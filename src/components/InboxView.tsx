@@ -49,7 +49,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-              Bandeja de Recados del Capitán
+              Bandeja de Recados · Goal Recall
             </span>
             <span className="text-slate-600">·</span>
             <span className="text-xs text-slate-400">Mensajes de Reclutadores & Clientes</span>

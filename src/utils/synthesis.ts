@@ -79,7 +79,7 @@ export const generateCaseStudyMarkdown = (
 
   const markdown = `# Case Study: ${clientOrProject}
 *Engineering Leadership & Technical Execution by ${userName}*
-*Generated via Captain's Log on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}*
+*Generated via Goal Recall on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}*
 
 ---
 
@@ -116,7 +116,7 @@ ${targetLogs
 \`${allTags.join("`, `") || "TypeScript, Node.js, React, PostgreSQL, Docker"}\`
 
 ---
-*Verified from production engineering records tracked in Captain's Log.*
+*Verified from production engineering records tracked in Goal Recall.*
 `;
 
   return markdown;

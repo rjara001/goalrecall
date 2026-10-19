@@ -24,6 +24,8 @@ interface QuickLogModalProps {
   onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => void;
   existingLogs: LogEntry[];
   initialData?: LogEntry | null;
+  initialExperienceId?: string;
+  initialBulletText?: string;
 }
 
 const CATEGORIES: LogCategory[] = [
@@ -76,8 +78,14 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   onSave,
   existingLogs,
   initialData,
+  initialExperienceId,
+  initialBulletText,
 }) => {
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
+  const [experienceId, setExperienceId] = useState<string>("");
+  const [isCreatingNewExp, setIsCreatingNewExp] = useState(false);
+  const [newExpCompany, setNewExpCompany] = useState("");
+  const [newExpRole, setNewExpRole] = useState("");
   const [client, setClient] = useState("");
   const [project, setProject] = useState("");
   const [category, setCategory] = useState<LogCategory>("Feature ✨");
@@ -87,6 +95,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false); // Default to Sandbox Privado!
+  const [experiencesList, setExperiencesList] = useState<any[]>([]);
 
   // Speech-to-Text State
   const [isListening, setIsListening] = useState(false);
@@ -94,33 +103,56 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const recognitionRef = useRef<any>(null);
 
   // Auto-complete suggestion lists
-  const existingClients = Array.from(new Set(existingLogs.map((l) => l.client))).filter(Boolean);
   const existingProjects = Array.from(new Set(existingLogs.map((l) => l.project))).filter(Boolean);
 
   // Initialize or reset form
   useEffect(() => {
-    if (initialData) {
-      setDate(initialData.date);
-      setClient(initialData.client);
-      setProject(initialData.project);
-      setCategory(initialData.category);
-      setTitle(initialData.title);
-      setDescription(initialData.description || "");
-      setImpact(initialData.impact);
-      setTags(initialData.tags || []);
-      setIsPublic(initialData.isPublic);
-    } else {
-      setDate(new Date().toISOString().substring(0, 10));
-      setClient(existingClients[0] || "ClientX");
-      setProject(existingProjects[0] || "Core Revamp");
-      setCategory("Feature ✨");
-      setTitle("");
-      setDescription("");
-      setImpact("");
-      setTags(["#FullStack", "#TypeScript"]);
-      setIsPublic(false); // Sandbox by default
-    }
-  }, [initialData, isOpen]);
+    // Import and get experiences
+    import("../utils/storage").then(({ getStoredExperiences }) => {
+      const exps = getStoredExperiences();
+      setExperiencesList(exps);
+
+      if (initialData) {
+        setDate(initialData.date);
+        setExperienceId(initialData.experienceId || exps[0]?.id || "exp-personal");
+        setClient(initialData.client);
+        setProject(initialData.project);
+        setCategory(initialData.category);
+        setTitle(initialData.title);
+        setDescription(initialData.description || "");
+        setImpact(initialData.impact);
+        setTags(initialData.tags || []);
+        setIsPublic(initialData.isPublic);
+      } else {
+        const targetExp = initialExperienceId 
+          ? exps.find((e) => e.id === initialExperienceId) 
+          : null;
+        const defaultExp = targetExp || exps[0] || { id: "exp-personal", company: "Proyectos Personales & Consultoría Independiente" };
+        setDate(new Date().toISOString().substring(0, 10));
+        setExperienceId(defaultExp.id);
+        setClient(defaultExp.company);
+        setProject(existingProjects[0] || "Producción");
+        setCategory("Feature ✨");
+
+        if (initialBulletText) {
+          const cleanText = initialBulletText.trim();
+          setTitle(cleanText.length > 95 ? cleanText.substring(0, 92) + "..." : cleanText);
+          setDescription(cleanText);
+          setImpact("Entregado con éxito y métricas verificables en producción");
+          const techTags = defaultExp.technologies && defaultExp.technologies.length > 0 
+            ? defaultExp.technologies.slice(0, 4).map((t: string) => t.startsWith("#") ? t : `#${t.replace(/\s+/g, '')}`)
+            : ["#Producción", "#Arquitectura"];
+          setTags(techTags);
+        } else {
+          setTitle("");
+          setDescription("");
+          setImpact("");
+          setTags(["#FullStack", "#TypeScript"]);
+        }
+        setIsPublic(false); // Sandbox by default
+      }
+    });
+  }, [initialData, isOpen, initialExperienceId, initialBulletText]);
 
   // Web Speech API Initialization
   useEffect(() => {
@@ -211,14 +243,32 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !impact.trim()) return;
 
+    let targetExpId = experienceId;
+    let targetClient = client;
+
+    if (isCreatingNewExp && newExpCompany.trim()) {
+      const { addExperience } = await import("../utils/storage");
+      const createdExp = addExperience({
+        company: newExpCompany.trim(),
+        role: newExpRole.trim() || "Ingeniero",
+        startDate: new Date().getFullYear().toString(),
+        isCurrent: true,
+        summary: "Experiencia registrada para asignación de logros.",
+        isPersonalProjects: false,
+      });
+      targetExpId = createdExp.id;
+      targetClient = createdExp.company;
+    }
+
     onSave({
       date,
-      client: client.trim() || "Internal",
-      project: project.trim() || "Core",
+      experienceId: targetExpId,
+      client: targetClient.trim() || "Empresa",
+      project: project.trim() || "General",
       category,
       title: title.trim(),
       description: description.trim() || undefined,
@@ -248,7 +298,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 {initialData ? "Editar Registro de Log" : "Captura Rápida de Log (Frictionless)"}
               </h2>
               <p className="text-xs text-slate-400">
-                Documenta tu victoria técnica con datos cuantitativos de impacto
+                Documenta tu victoria técnica bajo su empresa o proyecto correspondiente
               </p>
             </div>
           </div>
@@ -280,7 +330,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
           
-          {/* Metadata Row: Date, Client, Project */}
+          {/* Metadata Row: Date, Experience/Company Selector, Project */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
@@ -296,27 +346,65 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
               />
             </div>
 
+            {/* Experience / Company Container */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                <Building className="w-3.5 h-3.5 text-cyan-400" />
-                Cliente / Entidad
-              </label>
-              <input
-                type="text"
-                list="client-suggestions"
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                placeholder="ej. ClientX, Internal"
-                required
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-              />
-              <datalist id="client-suggestions">
-                {existingClients.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-cyan-400" />
+                  Empresa / Experiencia *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingNewExp(!isCreatingNewExp)}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono"
+                >
+                  {isCreatingNewExp ? "← Existente" : "+ Nueva"}
+                </button>
+              </div>
+
+              {isCreatingNewExp ? (
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    value={newExpCompany}
+                    onChange={(e) => {
+                      setNewExpCompany(e.target.value);
+                      setClient(e.target.value);
+                    }}
+                    placeholder="Nombre Empresa (ej. Stripe)"
+                    required
+                    className="w-full bg-slate-900/90 border border-cyan-500/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                  />
+                  <input
+                    type="text"
+                    value={newExpRole}
+                    onChange={(e) => setNewExpRole(e.target.value)}
+                    placeholder="Cargo (ej. Senior Backend)"
+                    className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              ) : (
+                <select
+                  value={experienceId}
+                  onChange={(e) => {
+                    setExperienceId(e.target.value);
+                    const selected = experiencesList.find((exp) => exp.id === e.target.value);
+                    if (selected) {
+                      setClient(selected.company);
+                    }
+                  }}
+                  className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                >
+                  {experiencesList.map((exp) => (
+                    <option key={exp.id} value={exp.id}>
+                      {exp.company} {exp.role ? `— ${exp.role}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
+            {/* Project / Module */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
                 <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />

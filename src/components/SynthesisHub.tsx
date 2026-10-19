@@ -187,39 +187,49 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3">
-              {xyzBullets.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 bg-slate-900/60 hover:bg-slate-900 border border-slate-800 rounded-xl transition-all flex items-start justify-between gap-3 group"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
-                      <span>{item.client}</span>
-                      <span>·</span>
-                      <span>{item.project}</span>
-                      <span>·</span>
-                      <span>{item.date}</span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed group-hover:text-cyan-200 transition-colors">
-                      • {item.bullet}
-                    </p>
-                    <div className="flex items-center gap-2 text-[11px] text-emerald-400/90 font-mono">
-                      <span className="font-semibold text-emerald-500">Métrica clave:</span>
-                      <span>{item.impact}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleCopy(item.bullet, item.id)}
-                    className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
-                    title="Copiar este bullet"
+            {xyzBullets.length === 0 ? (
+              <div className="p-8 text-center border border-dashed border-slate-800 rounded-xl bg-slate-900/40 space-y-2">
+                <Briefcase className="w-8 h-8 text-cyan-400 mx-auto opacity-60" />
+                <h4 className="text-sm font-bold text-white">Sin logros para sintetizar en Google XYZ</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Registra tus primeras victorias técnicas en la Bitácora o sube tu CV para autogenerar bullets de alto impacto con métricas comprobables.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {xyzBullets.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-4 bg-slate-900/60 hover:bg-slate-900 border border-slate-800 rounded-xl transition-all flex items-start justify-between gap-3 group"
                   >
-                    {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 font-mono">
+                        <span>{item.client}</span>
+                        <span>·</span>
+                        <span>{item.project}</span>
+                        <span>·</span>
+                        <span>{item.date}</span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed group-hover:text-cyan-200 transition-colors">
+                        • {item.bullet}
+                      </p>
+                      <div className="flex items-center gap-2 text-[11px] text-emerald-400/90 font-mono">
+                        <span className="font-semibold text-emerald-500">Métrica clave:</span>
+                        <span>{item.impact}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleCopy(item.bullet, item.id)}
+                      className="p-2 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+                      title="Copiar este bullet"
+                    >
+                      {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -235,77 +245,87 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              {starStories.map((story) => (
-                <div
-                  key={story.id}
-                  className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-3"
-                >
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mb-1">
-                        <span className="text-slate-300 font-semibold">{story.client}</span>
-                        <span>·</span>
-                        <span>{story.project}</span>
-                        <span>·</span>
-                        <span className="text-cyan-400">{story.category}</span>
+            {starStories.length === 0 ? (
+              <div className="p-8 text-center border border-dashed border-slate-800 rounded-xl bg-slate-900/40 space-y-2">
+                <Layers className="w-8 h-8 text-cyan-400 mx-auto opacity-60" />
+                <h4 className="text-sm font-bold text-white">Sin fichas STAR disponibles</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Añade tus logros técnicos en la Bitácora para autogenerar historias STAR estructuradas (Situación, Tarea, Acción, Resultado) para entrevistas.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {starStories.map((story) => (
+                  <div
+                    key={story.id}
+                    className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mb-1">
+                          <span className="text-slate-300 font-semibold">{story.client}</span>
+                          <span>·</span>
+                          <span>{story.project}</span>
+                          <span>·</span>
+                          <span className="text-cyan-400">{story.category}</span>
+                        </div>
+                        <h3 className="text-sm sm:text-base font-bold text-white">
+                          {story.title}
+                        </h3>
                       </div>
-                      <h3 className="text-sm sm:text-base font-bold text-white">
-                        {story.title}
-                      </h3>
+
+                      <button
+                        onClick={() =>
+                          handleCopy(
+                            `# HISTORIA STAR: ${story.title}\n\n` +
+                            `**SITUACIÓN:** ${story.situation}\n\n` +
+                            `**TAREA:** ${story.task}\n\n` +
+                            `**ACCIÓN:** ${story.action}\n\n` +
+                            `**RESULTADO:** ${story.result}`,
+                            story.id
+                          )
+                        }
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-lg border border-slate-700 transition-colors shrink-0"
+                      >
+                        {copiedId === story.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedId === story.id ? "¡Copiado!" : "Copiar Ficha STAR"}</span>
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() =>
-                        handleCopy(
-                          `# HISTORIA STAR: ${story.title}\n\n` +
-                          `**SITUACIÓN:** ${story.situation}\n\n` +
-                          `**TAREA:** ${story.task}\n\n` +
-                          `**ACCIÓN:** ${story.action}\n\n` +
-                          `**RESULTADO:** ${story.result}`,
-                          story.id
-                        )
-                      }
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-lg border border-slate-700 transition-colors shrink-0"
-                    >
-                      {copiedId === story.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedId === story.id ? "¡Copiado!" : "Copiar Ficha STAR"}</span>
-                    </button>
-                  </div>
+                    {/* 4 Pillars Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+                        <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-bold block mb-1">
+                          [S] Situación (Contexto)
+                        </span>
+                        <p className="text-slate-300 leading-relaxed">{story.situation}</p>
+                      </div>
 
-                  {/* 4 Pillars Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-bold block mb-1">
-                        [S] Situación (Contexto)
-                      </span>
-                      <p className="text-slate-300 leading-relaxed">{story.situation}</p>
-                    </div>
+                      <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+                        <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1">
+                          [T] Tarea (Objetivo y Reto)
+                        </span>
+                        <p className="text-slate-300 leading-relaxed">{story.task}</p>
+                      </div>
 
-                    <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1">
-                        [T] Tarea (Objetivo y Reto)
-                      </span>
-                      <p className="text-slate-300 leading-relaxed">{story.task}</p>
-                    </div>
+                      <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
+                        <span className="text-[11px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1">
+                          [A] Acción (Implementación Técnica)
+                        </span>
+                        <p className="text-slate-300 leading-relaxed">{story.action}</p>
+                      </div>
 
-                    <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1">
-                        [A] Acción (Implementación Técnica)
-                      </span>
-                      <p className="text-slate-300 leading-relaxed">{story.action}</p>
-                    </div>
-
-                    <div className="p-3 bg-slate-950/70 border border-emerald-950/80 rounded-lg">
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold block mb-1">
-                        [R] Resultado (Impacto Cuantitativo)
-                      </span>
-                      <p className="text-emerald-200 font-mono font-medium leading-relaxed">{story.result}</p>
+                      <div className="p-3 bg-slate-950/70 border border-emerald-950/80 rounded-lg">
+                        <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold block mb-1">
+                          [R] Resultado (Impacto Cuantitativo)
+                        </span>
+                        <p className="text-emerald-200 font-mono font-medium leading-relaxed">{story.result}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

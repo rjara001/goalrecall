@@ -45,11 +45,11 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Bienvenido a Captain's Log (Bitácora del Capitán)
+            Bienvenido a Goal Recall (Brag Document Tracker)
           </h1>
           
           <p className="text-sm text-slate-300 leading-relaxed">
-            Captain's Log es una plataforma privada y táctica diseñada para ingenieros de software, Tech Leads y arquitectos. Te permite registrar victorias técnicas diarias sin fricción fuera de entornos corporativos cerrados y sintetizarlas automáticamente en activos de carrera para tu CV, entrevistas y portafolio público.
+            Goal Recall es una plataforma privada y táctica diseñada para ingenieros de software, Tech Leads y arquitectos. Te permite registrar victorias técnicas diarias sin fricción fuera de entornos corporativos cerrados y sintetizarlas automáticamente en activos de carrera para tu CV, entrevistas y portafolio público.
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">

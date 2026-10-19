@@ -1,6 +1,6 @@
 {
-  "summary": "Updated implementation plan incorporating a dedicated, interactive 'Manual de Vuelo' (Documentation & User Guide) page accessible from the top navigation and welcome flow, detailing all platform capabilities, workflows, formulas, and security safeguards.",
-  "updatedAt": "2026-10-14T11:04:44.955175716Z",
+  "summary": "Plan de implementación detallado con mockups visuales completos para la reorganización de la Bitácora en dos vistas: 'Empresa / Experiencia' (idéntica a la salida del CV con extracción de logros in-situ) y 'Logros' (con métricas Google XYZ, categorías y visibilidad).",
+  "updatedAt": "2026-10-19T15:25:36.437018762Z",
   "requestFeedback": true,
   "userFacing": true
 }

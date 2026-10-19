@@ -1,173 +1,318 @@
-import { LogEntry, UserProfile, VisitorMessage } from "../types";
+import { LogEntry, UserProfile, VisitorMessage, CustomAccount, ExtractedCvData, WorkExperience } from "../types";
 
 const STORAGE_KEYS = {
   LOGS: "captains_logs_v1",
   USER: "captains_user_v1",
+  CUSTOM_ACCOUNTS: "goal_recall_custom_accounts_v1",
   INBOX: "captains_inbox_v1",
   PIN: "captains_pin_v1",
+  CV_DATA: "captains_stored_cv_v1",
+  EXPERIENCES: "captains_experiences_v1",
 };
+
+export const INITIAL_EXPERIENCES: WorkExperience[] = [];
+
+export const DEFAULT_USERS: UserProfile[] = [];
 
 export const INITIAL_USER: UserProfile = {
-  id: "captain-001",
-  name: "Alex Rivera",
-  email: "alex.rivera.dev@gmail.com",
+  id: "usr-guest",
+  name: "Usuario",
+  email: "",
   avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-  title: "Senior Full-Stack & Systems Architect",
-  bio: "10+ years architecting high-throughput distributed systems, real-time web applications, and resilient cloud infrastructure. Passionate about zero-downtime migrations, developer velocity, and measurable business outcomes.",
-  location: "Madrid, Spain / Remote",
-  github: "https://github.com",
-  linkedin: "https://linkedin.com",
-  skills: [
-    { name: "TypeScript / Node.js", category: "Languages" },
-    { name: "Go & Rust", category: "Languages" },
-    { name: "React 19 & Next.js", category: "Frameworks" },
-    { name: "Tailwind CSS", category: "Frameworks" },
-    { name: "PostgreSQL & Redis", category: "Cloud/DevOps" },
-    { name: "Docker & Kubernetes", category: "Cloud/DevOps" },
-    { name: "AWS & GCP Cloud", category: "Cloud/DevOps" },
-    { name: "Event-Driven & Microservices", category: "Architecture" },
-    { name: "High-Availability Systems", category: "Architecture" },
-  ],
-  isDemoUser: true,
+  title: "",
+  bio: "",
+  location: "",
+  github: "",
+  linkedin: "",
+  skills: [],
+  authProvider: "custom",
+  isDemoUser: false,
+  isCustom: true,
+  createdAt: Date.now(),
 };
 
-export const INITIAL_LOGS: LogEntry[] = [
-  {
-    id: "log-001",
-    date: "2026-10-12",
-    client: "ClientX",
-    project: "Checkout Revamp",
-    category: "Architecture 🏗️",
-    title: "Migrated checkout payment flow from synchronous REST to asynchronous saga",
-    description: "Designed distributed saga orchestrator using Redis Streams and Postgres idempotency keys. Replaced blocking 3rd-party gateway roundtrips with optimistic reservation and background reconciliation.",
-    impact: "Cut checkout p99 latency from 3.2s to 240ms (-92%) and reduced cart abandonment by 14.8%",
-    tags: ["#Architecture", "#Redis", "#PostgreSQL", "#PaymentGateway"],
-    isPublic: true,
-    createdAt: Date.now() - 86400000 * 2,
-    updatedAt: Date.now() - 86400000 * 2,
-  },
-  {
-    id: "log-002",
-    date: "2026-10-10",
-    client: "ClientX",
-    project: "Checkout Revamp",
-    category: "Fix 🐛",
-    title: "Resolved distributed race condition in inventory decrement during flash sales",
-    description: "Identified phantom stock oversell bug occurring under 15,000 req/sec spikes. Replaced naive row-level locks with Redis atomic Lua scripts and optimistic ledger verification.",
-    impact: "Eliminated 100% of overselling incidents ($42k saved in manual refund overhead during Black Friday)",
-    tags: ["#BugFix", "#Concurrency", "#Lua", "#HighThroughput"],
-    isPublic: true,
-    createdAt: Date.now() - 86400000 * 4,
-    updatedAt: Date.now() - 86400000 * 4,
-  },
-  {
-    id: "log-003",
-    date: "2026-10-06",
-    client: "Internal Core",
-    project: "Platform Observability",
-    category: "Infra/DevOps 🚀",
-    title: "Implemented OpenTelemetry distributed tracing and unified Grafana dashboard",
-    description: "Instrumented Node.js microservices with OpenTelemetry SDK and collector. Configured automated alert thresholds for p95 latency anomalies and error rate degradation.",
-    impact: "Reduced Mean Time To Detection (MTTD) from 45 min to under 3 min across 18 microservices",
-    tags: ["#DevOps", "#OpenTelemetry", "#Grafana", "#Kubernetes"],
-    isPublic: true,
-    createdAt: Date.now() - 86400000 * 8,
-    updatedAt: Date.now() - 86400000 * 8,
-  },
-  {
-    id: "log-004",
-    date: "2026-09-28",
-    client: "Internal Core",
-    project: "Platform Security",
-    category: "Fix 🐛",
-    title: "Patched critical session token replay vulnerability in internal admin proxy",
-    description: "CONFIDENTIAL / INTERNAL SANDBOX: Found non-expiring JWT refresh token edge-case when users revoked 2FA devices. Implemented distributed Redis token revocation blacklist with immediate SSE revocation broadcast.",
-    impact: "Closed P0 security loophole prior to external SOC2 audit compliance inspection",
-    tags: ["#Security", "#JWT", "#Confidential", "#OAuth"],
-    isPublic: false, // In private sandbox by default!
-    createdAt: Date.now() - 86400000 * 16,
-    updatedAt: Date.now() - 86400000 * 16,
-  },
-  {
-    id: "log-005",
-    date: "2026-09-18",
-    client: "ClientX",
-    project: "Catalog Search",
-    category: "Feature ✨",
-    title: "Shipped hybrid semantic & full-text search with instant autocomplete",
-    description: "Built vector embedding indexing pipeline alongside Postgres pgvector and trigram search. Implemented debounced client-side cached query layer with React 19 optimistic UI.",
-    impact: "Increased search-to-cart conversion rate by 22.4% and accelerated mobile search response times to 45ms",
-    tags: ["#React", "#TypeScript", "#pgvector", "#SearchOptimization"],
-    isPublic: true,
-    createdAt: Date.now() - 86400000 * 26,
-    updatedAt: Date.now() - 86400000 * 26,
-  },
-  {
-    id: "log-006",
-    date: "2026-09-04",
-    client: "ClientX",
-    project: "Legacy Modernization",
-    category: "Refactor 🧹",
-    title: "Decomposed 14,000-line monolithic controller into clean domain modules",
-    description: "Refactored legacy invoice generator using Hexagonal Architecture (Ports and Adapters). Implemented automated unit test suite increasing coverage from 28% to 94%.",
-    impact: "Cut onboarding time for junior engineers on billing module from 3 weeks to 2 days; zero regression defects",
-    tags: ["#CleanArchitecture", "#Refactoring", "#UnitTesting", "#DomainDrivenDesign"],
-    isPublic: true,
-    createdAt: Date.now() - 86400000 * 40,
-    updatedAt: Date.now() - 86400000 * 40,
-  },
-  {
-    id: "log-007",
-    date: "2026-08-20",
-    client: "Internal Core",
-    project: "R&D AI Lab",
-    category: "Spike/R&D 🔬",
-    title: "Benchmarked edge-computed local LLMs for automated PR code reviews",
-    description: "Evaluated latency, token costs, and accuracy of quantized models on worker nodes. Validated that local inference met strict data sovereignty requirements for private client codebases.",
-    impact: "Delivered comprehensive executive spike report recommending hybrid on-prem strategy, saving projected $35k/year cloud API fees",
-    tags: ["#AI", "#Research", "#CostOptimization", "#EdgeComputing"],
-    isPublic: false, // Private sandbox
-    createdAt: Date.now() - 86400000 * 55,
-    updatedAt: Date.now() - 86400000 * 55,
-  },
-];
+export const INITIAL_LOGS: LogEntry[] = [];
 
-export const INITIAL_INBOX: VisitorMessage[] = [
-  {
-    id: "msg-001",
-    name: "Elena Rostova",
-    email: "elena.rostova@techfin-ventures.io",
-    organization: "TechFin Ventures (London)",
-    message: "Hi Alex, saw your work on the distributed checkout saga and Redis concurrency fixes. We are building a high-volume trading settlement engine and need a Staff Architect. Are you open to a 20-min intro chat?",
-    date: "2026-10-13 14:20",
-    read: false,
-    replied: false,
-  },
-  {
-    id: "msg-002",
-    name: "Marcus Thorne",
-    email: "mthorne@scalepeak.cloud",
-    organization: "ScalePeak Systems",
-    message: "Impressive metrics on the MTTD observability reduction. We would love to discuss a consulting advisory engagement for our Q1 Kubernetes migration.",
-    date: "2026-10-09 10:15",
-    read: true,
-    replied: true,
-  },
-];
+export const DUMMY_LOG_IDS = new Set([
+  "log-001",
+  "log-002",
+  "log-003",
+  "log-004",
+  "log-005",
+  "log-006",
+  "log-007",
+]);
 
-// --- Storage Utilities ---
+export const DUMMY_EXP_IDS = new Set([
+  "exp-meli",
+  "exp-stripe",
+  "exp-clientx",
+  "exp-core",
+]);
+
+export const purgeDummyPresetData = (): void => {
+  try {
+    const rawLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
+    if (rawLogs) {
+      const parsedLogs: LogEntry[] = JSON.parse(rawLogs);
+      if (Array.isArray(parsedLogs)) {
+        const cleanLogs = parsedLogs.filter(
+          (l) =>
+            !DUMMY_LOG_IDS.has(l.id) &&
+            l.client !== "ClientX" &&
+            !l.title?.includes("Migrated checkout payment flow") &&
+            !l.title?.includes("inventory decrement during flash sales") &&
+            !l.title?.includes("settlement microservices") &&
+            !l.title?.includes("anomaly detection pipeline") &&
+            !l.title?.includes("zero-downtime hot reload") &&
+            !l.title?.includes("monolithic controller") &&
+            !l.title?.includes("local LLMs")
+        );
+        localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(cleanLogs));
+      }
+    }
+
+    const rawExp = localStorage.getItem(STORAGE_KEYS.EXPERIENCES);
+    if (rawExp) {
+      const parsedExp: WorkExperience[] = JSON.parse(rawExp);
+      if (Array.isArray(parsedExp)) {
+        const cleanExp = parsedExp.filter(
+          (e) =>
+            !DUMMY_EXP_IDS.has(e.id) &&
+            !e.company?.includes("Mercado Libre") &&
+            !e.company?.includes("Stripe Platform") &&
+            !e.company?.includes("ClientX") &&
+            !e.company?.includes("Internal Core")
+        );
+        localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(cleanExp));
+      }
+    }
+
+    const rawUser = localStorage.getItem(STORAGE_KEYS.USER);
+    if (rawUser) {
+      const user = JSON.parse(rawUser);
+      if (user) {
+        let changed = false;
+        if (user.bio?.includes("12+ years architecting") || user.bio?.includes("Ingeniero de software enfocado")) {
+          user.bio = "";
+          changed = true;
+        }
+        if (user.github === "https://github.com") {
+          user.github = "";
+          changed = true;
+        }
+        if (user.linkedin === "https://linkedin.com") {
+          user.linkedin = "";
+          changed = true;
+        }
+        if (user.skills && user.skills.some((s: any) => s.name === "TypeScript / Node.js" || s.name === "Distributed Systems Architecture")) {
+          user.skills = [];
+          changed = true;
+        }
+        if (user.title === "Senior Full-Stack & Systems Architect" && user.name === "Rodrigo Jara") {
+          user.title = "";
+          changed = true;
+        }
+        if (changed) {
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+        }
+      }
+    }
+
+    const rawAccounts = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
+    if (rawAccounts) {
+      const accounts: CustomAccount[] = JSON.parse(rawAccounts);
+      if (Array.isArray(accounts)) {
+        const cleanedAccounts = accounts.map((acc) => {
+          const isDummyBio = acc.bio?.includes("12+ years") || acc.bio?.includes("Ingeniero de software enfocado");
+          return {
+            ...acc,
+            bio: isDummyBio ? "" : (acc.bio || ""),
+            title: acc.title === "Senior Full-Stack & Systems Architect" ? "" : (acc.title || ""),
+            github: acc.github === "https://github.com" ? "" : (acc.github || ""),
+            linkedin: acc.linkedin === "https://linkedin.com" ? "" : (acc.linkedin || ""),
+            skills: acc.skills?.filter((s: any) => s.name !== "TypeScript / Node.js" && s.name !== "Distributed Systems Architecture") || [],
+          };
+        });
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify(cleanedAccounts));
+      }
+    }
+  } catch (err) {
+    console.warn("Purge dummy preset data check error:", err);
+  }
+};
+
+// Execute purge on module load
+purgeDummyPresetData();
+
+export const INITIAL_INBOX: VisitorMessage[] = [];
+
+// --- Work Experiences Utilities ---
+
+export const getStoredExperiences = (_userId?: string): WorkExperience[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.EXPERIENCES);
+    if (!raw) {
+      return [];
+    }
+    const parsed: WorkExperience[] = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (e) =>
+        !DUMMY_EXP_IDS.has(e.id) &&
+        !e.company?.includes("Mercado Libre") &&
+        !e.company?.includes("Stripe Platform") &&
+        !e.company?.includes("ClientX") &&
+        !e.company?.includes("Internal Core")
+    );
+  } catch (e) {
+    console.error("Error reading experiences from localStorage", e);
+    return [];
+  }
+};
+
+export const saveExperiences = (experiences: WorkExperience[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(experiences));
+  } catch (e) {
+    console.error("Error saving experiences to localStorage", e);
+  }
+};
+
+export const addExperience = (
+  exp: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
+): WorkExperience => {
+  const experiences = getStoredExperiences();
+  const newExp: WorkExperience = {
+    ...exp,
+    id: "exp-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  const updated = [newExp, ...experiences];
+  saveExperiences(updated);
+  return newExp;
+};
+
+export const updateExperience = (updatedExp: WorkExperience): void => {
+  const experiences = getStoredExperiences();
+  const index = experiences.findIndex((e) => e.id === updatedExp.id);
+  if (index !== -1) {
+    const oldCompany = experiences[index].company;
+    experiences[index] = { ...updatedExp, updatedAt: Date.now() };
+    saveExperiences(experiences);
+
+    // If company name changed, update the client field of all linked logs
+    if (oldCompany !== updatedExp.company) {
+      const logs = getStoredLogs();
+      let hasChanges = false;
+      const updatedLogs = logs.map((l) => {
+        if (l.experienceId === updatedExp.id) {
+          hasChanges = true;
+          return { ...l, client: updatedExp.company, updatedAt: Date.now() };
+        }
+        return l;
+      });
+      if (hasChanges) {
+        saveLogs(updatedLogs);
+      }
+    }
+  }
+};
+
+export const deleteExperience = (id: string): void => {
+  const experiences = getStoredExperiences();
+  // Don't allow deleting the default personal projects container
+  const filtered = experiences.filter((e) => e.id !== id);
+  saveExperiences(filtered);
+
+  // Re-link any orphaned logs to personal projects
+  const personal = experiences.find((e) => e.isPersonalProjects) || experiences[0];
+  if (personal) {
+    const logs = getStoredLogs();
+    let hasChanges = false;
+    const updatedLogs = logs.map((l) => {
+      if (l.experienceId === id) {
+        hasChanges = true;
+        return {
+          ...l,
+          experienceId: personal.id,
+          client: personal.company,
+          updatedAt: Date.now(),
+        };
+      }
+      return l;
+    });
+    if (hasChanges) {
+      saveLogs(updatedLogs);
+    }
+  }
+};
+
+export const getExperienceById = (id: string): WorkExperience | undefined => {
+  const experiences = getStoredExperiences();
+  return experiences.find((e) => e.id === id);
+};
+
+export const getLogsForExperience = (experienceId: string): LogEntry[] => {
+  const logs = getStoredLogs();
+  return logs.filter((l) => l.experienceId === experienceId);
+};
+
+// --- Storage Utilities (Logs) ---
 
 export const getStoredLogs = (): LogEntry[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(INITIAL_LOGS));
-      return INITIAL_LOGS;
+      return [];
     }
-    return JSON.parse(raw);
+    const parsed: LogEntry[] = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Filter any dummy logs
+    const nonDummy = parsed.filter(
+      (l) =>
+        !DUMMY_LOG_IDS.has(l.id) &&
+        l.client !== "ClientX" &&
+        !l.title?.includes("Migrated checkout payment flow") &&
+        !l.title?.includes("inventory decrement during flash sales") &&
+        !l.title?.includes("settlement microservices") &&
+        !l.title?.includes("anomaly detection pipeline") &&
+        !l.title?.includes("zero-downtime hot reload") &&
+        !l.title?.includes("monolithic controller") &&
+        !l.title?.includes("local LLMs")
+    );
+
+    // Ensure all logs have experienceId (Migration to Dual Model)
+    const experiences = getStoredExperiences();
+    let migrated = false;
+    const updated = nonDummy.map((log) => {
+      if (!log.experienceId) {
+        migrated = true;
+        // Find matching experience by company/client
+        const matched = experiences.find(
+          (e) =>
+            e.company.toLowerCase().includes(log.client.toLowerCase()) ||
+            log.client.toLowerCase().includes(e.company.toLowerCase())
+        );
+        const targetExpId = matched ? matched.id : (experiences.find((e) => e.isPersonalProjects)?.id || experiences[0]?.id || "exp-personal");
+        return { ...log, experienceId: targetExpId };
+      }
+      return log;
+    });
+
+    if (migrated || nonDummy.length !== parsed.length) {
+      saveLogs(updated);
+    }
+
+    return updated;
   } catch (e) {
     console.error("Error reading logs from localStorage", e);
-    return INITIAL_LOGS;
+    return [];
   }
 };
 
@@ -183,8 +328,22 @@ export const addLog = (
   entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">
 ): LogEntry => {
   const logs = getStoredLogs();
+  const experiences = getStoredExperiences();
+
+  // Ensure experienceId is set
+  let expId = entry.experienceId;
+  if (!expId) {
+    const matched = experiences.find(
+      (e) =>
+        e.company.toLowerCase() === entry.client.toLowerCase() ||
+        entry.client.toLowerCase().includes(e.company.toLowerCase())
+    );
+    expId = matched ? matched.id : (experiences.find((e) => e.isPersonalProjects)?.id || experiences[0]?.id || "exp-personal");
+  }
+
   const newLog: LogEntry = {
     ...entry,
+    experienceId: expId,
     id: "log-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
     isPublic: entry.isPublic ?? false, // Defaults to Sandbox Privado
     createdAt: Date.now(),
@@ -225,18 +384,228 @@ export const deleteLog = (id: string): void => {
   saveLogs(filtered);
 };
 
+// --- Custom Account Authentication Utilities ---
+
+export const hashPassword = (pwd: string): string => {
+  return btoa(encodeURIComponent("goal_recall_salt_" + pwd.trim()));
+};
+
+export const getStoredCustomAccounts = (): CustomAccount[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
+    if (!raw) {
+      const seedAccount: CustomAccount = {
+        id: "usr-rodrigo-jara",
+        name: "Rodrigo Jara",
+        email: "rjara001@gmail.com",
+        passwordHash: hashPassword("admin123"),
+        title: "",
+        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+        bio: "",
+        location: "",
+        github: "",
+        linkedin: "",
+        skills: [],
+        createdAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify([seedAccount]));
+      return [seedAccount];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const saveStoredCustomAccounts = (accounts: CustomAccount[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify(accounts));
+  } catch (e) {
+    console.error("Error saving custom accounts:", e);
+  }
+};
+
+export const registerCustomAccount = (params: {
+  name: string;
+  email: string;
+  password: string;
+  title?: string;
+  avatar?: string;
+}): { success: boolean; user?: UserProfile; error?: string } => {
+  const cleanEmail = params.email.trim().toLowerCase();
+  const cleanName = params.name.trim();
+  const cleanPwd = params.password.trim();
+
+  if (!cleanName) {
+    return { success: false, error: "Ingresa tu nombre completo." };
+  }
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return { success: false, error: "Ingresa un correo electrónico válido." };
+  }
+  if (!cleanPwd || cleanPwd.length < 4) {
+    return { success: false, error: "La contraseña debe tener al menos 4 caracteres." };
+  }
+
+  const existingAccounts = getStoredCustomAccounts();
+  const alreadyExists = existingAccounts.some(
+    (acc) => acc.email.toLowerCase() === cleanEmail
+  );
+
+  if (alreadyExists) {
+    return {
+      success: false,
+      error: "Ya existe una cuenta con este correo electrónico. Por favor inicia sesión.",
+    };
+  }
+
+  const newAccount: CustomAccount = {
+    id: "usr-" + Date.now(),
+    name: cleanName,
+    email: cleanEmail,
+    passwordHash: hashPassword(cleanPwd),
+    title: params.title?.trim() || "",
+    avatar:
+      params.avatar ||
+      `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
+    bio: "",
+    location: "",
+    github: "",
+    linkedin: "",
+    skills: [],
+    createdAt: Date.now(),
+  };
+
+  const updatedAccounts = [newAccount, ...existingAccounts];
+  saveStoredCustomAccounts(updatedAccounts);
+
+  const userProfile: UserProfile = {
+    id: newAccount.id,
+    name: newAccount.name,
+    email: newAccount.email,
+    avatar: newAccount.avatar,
+    title: newAccount.title,
+    bio: newAccount.bio || "",
+    location: newAccount.location || "Remoto",
+    github: newAccount.github,
+    linkedin: newAccount.linkedin,
+    skills: newAccount.skills || [],
+    authProvider: "custom",
+    isCustom: true,
+    createdAt: newAccount.createdAt,
+  };
+
+  saveUser(userProfile);
+  return { success: true, user: userProfile };
+};
+
+export const authenticateCustomAccount = (
+  emailOrUsername: string,
+  password: string
+): { success: boolean; user?: UserProfile; error?: string } => {
+  const cleanInput = emailOrUsername.trim().toLowerCase();
+  const cleanPwd = password.trim();
+
+  if (!cleanInput) {
+    return { success: false, error: "Ingresa tu correo o nombre de usuario." };
+  }
+  if (!cleanPwd) {
+    return { success: false, error: "Ingresa tu contraseña." };
+  }
+
+  const accounts = getStoredCustomAccounts();
+  const target = accounts.find(
+    (acc) =>
+      acc.email.toLowerCase() === cleanInput ||
+      acc.name.toLowerCase() === cleanInput
+  );
+
+  if (!target) {
+    return {
+      success: false,
+      error: "Usuario o correo no encontrado. Revisa tus datos o crea una cuenta.",
+    };
+  }
+
+  if (target.passwordHash !== hashPassword(cleanPwd)) {
+    return {
+      success: false,
+      error: "Contraseña incorrecta. Por favor verifica tus credenciales.",
+    };
+  }
+
+  const userProfile: UserProfile = {
+    id: target.id,
+    name: target.name,
+    email: target.email,
+    avatar: target.avatar,
+    title: target.title,
+    bio: target.bio || "",
+    location: target.location || "Remoto",
+    github: target.github,
+    linkedin: target.linkedin,
+    skills: target.skills || [],
+    authProvider: "custom",
+    isCustom: true,
+    createdAt: target.createdAt,
+  };
+
+  saveUser(userProfile);
+  return { success: true, user: userProfile };
+};
+
 // --- User Profile Utilities ---
 
-export const getStoredUser = (): UserProfile => {
+export const getStoredUsersList = (): UserProfile[] => {
+  const accounts = getStoredCustomAccounts();
+  if (accounts.length > 0) {
+    return accounts.map((acc) => ({
+      id: acc.id,
+      name: acc.name,
+      email: acc.email,
+      avatar: acc.avatar,
+      title: acc.title,
+      bio: acc.bio || "",
+      location: acc.location || "Remoto",
+      github: acc.github,
+      linkedin: acc.linkedin,
+      skills: acc.skills || [],
+      authProvider: "custom",
+      isCustom: true,
+      createdAt: acc.createdAt,
+    }));
+  }
+  return DEFAULT_USERS;
+};
+
+export const saveUsersList = (_users: UserProfile[]): void => {
+  // Maintained for backward compatibility
+};
+
+export const addCustomUser = (newUser: UserProfile): UserProfile[] => {
+  saveUser(newUser);
+  return getStoredUsersList();
+};
+
+export const updateCustomUser = (updatedUser: UserProfile): UserProfile[] => {
+  saveUser(updatedUser);
+  return getStoredUsersList();
+};
+
+export const deleteCustomUser = (_userId: string): { updatedList: UserProfile[]; newActiveUser: UserProfile } => {
+  const list = getStoredUsersList();
+  return { updatedList: list, newActiveUser: list[0] || INITIAL_USER };
+};
+
+export const getStoredUser = (): UserProfile | null => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.USER);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(INITIAL_USER));
-      return INITIAL_USER;
+      return null;
     }
     return JSON.parse(raw);
   } catch (e) {
-    return INITIAL_USER;
+    return null;
   }
 };
 
@@ -306,6 +675,7 @@ export const exportBackupJson = (): string => {
     exportedAt: new Date().toISOString(),
     user: getStoredUser(),
     logs: getStoredLogs(),
+    experiences: getStoredExperiences(),
     inbox: getStoredInbox(),
   };
   return JSON.stringify(payload, null, 2);
@@ -326,6 +696,7 @@ export const importBackupJson = (
 
     saveLogs(parsed.logs);
     if (parsed.user) saveUser(parsed.user);
+    if (Array.isArray(parsed.experiences)) saveExperiences(parsed.experiences);
     if (Array.isArray(parsed.inbox)) saveInbox(parsed.inbox);
 
     return { success: true, count: parsed.logs.length };
@@ -339,7 +710,57 @@ export const importBackupJson = (
 };
 
 export const resetToDemoData = (): void => {
-  localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(INITIAL_LOGS));
-  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(INITIAL_USER));
-  localStorage.setItem(STORAGE_KEYS.INBOX, JSON.stringify(INITIAL_INBOX));
+  localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify([]));
+  localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify([]));
+  localStorage.removeItem(STORAGE_KEYS.USER);
+  localStorage.setItem(STORAGE_KEYS.INBOX, JSON.stringify([]));
 };
+
+export const getStoredCv = (userId?: string): ExtractedCvData | null => {
+  try {
+    const key = userId ? `${STORAGE_KEYS.CV_DATA}_${userId}` : STORAGE_KEYS.CV_DATA;
+    const item = localStorage.getItem(key);
+    if (!item && userId) {
+      // fallback to global key
+      const fallback = localStorage.getItem(STORAGE_KEYS.CV_DATA);
+      return fallback ? JSON.parse(fallback) : null;
+    }
+    return item ? JSON.parse(item) : null;
+  } catch (e) {
+    console.error("Error reading stored CV:", e);
+    return null;
+  }
+};
+
+export const saveStoredCv = (cvData: ExtractedCvData, userId?: string): void => {
+  try {
+    const key = userId ? `${STORAGE_KEYS.CV_DATA}_${userId}` : STORAGE_KEYS.CV_DATA;
+    localStorage.setItem(key, JSON.stringify(cvData));
+    localStorage.setItem(STORAGE_KEYS.CV_DATA, JSON.stringify(cvData));
+  } catch (e) {
+    console.error("Error saving stored CV:", e);
+  }
+};
+
+export const clearStoredCv = (): void => {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.CV_DATA);
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith(STORAGE_KEYS.CV_DATA) || k.startsWith("captains_stored_cv"))) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    console.error("Error clearing stored CV:", e);
+  }
+};
+
+export const clearSessionData = (): void => {
+  saveUser(null);
+  clearStoredCv();
+};
+
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Navbar } from "./components/Navbar";
+import { LandingPage } from "./components/LandingPage";
 import { TimelineView } from "./components/TimelineView";
 import { SynthesisHub } from "./components/SynthesisHub";
 import { InboxView } from "./components/InboxView";
@@ -8,6 +9,9 @@ import { PublicDeck } from "./components/PublicDeck";
 import { QuickLogModal } from "./components/QuickLogModal";
 import { AuthModal } from "./components/AuthModal";
 import { SettingsBackupModal } from "./components/SettingsBackupModal";
+import { PasteBulletsModal } from "./components/PasteBulletsModal";
+import { CvUploadModal } from "./components/CvUploadModal";
+import { ExperienceModal } from "./components/ExperienceModal";
 import { 
   getStoredLogs, 
   saveLogs, 
@@ -20,21 +24,38 @@ import {
   getStoredInbox, 
   addVisitorMessage, 
   markMessageRead, 
-  deleteMessage 
+  deleteMessage,
+  getStoredExperiences,
+  addExperience,
+  updateExperience,
+  deleteExperience,
+  clearSessionData,
+  resetToDemoData,
+  purgeDummyPresetData,
+  INITIAL_LOGS,
+  INITIAL_EXPERIENCES,
+  INITIAL_INBOX,
+  INITIAL_USER
 } from "./utils/storage";
-import { LogEntry, UserProfile, VisitorMessage } from "./types";
-import { Check, Info, Bell, AlertTriangle } from "lucide-react";
+import { LogEntry, UserProfile, VisitorMessage, WorkExperience } from "./types";
+import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<"quarters" | "public">("quarters");
+  const [activeView, setActiveView] = useState<"landing" | "quarters" | "public">("landing");
   const [activeQuartersTab, setActiveQuartersTab] = useState<"timeline" | "synthesis" | "inbox" | "docs">("timeline");
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [experiences, setExperiences] = useState<WorkExperience[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [inbox, setInbox] = useState<VisitorMessage[]>([]);
 
   // Modals
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
+  const [isCvUploadOpen, setIsCvUploadOpen] = useState(false);
+  const [isPasteBulletsOpen, setIsPasteBulletsOpen] = useState(false);
+  const [isExperienceModalOpen, setIsExperienceModalOpen] = useState(false);
+  const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
+  const [initialExperienceIdForLog, setInitialExperienceIdForLog] = useState<string | undefined>(undefined);
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -51,7 +72,9 @@ export default function App() {
 
   // Initial Data Load
   useEffect(() => {
+    purgeDummyPresetData();
     setLogs(getStoredLogs());
+    setExperiences(getStoredExperiences());
     setUser(getStoredUser());
     setInbox(getStoredInbox());
   }, []);
@@ -59,7 +82,7 @@ export default function App() {
   // Global Keyboard Shortcuts (Cmd+K, Alt+L, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K or Alt + L
+      // Cmd/Ctrl + K or Alt + L opens quick log and switches to quarters if on landing
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setEditingLog(null);
@@ -136,6 +159,56 @@ export default function App() {
     showToast("Log duplicado en Sandbox Privado.", "info");
   };
 
+  const handleImportBatchLogs = (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
+    batch.forEach((entry) => addLog(entry));
+    setLogs(getStoredLogs());
+    setExperiences(getStoredExperiences());
+    showToast(`¡Se importaron ${batch.length} logros a tu Sandbox Privado! 🔒`, "success");
+  };
+
+  // Experience (Company / Project Container) Actions
+  const handleOpenAddExperience = () => {
+    setEditingExperience(null);
+    setIsExperienceModalOpen(true);
+  };
+
+  const handleOpenEditExperience = (exp: WorkExperience) => {
+    setEditingExperience(exp);
+    setIsExperienceModalOpen(true);
+  };
+
+  const handleSaveExperience = (
+    expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string }
+  ) => {
+    if (expData.id) {
+      updateExperience(expData as WorkExperience);
+      setExperiences(getStoredExperiences());
+      setLogs(getStoredLogs()); // Company name updates might cascade to logs
+      setIsExperienceModalOpen(false);
+      setEditingExperience(null);
+      showToast(`Empresa "${expData.company}" actualizada correctamente.`);
+    } else {
+      const created = addExperience(expData);
+      setExperiences(getStoredExperiences());
+      setIsExperienceModalOpen(false);
+      setEditingExperience(null);
+      showToast(`Empresa/Proyecto "${created.company}" creado con éxito. ✨`);
+    }
+  };
+
+  const handleDeleteExperience = (id: string) => {
+    deleteExperience(id);
+    setExperiences(getStoredExperiences());
+    setLogs(getStoredLogs()); // Logs re-linked to personal projects
+    showToast("Empresa eliminada. Sus logros fueron transferidos a Proyectos Personales.", "info");
+  };
+
+  const handleOpenAddLogToExperience = (experienceId: string) => {
+    setEditingLog(null);
+    setInitialExperienceIdForLog(experienceId);
+    setIsQuickLogOpen(true);
+  };
+
   // Inbox Actions
   const handleSendVisitorMessage = (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => {
     addVisitorMessage(msg);
@@ -158,23 +231,53 @@ export default function App() {
   const handleLogin = (newUser: UserProfile) => {
     saveUser(newUser);
     setUser(newUser);
-    showToast(`¡Bienvenido, ${newUser.name}! Sesión sincronizada.`);
+    setLogs(getStoredLogs());
+    setExperiences(getStoredExperiences());
+    setInbox(getStoredInbox());
+    const providerLabel = newUser.authProvider === "google" ? "Google" : "Custom Login";
+    showToast(`¡Bienvenido, ${newUser.name}! Sesión iniciada con ${providerLabel}. ✨`, "success");
+    setActiveView("quarters");
   };
 
   const handleLogout = () => {
-    saveUser(null);
+    // 1. Clear session user and temporary CV data from storage
+    clearSessionData();
     setUser(null);
-    showToast("Has cerrado la sesión.", "info");
+
+    // 2. Reset private data and storage to clean baseline demo state
+    resetToDemoData();
+    setLogs(INITIAL_LOGS);
+    setExperiences(INITIAL_EXPERIENCES);
+    setInbox(INITIAL_INBOX);
+
+    // 3. Return directly to Landing Page
+    setActiveView("landing");
+    setActiveQuartersTab("timeline");
+
+    // 4. Close all open modals & reset active edit states
+    setIsAuthOpen(false);
+    setIsSettingsOpen(false);
+    setIsQuickLogOpen(false);
+    setIsCvUploadOpen(false);
+    setIsPasteBulletsOpen(false);
+    setIsExperienceModalOpen(false);
+    setEditingLog(null);
+    setEditingExperience(null);
+    setInitialExperienceIdForLog(undefined);
+
+    // 5. User feedback
+    showToast("Sesión cerrada exitosamente. Retornando a la página de inicio.", "info");
   };
 
   const handleUpdateProfile = (updated: UserProfile) => {
     saveUser(updated);
     setUser(updated);
-    showToast("Perfil del Capitán actualizado.");
+    showToast("Perfil de usuario actualizado correctamente.", "success");
   };
 
   const reloadDataFromStorage = () => {
     setLogs(getStoredLogs());
+    setExperiences(getStoredExperiences());
     setUser(getStoredUser());
     setInbox(getStoredInbox());
   };
@@ -195,8 +298,10 @@ export default function App() {
           setEditingLog(null);
           setIsQuickLogOpen(true);
         }}
+        onOpenCvUpload={() => setIsCvUploadOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onLogout={handleLogout}
         user={user}
         unreadInboxCount={unreadInboxCount}
         publicLogsCount={publicLogsCount}
@@ -205,62 +310,115 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6">
         
-        {activeView === "quarters" ? (
-          /* Captain's Quarters (Private Workspace) */
-          <div>
-            {activeQuartersTab === "timeline" && (
-              <TimelineView
-                logs={logs}
-                onTogglePublic={handleTogglePublic}
-                onEditLog={(log) => {
-                  setEditingLog(log);
-                  setIsQuickLogOpen(true);
-                }}
-                onDeleteLog={handleDeleteLog}
-                onDuplicateLog={handleDuplicateLog}
-                onOpenQuickLog={() => {
-                  setEditingLog(null);
-                  setIsQuickLogOpen(true);
-                }}
-              />
-            )}
+        {/* VIEW 1: PUBLIC LANDING PAGE */}
+        {activeView === "landing" && (
+          <LandingPage
+            onOpenAuth={() => setIsAuthOpen(true)}
+            onEnterQuarters={() => {
+              if (!user) {
+                setIsAuthOpen(true);
+              } else {
+                setActiveView("quarters");
+              }
+            }}
+            onEnterPublicDeck={() => setActiveView("public")}
+            onOpenDocs={() => {
+              setActiveView("quarters");
+              setActiveQuartersTab("docs");
+            }}
+            user={user}
+          />
+        )}
 
-            {activeQuartersTab === "synthesis" && (
-              <SynthesisHub logs={logs} userName={user?.name || "Senior Software Engineer"} />
-            )}
-
-            {activeQuartersTab === "inbox" && (
-              <InboxView
-                messages={inbox}
-                onMarkRead={handleMarkMessageRead}
-                onDeleteMessage={handleDeleteMessage}
-              />
-            )}
-
-            {activeQuartersTab === "docs" && (
-              <DocumentationView
-                onOpenQuickLog={() => {
-                  setEditingLog(null);
-                  setIsQuickLogOpen(true);
-                }}
-                onGoToSynthesis={() => setActiveQuartersTab("synthesis")}
-                onGoToPublicDeck={() => setActiveView("public")}
-              />
-            )}
-          </div>
-        ) : (
-          /* Public Deck (Recruiter / Client Showcase) */
-          user ? (
-            <PublicDeck
-              logs={logs}
-              userProfile={user}
-              onSendVisitorMessage={handleSendVisitorMessage}
-            />
+        {/* VIEW 2: CAPTAIN'S QUARTERS (PRIVATE WORKSPACE) */}
+        {activeView === "quarters" && (
+          !user ? (
+            <div className="py-20 text-center max-w-md mx-auto space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-white">Espacio Privado Protegido</h3>
+                <p className="text-slate-400 text-sm">
+                  Inicia sesión para acceder a tu Bitácora privada, gestionar logros por empresa y sintetizar versiones de tu trayectoria.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm"
+                >
+                  Iniciar Sesión
+                </button>
+                <button
+                  onClick={() => setActiveView("landing")}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                >
+                  Volver al Inicio
+                </button>
+              </div>
+            </div>
           ) : (
-            <div className="text-center py-20">
-              <p className="text-slate-400 text-sm">Cargando perfil público...</p>
+            <div>
+              {activeQuartersTab === "timeline" && (
+                <TimelineView
+                  logs={logs}
+                  experiences={experiences}
+                  onTogglePublic={handleTogglePublic}
+                  onEditLog={(log) => {
+                    setEditingLog(log);
+                    setIsQuickLogOpen(true);
+                  }}
+                  onDeleteLog={handleDeleteLog}
+                  onDuplicateLog={handleDuplicateLog}
+                  onOpenQuickLog={() => {
+                    setEditingLog(null);
+                    setInitialExperienceIdForLog(undefined);
+                    setIsQuickLogOpen(true);
+                  }}
+                  onOpenPasteBullets={() => setIsPasteBulletsOpen(true)}
+                  onOpenCvUpload={() => setIsCvUploadOpen(true)}
+                  onAddExperience={handleOpenAddExperience}
+                  onEditExperience={handleOpenEditExperience}
+                  onDeleteExperience={handleDeleteExperience}
+                  onAddLogToExperience={handleOpenAddLogToExperience}
+                />
+              )}
+
+              {activeQuartersTab === "synthesis" && (
+                <SynthesisHub logs={logs} userName={user?.name || "Senior Software Engineer"} />
+              )}
+
+              {activeQuartersTab === "inbox" && (
+                <InboxView
+                  messages={inbox}
+                  onMarkRead={handleMarkMessageRead}
+                  onDeleteMessage={handleDeleteMessage}
+                />
+              )}
+
+              {activeQuartersTab === "docs" && (
+                <DocumentationView
+                  onOpenQuickLog={() => {
+                    setEditingLog(null);
+                    setInitialExperienceIdForLog(undefined);
+                    setIsQuickLogOpen(true);
+                  }}
+                  onGoToSynthesis={() => setActiveQuartersTab("synthesis")}
+                  onGoToPublicDeck={() => setActiveView("public")}
+                />
+              )}
             </div>
           )
+        )}
+
+        {/* VIEW 3: PUBLIC DECK (RECRUITER / CLIENT SHOWCASE) */}
+        {activeView === "public" && (
+          <PublicDeck
+            logs={logs}
+            userProfile={user || INITIAL_USER}
+            onSendVisitorMessage={handleSendVisitorMessage}
+          />
         )}
       </main>
 
@@ -270,13 +428,43 @@ export default function App() {
         onClose={() => {
           setIsQuickLogOpen(false);
           setEditingLog(null);
+          setInitialExperienceIdForLog(undefined);
         }}
         onSave={handleSaveLog}
         existingLogs={logs}
         initialData={editingLog}
+        initialExperienceId={initialExperienceIdForLog}
       />
 
-      {/* Auth Modal */}
+      {/* Experience Modal (Companies / Personal Projects Container) */}
+      <ExperienceModal
+        isOpen={isExperienceModalOpen}
+        onClose={() => {
+          setIsExperienceModalOpen(false);
+          setEditingExperience(null);
+        }}
+        onSave={handleSaveExperience}
+        initialData={editingExperience}
+      />
+
+      {/* CV Upload Modal (Alternativa 1) */}
+      <CvUploadModal
+        isOpen={isCvUploadOpen}
+        onClose={() => setIsCvUploadOpen(false)}
+        onImportLogs={handleImportBatchLogs}
+        currentUser={user}
+        onUpdateProfile={handleUpdateProfile}
+      />
+
+      {/* Paste Bullets Batch Modal (Alternativa 2) */}
+      <PasteBulletsModal
+        isOpen={isPasteBulletsOpen}
+        onClose={() => setIsPasteBulletsOpen(false)}
+        onImportLogs={handleImportBatchLogs}
+        onOpenCvModal={() => setIsCvUploadOpen(true)}
+      />
+
+      {/* Auth Modal (Google Login + Custom Login/Register) */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
@@ -305,12 +493,42 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-[#060910] py-6 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="font-mono text-[11px]">
-            CAPTAIN'S LOG · Bitácora Local-First y Vitrina Pública Ejecutiva
-          </p>
-          <div className="flex items-center gap-4 text-[11px]">
+      <footer className="border-t border-slate-900 bg-[#060910] py-8 px-4 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-left">
+            <p className="font-mono text-xs text-slate-300 font-bold">
+              GOAL RECALL · Bitácora Local-First y Vitrina Pública Ejecutiva
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Privacidad garantizada: tus datos residen en tu navegador sin telemetría de terceros.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <button
+              onClick={() => setActiveView("landing")}
+              className="hover:text-cyan-400 transition-colors"
+            >
+              Inicio
+            </button>
+            <span>·</span>
+            <button
+              onClick={() => {
+                setActiveView("quarters");
+                setActiveQuartersTab("timeline");
+              }}
+              className="hover:text-cyan-400 transition-colors"
+            >
+              Captain's Quarters
+            </button>
+            <span>·</span>
+            <button
+              onClick={() => setActiveView("public")}
+              className="hover:text-cyan-400 transition-colors"
+            >
+              Public Deck
+            </button>
+            <span>·</span>
             <button
               onClick={() => {
                 setActiveView("quarters");
@@ -325,7 +543,7 @@ export default function App() {
               onClick={() => setIsSettingsOpen(true)}
               className="hover:text-cyan-400 transition-colors"
             >
-              Exportar Respaldo JSON
+              Respaldo JSON
             </button>
           </div>
         </div>

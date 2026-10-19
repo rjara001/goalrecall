@@ -6,15 +6,35 @@ export type LogCategory =
   | "Infra/DevOps 🚀" 
   | "Spike/R&D 🔬";
 
+export interface WorkExperience {
+  id: string;
+  userId?: string;
+  company: string; // e.g. "ParserDigital / Chambers & Partners"
+  role: string; // e.g. "Senior Full Stack Developer"
+  startDate: string; // e.g. "Oct 2025" or "2022"
+  endDate?: string; // e.g. "Present" or "2024"
+  isCurrent?: boolean; // true if currently working here
+  location?: string; // e.g. "Santiago, Chile / Remoto"
+  summary?: string; // brief context/mission of the team or role
+  bullets?: string[]; // real textual bullets extracted from CV
+  technologies?: string[]; // primary tech stack
+  isPersonalProjects?: boolean; // true if this is the personal projects container
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface LogEntry {
   id: string;
+  userId?: string; // Links log to a specific user profile
+  experienceId?: string; // Strictly links this achievement to its parent WorkExperience
+  originalBullet?: string; // Reference to the original CV bullet this achievement was extracted from
   date: string; // ISO format: YYYY-MM-DD
-  client: string; // e.g. "ClientX", "Internal"
-  project: string; // e.g. "Checkout Revamp", "Cloud Migration"
+  client: string; // e.g. "ParserDigital", "ClientX"
+  project: string; // e.g. "Digital Submissions", "Checkout Revamp"
   category: LogCategory;
   title: string;
   description?: string;
-  impact: string; // Quantitative/qualitative outcome
+  impact: string; // Quantitative/qualitative outcome (Google XYZ formula)
   tags: string[];
   isPublic: boolean; // Default false (Sandbox). If true, appears in Public Deck & First Mate
   createdAt: number;
@@ -32,7 +52,25 @@ export interface UserProfile {
   github?: string;
   linkedin?: string;
   skills: { name: string; category: "Languages" | "Frameworks" | "Cloud/DevOps" | "Architecture" }[];
+  authProvider?: "google" | "custom";
   isDemoUser?: boolean;
+  isCustom?: boolean;
+  createdAt?: number;
+}
+
+export interface CustomAccount {
+  id: string;
+  name: string;
+  email: string; // Used as login credential (case-insensitive)
+  passwordHash: string; // Base64 encoded password hash
+  title: string;
+  avatar: string;
+  bio?: string;
+  location?: string;
+  github?: string;
+  linkedin?: string;
+  skills?: { name: string; category: "Languages" | "Frameworks" | "Cloud/DevOps" | "Architecture" }[];
+  createdAt: number;
 }
 
 export interface VisitorMessage {
@@ -88,3 +126,87 @@ export interface STARStory {
   result: string;    // Measurable outcome & impact
   tags: string[];
 }
+
+export interface CvContact {
+  name: string;
+  headline: string;
+  email: string;
+  phone: string;
+  location: string;
+  linkedin: string;
+  github: string;
+  portfolio: string;
+}
+
+export interface CvExperience {
+  id: string;
+  company: string;
+  role: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent?: boolean;
+  description?: string;
+  bullets: string[];
+  technologies: string[];
+  category: LogCategory;
+}
+
+export interface CvEducation {
+  id: string;
+  degree: string;
+  institution: string;
+  year?: string;
+  status?: string;
+}
+
+export interface CvCertification {
+  id: string;
+  name: string;
+  issuer: string;
+  year?: string;
+  credentialId?: string;
+}
+
+export interface CvProject {
+  id: string;
+  name: string;
+  role?: string;
+  description: string;
+  technologies: string[];
+  url?: string;
+}
+
+export interface CvLanguage {
+  id: string;
+  language: string;
+  level: string;
+}
+
+export interface ExtractedCvData {
+  contact: CvContact;
+  summary: string;
+  skills: {
+    technical: string[];
+    frameworks: string[];
+    toolsCloud: string[];
+    softSkills: string[];
+  };
+  experiences: CvExperience[];
+  education: CvEducation[];
+  certifications: CvCertification[];
+  projects: CvProject[];
+  languages: CvLanguage[];
+  rawTextPreview?: string;
+}
+
+export interface CvPendingField {
+  id: string;
+  section: "contact" | "summary" | "skills" | "experiences" | "education" | "certifications" | "projects" | "languages";
+  fieldName: string;
+  label: string;
+  description: string;
+  severity: "high" | "medium" | "low";
+  suggestedPrompt: string;
+}
+

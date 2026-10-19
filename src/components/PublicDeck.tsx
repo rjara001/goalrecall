@@ -321,7 +321,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 <MessageSquare className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Dejar un Recado para el Capitán</h3>
+                <h3 className="text-sm font-bold text-white">Dejar un Recado / Contacto Directo</h3>
                 <p className="text-[11px] text-slate-400">
                   ¿Preguntas sobre disponibilidad, asesoría técnica o reclutamiento?
                 </p>
@@ -389,7 +389,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   type="submit"
                   className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-emerald-500/20"
                 >
-                  Enviar Mensaje al Capitán
+                  Enviar Mensaje / Recado
                 </button>
               </form>
             )}
