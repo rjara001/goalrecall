@@ -1,4 +1,4 @@
-import { LogEntry, UserProfile, VisitorMessage, CustomAccount, ExtractedCvData, WorkExperience } from "../types";
+import { LogEntry, UserProfile, VisitorMessage, CustomAccount, ExtractedCvData, WorkExperience, AiUsageRecord } from "../types";
 
 const STORAGE_KEYS = {
   LOGS: "captains_logs_v1",
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   PIN: "captains_pin_v1",
   CV_DATA: "captains_stored_cv_v1",
   EXPERIENCES: "captains_experiences_v1",
+  AI_USAGE: "goal_recall_ai_usage_v1",
 };
 
 export const INITIAL_EXPERIENCES: WorkExperience[] = [];
@@ -762,5 +763,126 @@ export const clearSessionData = (): void => {
   saveUser(null);
   clearStoredCv();
 };
+
+// --- AI Usage Quota & Rate Limiting ---
+
+export const MAX_FREE_MONTHLY_AI_USES = 3;
+export const AI_COOLDOWN_MS = 120_000; // 2 minutes in ms
+
+export const getAiUsage = (): AiUsageRecord => {
+  const currentMonthKey = new Date().toISOString().substring(0, 7);
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.AI_USAGE);
+    if (!raw) {
+      return { monthKey: currentMonthKey, count: 0, lastUsed: 0 };
+    }
+    const parsed: AiUsageRecord = JSON.parse(raw);
+    if (parsed.monthKey !== currentMonthKey) {
+      // Month changed: auto reset count
+      const newRecord: AiUsageRecord = { monthKey: currentMonthKey, count: 0, lastUsed: parsed.lastUsed || 0 };
+      localStorage.setItem(STORAGE_KEYS.AI_USAGE, JSON.stringify(newRecord));
+      return newRecord;
+    }
+    return parsed;
+  } catch (e) {
+    return { monthKey: currentMonthKey, count: 0, lastUsed: 0 };
+  }
+};
+
+export const checkCanUseAi = (plan: "free" | "pro" = "free"): {
+  canUse: boolean;
+  reason?: string;
+  remaining: number;
+  cooldownRemainingMs: number;
+  usage: AiUsageRecord;
+} => {
+  const usage = getAiUsage();
+  const now = Date.now();
+  const cooldownRemainingMs = Math.max(0, usage.lastUsed + AI_COOLDOWN_MS - now);
+
+  if (plan === "pro") {
+    return {
+      canUse: cooldownRemainingMs === 0,
+      reason: cooldownRemainingMs > 0 ? "Por favor espera a que termine el tiempo de enfriamiento entre llamadas." : undefined,
+      remaining: 999,
+      cooldownRemainingMs,
+      usage,
+    };
+  }
+
+  // Free Tier rules:
+  const remaining = Math.max(0, MAX_FREE_MONTHLY_AI_USES - usage.count);
+
+  if (remaining <= 0) {
+    return {
+      canUse: false,
+      reason: `Has utilizado las ${MAX_FREE_MONTHLY_AI_USES} extracciones con IA incluidas en tu cuenta gratuita este mes.`,
+      remaining: 0,
+      cooldownRemainingMs,
+      usage,
+    };
+  }
+
+  if (cooldownRemainingMs > 0) {
+    const secondsLeft = Math.ceil(cooldownRemainingMs / 1000);
+    return {
+      canUse: false,
+      reason: `Por favor espera ${secondsLeft} segundos antes de realizar otra extracción con IA.`,
+      remaining,
+      cooldownRemainingMs,
+      usage,
+    };
+  }
+
+  return {
+    canUse: true,
+    remaining,
+    cooldownRemainingMs: 0,
+    usage,
+  };
+};
+
+export const recordAiUsage = (): AiUsageRecord => {
+  const currentMonthKey = new Date().toISOString().substring(0, 7);
+  const current = getAiUsage();
+  const updated: AiUsageRecord = {
+    monthKey: currentMonthKey,
+    count: (current.monthKey === currentMonthKey ? current.count : 0) + 1,
+    lastUsed: Date.now(),
+  };
+  try {
+    localStorage.setItem(STORAGE_KEYS.AI_USAGE, JSON.stringify(updated));
+  } catch (e) {
+    console.error("Error saving AI usage", e);
+  }
+  return updated;
+};
+
+export const saveProWaitlistEmail = (email: string): boolean => {
+  try {
+    const clean = email.trim().toLowerCase();
+    if (!clean || !clean.includes("@")) return false;
+    const raw = localStorage.getItem("goal_recall_pro_waitlist_v1");
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(clean)) {
+      list.push(clean);
+      localStorage.setItem("goal_recall_pro_waitlist_v1", JSON.stringify(list));
+    }
+    return true;
+  } catch (e) {
+    console.error("Error saving waitlist email", e);
+    return false;
+  }
+};
+
+export const getProWaitlistEmails = (): string[] => {
+  try {
+    const raw = localStorage.getItem("goal_recall_pro_waitlist_v1");
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+};
+
 
 

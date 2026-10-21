@@ -6,15 +6,14 @@ import {
   Sparkles, 
   Tag, 
   Check, 
-  ShieldAlert, 
   Eye, 
   Lock, 
   Calendar, 
   Building, 
   FolderGit2, 
   Zap, 
-  Info,
-  Clock
+  ChevronDown,
+  SlidersHorizontal
 } from "lucide-react";
 import { LogCategory, LogEntry, PresetTemplate } from "../types";
 
@@ -81,6 +80,17 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   initialExperienceId,
   initialBulletText,
 }) => {
+  // Primary focused fields
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [impact, setImpact] = useState("");
+
+  // Progressive Disclosure states - ALWAYS START COLLAPSED
+  const [isImpactVisible, setIsImpactVisible] = useState(false);
+  const [isContextVisible, setIsContextVisible] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+
+  // Secondary metadata fields
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
   const [experienceId, setExperienceId] = useState<string>("");
   const [isCreatingNewExp, setIsCreatingNewExp] = useState(false);
@@ -89,12 +99,9 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [client, setClient] = useState("");
   const [project, setProject] = useState("");
   const [category, setCategory] = useState<LogCategory>("Feature ✨");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [impact, setImpact] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [isPublic, setIsPublic] = useState(false); // Default to Sandbox Privado!
+  const [isPublic, setIsPublic] = useState(false); // Default: Sandbox Privado
   const [experiencesList, setExperiencesList] = useState<any[]>([]);
 
   // Speech-to-Text State
@@ -102,25 +109,55 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
 
+  // Refs
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const templatesDropdownRef = useRef<HTMLDivElement>(null);
+
   // Auto-complete suggestion lists
   const existingProjects = Array.from(new Set(existingLogs.map((l) => l.project))).filter(Boolean);
 
-  // Initialize or reset form
+  // Close templates dropdown on outside click
   useEffect(() => {
-    // Import and get experiences
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        templatesDropdownRef.current && 
+        !templatesDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTemplatesOpen(false);
+      }
+    };
+
+    if (isTemplatesOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isTemplatesOpen]);
+
+  // Initialize or reset form - ALWAYS START WITH ACCORDIONS COLLAPSED
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Both accordions ALWAYS arrive collapsed
+    setIsImpactVisible(false);
+    setIsContextVisible(false);
+    setIsTemplatesOpen(false);
+
     import("../utils/storage").then(({ getStoredExperiences }) => {
       const exps = getStoredExperiences();
       setExperiencesList(exps);
 
       if (initialData) {
+        setTitle(initialData.title);
+        setDescription(initialData.description || "");
+        setImpact(initialData.impact);
+
         setDate(initialData.date);
         setExperienceId(initialData.experienceId || exps[0]?.id || "exp-personal");
         setClient(initialData.client);
         setProject(initialData.project);
         setCategory(initialData.category);
-        setTitle(initialData.title);
-        setDescription(initialData.description || "");
-        setImpact(initialData.impact);
         setTags(initialData.tags || []);
         setIsPublic(initialData.isPublic);
       } else {
@@ -128,6 +165,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
           ? exps.find((e) => e.id === initialExperienceId) 
           : null;
         const defaultExp = targetExp || exps[0] || { id: "exp-personal", company: "Proyectos Personales & Consultoría Independiente" };
+        
         setDate(new Date().toISOString().substring(0, 10));
         setExperienceId(defaultExp.id);
         setClient(defaultExp.company);
@@ -151,6 +189,11 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         }
         setIsPublic(false); // Sandbox by default
       }
+
+      // Auto focus on title
+      setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 100);
     });
   }, [initialData, isOpen, initialExperienceId, initialBulletText]);
 
@@ -168,7 +211,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = "es-ES"; // Default to Spanish; also handles English well
+      recognition.lang = "es-ES";
 
       recognition.onresult = (event: any) => {
         let currentTranscript = "";
@@ -177,7 +220,6 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         }
 
         if (currentTranscript.trim()) {
-          // If title is short, populate title, else append to description
           setTitle((prev) => (prev ? `${prev} ${currentTranscript}` : currentTranscript));
         }
       };
@@ -226,6 +268,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
     setDescription(preset.description);
     setImpact(preset.impact);
     setTags(preset.tags);
+    setIsTemplatesOpen(false);
   };
 
   const handleAddTag = (e: React.KeyboardEvent) => {
@@ -243,9 +286,11 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !impact.trim()) return;
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!title.trim()) return;
+
+    const finalImpact = impact.trim() || "Completado y verificado en entorno de producción";
 
     let targetExpId = experienceId;
     let targetClient = client;
@@ -272,335 +317,465 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
       category,
       title: title.trim(),
       description: description.trim() || undefined,
-      impact: impact.trim(),
+      impact: finalImpact,
       tags,
       isPublic,
     });
     onClose();
   };
 
+  // Keyboard shortcut: Cmd/Ctrl + Enter to quickly submit
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   if (!isOpen) return null;
 
+  // Selected company label for preview chip
+  const currentExpObj = experiencesList.find((exp) => exp.id === experienceId);
+  const companyLabel = isCreatingNewExp 
+    ? (newExpCompany || "Nueva Empresa") 
+    : (currentExpObj?.company || client || "Personal");
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onKeyDown={handleKeyDown}
+    >
       <div 
-        className="w-full max-w-2xl bg-[#0D121F] border border-slate-700/80 rounded-2xl shadow-2xl shadow-cyan-950/20 overflow-hidden flex flex-col max-h-[92vh]"
+        className="w-full max-w-2xl bg-[#0B0F19] border border-slate-700/80 rounded-2xl shadow-2xl shadow-cyan-950/30 overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
+        {/* Top Header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-800 bg-slate-900/70">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Sparkles className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
-                {initialData ? "Editar Registro de Log" : "Captura Rápida de Log (Frictionless)"}
+              <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                {initialData ? "Editar Logro Técnico" : "Captura Rápida de Log"}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-700/40 text-cyan-300">
+                  Fricción Cero
+                </span>
               </h2>
-              <p className="text-xs text-slate-400">
-                Documenta tu victoria técnica bajo su empresa o proyecto correspondiente
-              </p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Cerrar modal"
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Presets Bar */}
-        <div className="px-6 py-2.5 bg-slate-900/40 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto">
-          <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider shrink-0">
-            Plantillas:
-          </span>
-          {PRESETS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => applyPreset(p)}
-              className="text-xs px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-white shrink-0 transition-colors"
-            >
-              {p.name}
-            </button>
-          ))}
+        {/* Subtle Sandbox / Privacy Bar at the top (Sutil, no invasivo) */}
+        <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`p-1 rounded-md shrink-0 ${isPublic ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-slate-800/80 text-slate-400 border border-slate-700/60"}`}>
+              {isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+            </div>
+            <div className="flex items-center gap-1.5 truncate">
+              <span className={`text-xs font-semibold ${isPublic ? "text-emerald-300" : "text-slate-200"}`}>
+                {isPublic ? "Visible en Public Deck" : "Sandbox Privado (Confidencial)"}
+              </span>
+              <span className="text-[11px] text-slate-400 hidden sm:inline truncate">
+                — {isPublic ? "Visible para reclutadores y exportaciones públicas" : "Solo tú puedes verlo; ideal para notas crudas y confidencialidad"}
+              </span>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer shrink-0" title={isPublic ? "Cambiar a Sandbox Privado" : "Hacer Visible en Public Deck"}>
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+        {/* Form Body - Maximum room for Title & Description */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
           
-          {/* Metadata Row: Date, Experience/Company Selector, Project */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                Fecha
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
-              />
-            </div>
-
-            {/* Experience / Company Container */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Building className="w-3.5 h-3.5 text-cyan-400" />
-                  Empresa / Experiencia *
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingNewExp(!isCreatingNewExp)}
-                  className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono"
-                >
-                  {isCreatingNewExp ? "← Existente" : "+ Nueva"}
-                </button>
-              </div>
-
-              {isCreatingNewExp ? (
-                <div className="space-y-1.5">
-                  <input
-                    type="text"
-                    value={newExpCompany}
-                    onChange={(e) => {
-                      setNewExpCompany(e.target.value);
-                      setClient(e.target.value);
-                    }}
-                    placeholder="Nombre Empresa (ej. Stripe)"
-                    required
-                    className="w-full bg-slate-900/90 border border-cyan-500/80 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400"
-                  />
-                  <input
-                    type="text"
-                    value={newExpRole}
-                    onChange={(e) => setNewExpRole(e.target.value)}
-                    placeholder="Cargo (ej. Senior Backend)"
-                    className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-              ) : (
-                <select
-                  value={experienceId}
-                  onChange={(e) => {
-                    setExperienceId(e.target.value);
-                    const selected = experiencesList.find((exp) => exp.id === e.target.value);
-                    if (selected) {
-                      setClient(selected.company);
-                    }
-                  }}
-                  className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                >
-                  {experiencesList.map((exp) => (
-                    <option key={exp.id} value={exp.id}>
-                      {exp.company} {exp.role ? `— ${exp.role}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            {/* Project / Module */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />
-                Proyecto / Módulo
-              </label>
-              <input
-                type="text"
-                list="project-suggestions"
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-                placeholder="ej. Checkout Revamp"
-                required
-                className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-              />
-              <datalist id="project-suggestions">
-                {existingProjects.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </div>
-          </div>
-
-          {/* Category Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Categoría Técnica
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-3 py-2 text-xs rounded-lg border text-left flex items-center justify-between transition-all ${
-                    category === cat
-                      ? "bg-cyan-500/10 border-cyan-500/80 text-cyan-300 font-semibold"
-                      : "bg-slate-900/70 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
-                  }`}
-                >
-                  <span>{cat}</span>
-                  {category === cat && <Check className="w-3.5 h-3.5 text-cyan-400" />}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Title & Speech Recognition */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-slate-300">
+          {/* 1. TÍTULO DEL LOG + ACCIONES (DICTAR Y USAR PLANTILLAS) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
                 Título del Log (Qué se hizo) *
               </label>
-              {speechSupported && (
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md font-medium transition-all ${
-                    isListening
-                      ? "bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse"
-                      : "bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
-                  }`}
-                >
-                  {isListening ? (
-                    <>
-                      <MicOff className="w-3.5 h-3.5" />
-                      <span>Detener Voz</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="w-3.5 h-3.5" />
-                      <span>Dictar con Voz</span>
-                    </>
+
+              <div className="flex items-center gap-2">
+                {/* Speech to text */}
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md font-medium transition-all ${
+                      isListening
+                        ? "bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse"
+                        : "bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
+                    }`}
+                    title="Dictar título con voz"
+                  >
+                    {isListening ? (
+                      <>
+                        <MicOff className="w-3 h-3" />
+                        <span>Detener</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-3 h-3" />
+                        <span>Dictar</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Templates Dropdown Trigger */}
+                <div className="relative" ref={templatesDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplatesOpen(!isTemplatesOpen)}
+                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md font-medium bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition-all"
+                  >
+                    <Zap className="w-3 h-3 fill-amber-300" />
+                    <span>Usar Plantilla</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform ${isTemplatesOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isTemplatesOpen && (
+                    <div className="absolute right-0 mt-1.5 w-64 bg-[#0F1422] border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="px-3 py-1.5 text-[10px] font-mono text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                        Selecciona un formato guía:
+                      </div>
+                      {PRESETS.map((p) => (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => applyPreset(p)}
+                          className="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-cyan-500/10 hover:text-cyan-300 transition-colors flex items-center justify-between"
+                        >
+                          <span className="font-medium truncate">{p.name}</span>
+                          <span className="text-[10px] text-slate-500 shrink-0 ml-2 font-mono">{p.category.split(" ")[0]}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                </button>
-              )}
+                </div>
+              </div>
             </div>
+
             <input
+              ref={titleInputRef}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="ej. Migración de pasarela de pago a arquitectura de saga asíncrona"
+              placeholder="ej. Reemplazo de arquitectura síncrona por pipelines asíncronos con Kafka"
               required
-              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner"
             />
           </div>
 
-          {/* Impact Metric (Crucial for XYZ & STAR) */}
-          <div>
-            <label className="block text-xs font-semibold text-emerald-400 mb-1 flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5" />
-              Impacto Medible / Resultado Cuantitativo *
-            </label>
-            <input
-              type="text"
-              value={impact}
-              onChange={(e) => setImpact(e.target.value)}
-              placeholder="ej. Reducción de latencia p99 de 3.2s a 240ms (-92%) y +14% de conversión"
-              required
-              className="w-full bg-slate-900/90 border border-emerald-500/40 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              Vital para la fórmula XYZ de Google: <span className="font-mono text-slate-300">"Accomplished [X] as measured by [Y]..."</span>
-            </p>
-          </div>
-
-          {/* Description (Technical steps) */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Pasos Técnicos / Detalles (Opcional)
-            </label>
+          {/* 2. PASOS TÉCNICOS / DETALLES (MÁS ALTO - rows={6}, min-h-[145px]) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300">
+                Pasos Técnicos / Detalles (Opcional)
+              </label>
+              <span className="text-[11px] text-slate-500">
+                Arquitectura, librerías, refactor o problemas resueltos
+              </span>
+            </div>
             <textarea
-              rows={2}
+              rows={6}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detalla decisiones de arquitectura, herramientas utilizadas, trampas evitadas o dificultades superadas..."
-              className="w-full bg-slate-900/90 border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 resize-none"
+              placeholder="Describe cómo lo resolviste: decisiones de arquitectura, patrones de diseño (ej. Saga, CQRS), optimizaciones de queries, índices creados o trampas de concurrencia superadas..."
+              className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all resize-y min-h-[145px] leading-relaxed"
             />
           </div>
 
-          {/* Tags */}
+          {/* 3. IMPACTO MEDIBLE (ACORDEÓN - LLEGA COLAPSADO POR DEFECTO) */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-cyan-400" />
-              Etiquetas Técnicas (Presiona Enter para añadir)
-            </label>
-            <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-900/90 border border-slate-700 rounded-lg min-h-[42px]">
-              {tags.map((t) => (
-                <span
-                  key={t}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/40 text-cyan-300 font-mono"
-                >
-                  {t}
+            {!isImpactVisible ? (
+              <button
+                type="button"
+                onClick={() => setIsImpactVisible(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-emerald-500/40 hover:border-emerald-500 hover:bg-emerald-950/20 text-emerald-400 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 text-xs">
+                  <Zap className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-emerald-500/40 underline-offset-4 group-hover:decoration-emerald-400">
+                    {impact ? `⚡ Impacto: "${impact.slice(0, 50)}${impact.length > 50 ? '...' : ''}"` : "+ Agregar Impacto Medible / Resultado Cuantitativo (Fórmula XYZ)"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-emerald-500/70 group-hover:text-emerald-300">
+                  {impact ? "Editar" : "Definir"} ▾
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/30 via-slate-900/80 to-cyan-950/20 border border-emerald-500/50 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                    Impacto Medible / Resultado Cuantitativo *
+                  </label>
                   <button
                     type="button"
-                    onClick={() => removeTag(t)}
-                    className="hover:text-red-400"
+                    onClick={() => setIsImpactVisible(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
                   >
-                    ×
+                    Ocultar
                   </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleAddTag}
-                placeholder={tags.length === 0 ? "ej. #React, #PostgreSQL..." : "Añadir más..."}
-                className="bg-transparent text-xs text-slate-200 focus:outline-none min-w-[120px] flex-1 px-1"
-              />
-            </div>
+                </div>
+                <input
+                  type="text"
+                  value={impact}
+                  onChange={(e) => setImpact(e.target.value)}
+                  placeholder="ej. Reducción de latencia p99 en 85% (de 2.4s a 180ms) y cero caídas en tráfico pico"
+                  className="w-full bg-slate-900 border border-emerald-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40 transition-all"
+                />
+                <p className="text-[11px] text-slate-400">
+                  <span className="text-emerald-300 font-semibold">Fórmula XYZ de Google:</span> Logró [X] medido por [Y] haciendo [Z]. Expresa el resultado en %, tiempo o volumen.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Sandbox & Selective Publication Box */}
-          <div className="p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className={`p-2 rounded-lg mt-0.5 ${isPublic ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "bg-slate-800 text-slate-400 border border-slate-700"}`}>
-                {isPublic ? <Eye className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-200">
-                  {isPublic ? "Publicar en Public Deck (Visible)" : "Guardar en Sandbox Privado (Confidencial)"}
-                </p>
-                <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
-                  {isPublic
-                    ? "Esta entrada se expondrá en tu vitrina pública y el agente 'First Mate' podrá citarla ante reclutadores."
-                    : "Por defecto es privada. Protege secretos comerciales y notas crudas. Podrás publicarla después con un clic."}
-                </p>
-              </div>
-            </div>
+          {/* 4. CONFIGURACIÓN DE CONTEXTO (ACORDEÓN - LLEGA COLAPSADO POR DEFECTO) */}
+          <div>
+            {!isContextVisible ? (
+              <button
+                type="button"
+                onClick={() => setIsContextVisible(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-slate-700/80 hover:border-slate-600 hover:bg-slate-800/40 text-slate-300 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 overflow-hidden text-xs">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors shrink-0" />
+                  <span className="font-medium underline decoration-slate-600 underline-offset-4 group-hover:decoration-slate-400">
+                    Contexto y Opciones Secundarias
+                  </span>
+                  {/* Scannable live preview pills */}
+                  <div className="hidden sm:flex items-center gap-1.5 ml-2 truncate">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700/60">
+                      🏢 {companyLabel}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700/60">
+                      {category}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700/60">
+                      📅 {date}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-mono text-slate-400 group-hover:text-white shrink-0 ml-2">
+                  Ajustar ▾
+                </span>
+              </button>
+            ) : (
+              <div className="p-4 border border-slate-800 rounded-xl bg-slate-900/60 space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                    Contexto y Configuración Secundaria
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsContextVisible(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Ocultar
+                  </button>
+                </div>
 
-            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-              <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-            </label>
+                {/* Row: Date, Experience, Project */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Fecha */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Calendar className="w-3 h-3 text-cyan-400" />
+                      Fecha del Hito
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+
+                  {/* Empresa / Experiencia */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Building className="w-3 h-3 text-cyan-400" />
+                        Empresa Asignada
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingNewExp(!isCreatingNewExp)}
+                        className="text-[10px] text-cyan-400 hover:text-cyan-300 font-mono"
+                      >
+                        {isCreatingNewExp ? "← Existente" : "+ Nueva"}
+                      </button>
+                    </div>
+
+                    {isCreatingNewExp ? (
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          value={newExpCompany}
+                          onChange={(e) => {
+                            setNewExpCompany(e.target.value);
+                            setClient(e.target.value);
+                          }}
+                          placeholder="Empresa (ej. Stripe)"
+                          className="w-full bg-slate-900 border border-cyan-500/80 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                        />
+                        <input
+                          type="text"
+                          value={newExpRole}
+                          onChange={(e) => setNewExpRole(e.target.value)}
+                          placeholder="Cargo (ej. Senior Backend)"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-slate-300 focus:outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <select
+                        value={experienceId}
+                        onChange={(e) => {
+                          setExperienceId(e.target.value);
+                          const selected = experiencesList.find((exp) => exp.id === e.target.value);
+                          if (selected) {
+                            setClient(selected.company);
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        {experiencesList.map((exp) => (
+                          <option key={exp.id} value={exp.id}>
+                            {exp.company} {exp.role ? `— ${exp.role}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Proyecto / Módulo */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <FolderGit2 className="w-3 h-3 text-cyan-400" />
+                      Proyecto / Módulo
+                    </label>
+                    <input
+                      type="text"
+                      list="project-suggestions"
+                      value={project}
+                      onChange={(e) => setProject(e.target.value)}
+                      placeholder="ej. Core Submissions"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                    />
+                    <datalist id="project-suggestions">
+                      {existingProjects.map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Categoría Técnica */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
+                    Categoría Técnica
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        className={`px-2.5 py-1.5 text-xs rounded-lg border text-left flex items-center justify-between transition-all ${
+                          category === cat
+                            ? "bg-cyan-500/15 border-cyan-500/80 text-cyan-300 font-semibold"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                        }`}
+                      >
+                        <span>{cat}</span>
+                        {category === cat && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Tag className="w-3 h-3 text-cyan-400" />
+                    Etiquetas Técnicas (Presiona Enter o coma para añadir)
+                  </label>
+                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-900 border border-slate-700 rounded-lg min-h-[38px]">
+                    {tags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/40 text-cyan-300 font-mono"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(t)}
+                          className="hover:text-red-400 ml-0.5"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={handleAddTag}
+                      placeholder={tags.length === 0 ? "ej. #Kafka, #Go, #PostgreSQL..." : "Añadir..."}
+                      className="bg-transparent text-xs text-slate-200 focus:outline-none min-w-[100px] flex-1 px-1"
+                    />
+                  </div>
+                </div>
+
+              </div>
+            )}
           </div>
 
           {/* Submit Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 transition-all"
-            >
-              {initialData ? "Actualizar Log" : "Guardar Log"}
-            </button>
+          <div className="pt-3 flex items-center justify-between border-t border-slate-800">
+            <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">Ctrl / ⌘</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">Enter</kbd> para guardar rápido
+            </span>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={!title.trim()}
+                className="px-5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                {initialData ? "Actualizar Log" : "Guardar Log"}
+              </button>
+            </div>
           </div>
         </form>
       </div>

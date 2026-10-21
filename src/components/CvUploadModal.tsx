@@ -34,7 +34,9 @@ import {
   ListTodo,
   ExternalLink,
   ChevronRight,
-  Download
+  Download,
+  Crown,
+  Clock
 } from "lucide-react";
 import {
   LogCategory,
@@ -49,7 +51,16 @@ import {
   CvLanguage,
   WorkExperience
 } from "../types";
-import { saveStoredCv, getStoredExperiences, saveExperiences } from "../utils/storage";
+import { 
+  saveStoredCv, 
+  getStoredExperiences, 
+  saveExperiences,
+  checkCanUseAi,
+  recordAiUsage,
+  getAiUsage,
+  MAX_FREE_MONTHLY_AI_USES,
+  saveProWaitlistEmail
+} from "../utils/storage";
 
 interface ExtractedBullet {
   id: string;
@@ -62,6 +73,7 @@ interface ExtractedBullet {
   tags: string[];
   xyzScore: number;
   metricHighlight?: string;
+  originalText?: string;
   selected: boolean;
   isEditing?: boolean;
 }
@@ -74,50 +86,86 @@ interface CvUploadModalProps {
   onUpdateProfile?: (updated: UserProfile) => void;
 }
 
-const SAMPLE_CV_TEXT = `RODRIGO JARA
-Senior Full-Stack & Systems Architect
-rjara001@gmail.com | +56 9 8765 4321 | Santiago, Chile / Remoto
-LinkedIn: linkedin.com/in/rodrigojara | GitHub: github.com/rjara
+const SAMPLE_CV_TEXT = `Experiencia Laboral
 
-RESUMEN PROFESIONAL
-Ingeniero de Software y Arquitecto de Sistemas con más de 12 años de trayectoria liderando plataformas de alta concurrencia, microservicios distribuidos y modernización de infraestructuras críticas en fintech y e-commerce.
+Senior Full Stack Developer
+@ ParserDigital / Chambers & Partners
+Oct 2025 — Present
+• Delivered the Digital Submissions platform for Chambers & Partners in 7 months, on time and on budget, now rolling out to 10,000+ law firms worldwide for rankings and legal awards submissions.
+• Replaced a fragmented, document-heavy process with structured digital workflows, converting Word/Excel submissions into live collaboration, secure sharing, guided editing, and contributor tracking, unlocking structured data for new commercial products.
+• Owned the end-to-end development of the History Navigation component, a version-tracking and audit feature showing who changed what and when, with visual highlighting of additions, removals, and modifications across document versions.
+• Built the section sharing feature from scratch, enabling submission sections to be distributed to contributors with per-user permissions, plus secure public URL access with configurable expiration for external collaborators.
+• Developed frontend applications within a Microfrontend architecture using Angular 21 and Native Federation, building modular components and feature flows with Signals, OnPush change detection, and Standalone Components.
+• Developed backend services with .NET 10 Minimal APIs and MediatR, applying Vertical Slice Architecture to keep domain logic decoupled, modular, and easy to maintain.
+• Engineered a Notion-style dynamic navigation drawer with section-level completion tracking, and a structured multi-section editor with draft persistence and real-time validation (errors and warnings).
+• Integrated with the Chambers Central API (CcApi) to keep law firm, contact, and ranking data synchronized across systems.
+• Contributed to CI/CD pipelines with Azure DevOps and Docker, with automated test suites using xUnit (backend) and Karma/Jasmine (frontend).
+• Used AI-assisted development tools (GitHub Copilot) to speed up prototyping and routine tasks, keeping the focus on architecture, performance, and code quality.
+Tecnologías: Angular 21, Native Federation, .NET 10, Minimal APIs, MediatR, Vertical Slice Architecture, Microservices, Bootstrap 5, Azure DevOps, Docker, Vitest, xUnit, Karma, Jasmine, GitHub Copilot, CcApi
 
-EXPERIENCIA LABORAL
+Full Stack Developer
+@ ParserDigital / Dunnhumby
+Oct 2024 — Oct 2025
+• Built and maintained dynamic reporting forms and dashboards using Next.js and NestJS, integrating with Databricks APIs to present curated data provided by the data engineering team.
+• Designed and implemented PostgreSQL relational models and stored procedures to support reporting interfaces and ensure reliable data delivery.
+• Integrated Azure Service Principals for secure execution of Databricks queries, implementing serverless access and token management via NestJS.
+• Deployed the platform on Azure Kubernetes Service (AKS) with CI/CD pipelines, enabling scalable, reliable, and reproducible production environments.
+• Developed reusable web components and microfrontend modules using React, Next.js, and Webpack, improving frontend modularity, code reuse, and maintainability across reporting dashboards.
+• Enhanced CI/CD pipelines in GitLab, optimizing deployments and automating environment provisioning, reducing production errors and manual tasks.
+• Implemented observability and monitoring with New Relic and OpenTelemetry, improving real-time performance tracking and accelerating issue resolution.
+• Applied unit and integration testing with Jest and enforced semantic versioning, ensuring high-quality releases and consistent component management.
+Tecnologías: React, Next.js, NestJS, .NET 9, GraphQL, REST APIs, Node.js, PostgreSQL, CI/CD, Azure, Webpack, AKS, Databricks APIs, GitLab, New Relic, OpenTelemetry, Jest
 
-Mercado Libre / Fintech Core — Staff Systems Engineer (2022 - Presente)
-• Diseñó y lideró la arquitectura de microservicios de liquidación de pagos de alta concurrencia, reduciendo la latencia P99 de 380ms a 42ms (-88%) procesando más de 12,000 transacciones por segundo.
-• Implementó sistema de resiliencia con circuit breakers y colas Kafka particionadas, alcanzando disponibilidad operativa SLA de 99.995% durante eventos de Hot Sale y Black Friday.
-• Refactorizó el pipeline de reconciliación contable distribuida en Go y PostgreSQL, eliminando discrepancias financieras en un 100% y recortando el procesamiento nocturno de 4 horas a 22 minutos.
-Tecnologías: Go, Kafka, PostgreSQL, Docker, Kubernetes, Datadog
+Backend Developer
+@ Raisin
+Sep 2023 — Oct 2024
+• Developed new features for the SaaS platform, maintaining back-office systems, APIs, and batch processes using .NET Core.
+• Designed and optimized SQL Server stored procedures to improve database efficiency and ensure reliable data processing.
+• Contributed to GraphQL, Java and Go middleware development, enhancing API performance and scalability.
+• Led deployment of services to AWS, automating release processes and improving system reliability.
+• Collaborated in an Agile team of 15, delivering features for US-based clients within Scrum cycles, improving sprint delivery efficiency.
+• Implemented unit and integration testing to ensure code quality and system stability across backend services.
+Tecnologías: .NET Core, GraphQL, Go, Java, Node.js, AWS, SQL Server, Git
 
-Stripe Platform Partner — Senior Backend Engineer (2020 - 2022)
-• Desarrolló motor de detección de anomalías y prevención de fraude en transacciones cross-border utilizando Redis y Rust, ahorrando más de $320,000 USD anuales en contracargos no autorizados.
-• Automatizó la infraestructura como código (IaC) en AWS con Terraform y Kubernetes (EKS), reduciendo los tiempos de despliegue de 45 minutos a 6 minutos (-86% de espera por PR) con cero tiempo de inactividad.
-• Implementó autenticación OAuth 2.0 y RBAC federado multi-tenant, superando auditoría SOC2 Tipo II con cero no conformidades críticas.
-Tecnologías: Rust, Redis, AWS, Terraform, Kubernetes, OAuth 2.0
+Full Stack Developer
+@ AndBank.com
+Aug 2022 — Sep 2023
+• Developed and enhanced mobile applications using React and Xamarin, improving user engagement across Android and iOS platforms.
+• Implemented multithreading in C# to optimize background data loading, significantly improving app performance.
+• Led deployment and troubleshooting via App Center, modernizing legacy Xamarin code and streamlining mobile release processes.
+• Developed new features in React and TypeScript, enhancing app functionality and user experience.
+• Collaborated closely with cross-functional teams, including designers, UX specialists, and backend engineers, to deliver seamless mobile experiences.
+Tecnologías: React, TypeScript, .NET Core, Xamarin, Android, iOS, Git, App Center, C#
 
-Global Tech Solutions — Frontend & Full-Stack Engineer (2018 - 2020)
-• Lideró la migración de portal monolítico a arquitectura modular con React 18, TypeScript y micro-frontends, incrementando la velocidad de carga (LCP) en 65% y reduciendo el bundle size en 48%.
-• Creó librería interna de componentes de UI accesibles (WCAG 2.1 AA) adoptada por 8 equipos de producto con más de 120 desarrolladores activos.
-Tecnologías: TypeScript, React, Tailwind CSS, Webpack, Jest
+Full Stack Developer
+@ Taller Technologies / Paypal.com
+Mar 2021 — Jun 2022
+• Developed new features for PayPal’s investment mobile app using React Native, enhancing user experience and functionality.
+• Implemented GraphQL APIs and serverless AWS Lambda functions, improving performance and scalability of backend services.
+• Gained experience in Docker, Kubernetes, and microservices architecture, contributing to reliable and scalable deployments.
+• Troubleshoot core repositories, particularly the checkout experience, resolving critical issues and improving system stability.
+• Participated in Agile development cycles using Jira, collaborating with cross-functional teams to deliver features on time.
+Tecnologías: Node.js, Angular, React, React Native, GraphQL, NestJS, TypeScript, AWS, Docker, Kubernetes, AWS Lambda, Jira
 
-HABILIDADES TÉCNICAS
-Lenguajes: TypeScript, Go, Rust, Python, SQL
-Frameworks & Librerías: React, Next.js, Node.js, Express, Tailwind CSS
-Cloud & DevOps: AWS, GCP, Docker, Kubernetes, Terraform, CI/CD, Kafka, Redis, PostgreSQL
-Arquitectura: Sistemas Distribuidos, Microservicios, Event-Driven Architecture, CQRS
+Full Stack Developer
+@ Falabella Bank, Santiago
+Jan 2020 — Mar 2021
+• Developed omnichannel digital experiences, implementing frontend and backend features for Falabella Bank’s platforms.
+• Designed and maintained REST APIs and microservices, ensuring scalable and reliable integration between systems.
+• Implemented CI/CD pipelines and automated testing using Jenkins and Jest, improving deployment efficiency and code quality.
+• Collaborated with cross-functional teams, including strategists, designers, UX specialists, and developers, to deliver cohesive digital solutions.
+• Contributed to debugging and troubleshooting across platforms, resolving production issues and enhancing system stability.
+Tecnologías: Node.js, NestJS, CI/CD, Jenkins, REST APIs, WebServices, Docker Compose, Docker Swarm, Jest, Portainer, Apigee
 
-EDUCACIÓN
-Ingeniería Civil en Informática y Telecomunicaciones
-Universidad Técnica Federico Santa María (2012 - 2017) · Graduado
-
-CERTIFICACIONES
-• AWS Certified Solutions Architect - Associate (Amazon Web Services, 2023)
-• Certified Kubernetes Administrator - CKA (Cloud Native Computing Foundation, 2022)
-
-IDIOMAS
-• Español: Nativo
-• Inglés: Avanzado / Profesional (C1)`;
+Technical Lead
+@ Falabella Retail, Santiago
+Apr 2019 — Jan 2020
+• Led and mentored an Agile development team, building AI-driven virtual assistants using Azure Cognitive Services.
+• Fostered a collaborative environment, conducting regular code reviews, providing technical guidance, and promoting best practices.
+• Managed team workflows and implemented continuous improvement initiatives, enhancing delivery efficiency and code quality.
+• Delivered business process automation solutions leveraging Azure RPA, GCP serverless, and web scraping tools, reducing manual workload.
+• Oversaw deployment and maintenance of applications using Docker, Kubernetes, and CI/CD pipelines, ensuring scalable and reliable production environments.
+Tecnologías: Node.js, Azure, PostgreSQL, MongoDB, Docker`;
 
 export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   isOpen,
@@ -156,6 +204,14 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
     suggestedPrompt: string;
   } | null>(null);
   const [quickFieldValue, setQuickFieldValue] = useState("");
+
+  // AI Usage Quota & Freemium Tier State
+  const [aiUsage, setAiUsage] = useState(() => getAiUsage());
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<any | null>(null);
+  const [showProModal, setShowProModal] = useState(false);
+  const [proEmail, setProEmail] = useState("");
+  const [proEmailSaved, setProEmailSaved] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -196,12 +252,23 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   };
 
   const processUploadedFile = async (file: File) => {
+    // 1. Strict Physical Size Restriction (2 MB max for Free Tier sustainability)
+    if (file.size > 2 * 1024 * 1024) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setErrorMessage(
+        `El archivo "${file.name}" pesa ${sizeMb} MB y supera el límite de 2 MB permitido para cuentas gratuitas. Sube una versión optimizada en PDF o pega el texto directamente.`
+      );
+      setIsProcessing(false);
+      return;
+    }
+
     setSelectedFile({
       name: file.name,
       size: `${Math.round(file.size / 1024)} KB`,
       type: file.type || "application/octet-stream",
     });
     setErrorMessage(null);
+    setQuotaExhausted(false);
     setIsProcessing(true);
     setProcessingStep("Leyendo documento binario...");
 
@@ -233,6 +300,20 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
         payload.mimeType = file.type || "application/octet-stream";
       }
 
+      // 2. Check AI Quota before calling Gemini API
+      const quota = checkCanUseAi(currentUser?.plan || "free");
+      if (!quota.canUse) {
+        setIsProcessing(false);
+        if (quota.cooldownRemainingMs > 0) {
+          const sec = Math.ceil(quota.cooldownRemainingMs / 1000);
+          setErrorMessage(`Por favor espera ${sec} segundos antes de realizar otra extracción con IA para prevenir saturar el servicio.`);
+          return;
+        }
+        setQuotaExhausted(true);
+        setPendingPayload(payload);
+        return;
+      }
+
       await sendExtractionRequest(payload);
     } catch (err: any) {
       console.error("Error al procesar archivo:", err);
@@ -247,24 +328,64 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       return;
     }
 
+    // 15,000 max characters limit
+    let cleanText = textToProcess.trim();
+    if (cleanText.length > 15000) {
+      cleanText = cleanText.substring(0, 15000);
+    }
+
     setErrorMessage(null);
+    setQuotaExhausted(false);
     setIsProcessing(true);
     setProcessingStep("Extrayendo estructura fidedigna con IA...");
     setSelectedFile({
       name: customName || "Texto_CV_Pegado.txt",
-      size: `${Math.round(textToProcess.length / 1024)} KB`,
+      size: `${Math.round(cleanText.length / 1024)} KB`,
       type: "text/plain",
     });
 
+    const payload = {
+      textContent: cleanText,
+      fileName: customName || "Texto_CV_Pegado.txt",
+      mimeType: "text/plain",
+    };
+
+    // Check AI Quota
+    const quota = checkCanUseAi(currentUser?.plan || "free");
+    if (!quota.canUse) {
+      setIsProcessing(false);
+      if (quota.cooldownRemainingMs > 0) {
+        const sec = Math.ceil(quota.cooldownRemainingMs / 1000);
+        setErrorMessage(`Por favor espera ${sec} segundos antes de realizar otra extracción con IA.`);
+        return;
+      }
+      setQuotaExhausted(true);
+      setPendingPayload(payload);
+      return;
+    }
+
     try {
-      await sendExtractionRequest({
-        textContent: textToProcess,
-        fileName: customName || "Texto_CV_Pegado.txt",
-        mimeType: "text/plain",
-      });
+      await sendExtractionRequest(payload);
     } catch (err: any) {
       console.error("Error en extracción:", err);
       setErrorMessage("Ocurrió un error en la extracción. Revisa tu conexión.");
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRunLocalExtractor = async () => {
+    if (!pendingPayload) return;
+    setQuotaExhausted(false);
+    setErrorMessage(null);
+    setIsProcessing(true);
+    setProcessingStep("Ejecutando extractor local verídico (sin IA, 100% gratuito)...");
+    try {
+      await sendExtractionRequest({
+        ...pendingPayload,
+        forceLocal: true,
+      });
+    } catch (err: any) {
+      setErrorMessage("No se pudo procesar con el extractor local. Prueba pegando el texto directamente.");
       setIsProcessing(false);
     }
   };
@@ -279,10 +400,17 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
     });
 
     if (!response.ok) {
-      throw new Error(`Servidor respondió con código ${response.status}`);
+      const errorJson = await response.json().catch(() => null);
+      throw new Error(errorJson?.error || `Servidor respondió con código ${response.status}`);
     }
 
     const data = await response.json();
+
+    // If successfully extracted via Gemini AI, record usage count
+    if (!payload.forceLocal && data.engine !== "local-strict-parser") {
+      recordAiUsage();
+      setAiUsage(getAiUsage());
+    }
 
     setExtractionEngine(data.engine || "Gemini 3.8 Flash");
     setExtractedCv(data.cvData || null);
@@ -524,7 +652,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
           const matchedExpId = expIdMap.get(b.client.trim().toLowerCase()) || defaultExpId;
           return {
             experienceId: matchedExpId,
-            originalBullet: b.originalText,
+            originalBullet: b.originalText || b.impact || b.title,
             date: new Date().toISOString().substring(0, 10),
             client: b.client.trim() || "Empresa",
             project: b.project.trim() || "Ingeniería",
@@ -569,7 +697,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
               <Sparkles className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-bold text-white tracking-tight">
                   Extractor de CV de Alta Fidelidad & Auditoría
                 </h3>
@@ -577,6 +705,16 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                   <ShieldCheck className="w-3 h-3 text-emerald-400" />
                   100% Datos Reales · Cero Invención
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setShowProModal(true)}
+                  className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Detalles de cuota y plan"
+                >
+                  <Zap className={`w-3 h-3 ${aiUsage.count >= MAX_FREE_MONTHLY_AI_USES ? "text-amber-400" : "text-purple-400"}`} />
+                  <span>{aiUsage.count} de {MAX_FREE_MONTHLY_AI_USES} usos IA este mes</span>
+                  <span className="text-purple-400 font-semibold underline ml-0.5">Plan Pro</span>
+                </button>
               </div>
               <p className="text-xs text-slate-400">
                 Extrae toda la información de tu CV, detecta campos faltantes y te ayuda a completarlos.
@@ -678,7 +816,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                     Arrastra tu CV aquí o haz clic para seleccionarlo
                   </h4>
                   <p className="text-xs text-slate-400 max-w-md mx-auto mb-4">
-                    Soporta PDFs nativos, documentos Word (.docx) o texto plano. Extrae automáticamente
+                    Soporta PDFs nativos, documentos Word (.docx) o texto plano (máx. 2 MB). Extrae automáticamente
                     contacto, resumen, experiencias, viñetas, educación y habilidades.
                   </p>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
@@ -687,6 +825,8 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                     <span>DOCX</span>
                     <span>•</span>
                     <span>TXT / Markdown</span>
+                    <span>•</span>
+                    <span className="text-purple-300 font-medium">Hasta 2 MB</span>
                   </div>
                 </div>
               )}
@@ -699,8 +839,8 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                       <FileText className="w-4 h-4 text-purple-400" />
                       Contenido textual de tu CV
                     </label>
-                    <span className="text-[11px] text-slate-500">
-                      {pastedCvText.length} caracteres
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {pastedCvText.length} / 15.000 caracteres máx.
                     </span>
                   </div>
                   <textarea
@@ -736,6 +876,52 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                   Probar con CV de Muestra (Rodrigo Jara)
                 </button>
               </div>
+
+              {quotaExhausted && (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-900 to-purple-950/30 border border-amber-500/50 shadow-xl space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center flex-shrink-0 text-amber-300">
+                      <Zap className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-white">
+                          Límite mensual de extracciones con IA alcanzado ({aiUsage.count}/{MAX_FREE_MONTHLY_AI_USES})
+                        </h4>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-700/60 font-semibold">
+                          Cuenta Gratuita
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Para asegurar que tu cuenta permanezca <strong>siempre 100% gratuita y sin costo ($0.00)</strong>, las extracciones con IA tienen un límite de 3 usos al mes (se renueva automáticamente el primer día de cada mes).
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        ¡No te preocupes! Puedes procesar tu documento inmediatamente con nuestro motor local sin IA a costo cero, o unirte a la lista del Plan Pro.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={handleRunLocalExtractor}
+                      className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-emerald-200" />
+                      <span>Procesar con Extractor Local ($0.00)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowProModal(true)}
+                      className="px-4 py-3 rounded-xl bg-purple-600/90 hover:bg-purple-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 border border-purple-400/30 shadow-lg shadow-purple-950/40 cursor-pointer"
+                    >
+                      <Crown className="w-4 h-4 text-amber-300" />
+                      <span>Desbloquear Ilimitado (Plan Pro)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {errorMessage && (
                 <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 flex items-center gap-2.5 text-xs text-red-300">
@@ -1330,6 +1516,129 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
               >
                 <Check className="w-3.5 h-3.5" />
                 Guardar Campo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRO PLAN / WAITLIST MODAL */}
+      {showProModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-lg bg-[#0B0F19] border border-purple-500/50 rounded-2xl p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Plan Pro · Acceso Ilimitado & Suite de Carrera
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Para desarrolladores en búsqueda activa o en fase de optimización de perfil.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProModal(false);
+                  setProEmailSaved(false);
+                }}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Features list */}
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs">
+                <div className="font-semibold text-white flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  ¿Qué incluye el Plan Pro?
+                </div>
+                <ul className="space-y-1.5 text-slate-300 text-[11px]">
+                  <li className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span><strong>Extracciones de CV ilimitadas</strong> con Gemini 3.8 Flash (sin límites mensuales ni tiempos de espera).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span><strong>Generación de CV personalizado</strong> ajustado al 80/20 de cada oferta de empleo (Fase 2).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span><strong>Preparador de entrevistas STAR</strong> enfocado en las preguntas clave de la vacante (Fase 2).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span><strong>Historial de preguntas y respuestas</strong> para postulaciones repetidas (Fase 2).</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Waitlist signup */}
+              <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+                <div className="text-xs text-purple-200">
+                  <p className="font-semibold text-white mb-0.5">Únete a la lista de espera con 50% de descuento:</p>
+                  <p className="text-[11px] text-slate-300">
+                    Déjanos tu correo para notificarte el lanzamiento y recibir tu descuento preferencial.
+                  </p>
+                </div>
+
+                {proEmailSaved ? (
+                  <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>¡Listo! Registramos tu correo con prioridad de acceso.</span>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (proEmail && proEmail.includes("@")) {
+                        saveProWaitlistEmail(proEmail);
+                        setProEmailSaved(true);
+                      }
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="email"
+                      required
+                      value={proEmail}
+                      onChange={(e) => setProEmail(e.target.value)}
+                      placeholder="tu-correo@ejemplo.com"
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-900/30"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-300" />
+                      Anotarme
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-[11px] text-slate-500">
+                Tu cuenta actual sigue funcionando al 100% sin costo alguno.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProModal(false);
+                  setProEmailSaved(false);
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cerrar
               </button>
             </div>
           </div>

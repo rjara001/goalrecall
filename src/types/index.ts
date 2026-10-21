@@ -41,6 +41,12 @@ export interface LogEntry {
   updatedAt: number;
 }
 
+export interface AiUsageRecord {
+  monthKey: string; // e.g. "2026-10"
+  count: number; // 0 to 3 for Free tier
+  lastUsed: number; // timestamp ms for 2-minute cooldown
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -53,6 +59,8 @@ export interface UserProfile {
   linkedin?: string;
   skills: { name: string; category: "Languages" | "Frameworks" | "Cloud/DevOps" | "Architecture" }[];
   authProvider?: "google" | "custom";
+  plan?: "free" | "pro"; // Default "free"
+  aiUsage?: AiUsageRecord;
   isDemoUser?: boolean;
   isCustom?: boolean;
   createdAt?: number;

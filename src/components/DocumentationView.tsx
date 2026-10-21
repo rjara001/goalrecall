@@ -20,13 +20,13 @@ import {
 
 interface DocumentationViewProps {
   onOpenQuickLog: () => void;
-  onGoToSynthesis: () => void;
+  onGoToTimeline: () => void;
   onGoToPublicDeck: () => void;
 }
 
 export const DocumentationView: React.FC<DocumentationViewProps> = ({
   onOpenQuickLog,
-  onGoToSynthesis,
+  onGoToTimeline,
   onGoToPublicDeck,
 }) => {
   return (
@@ -145,39 +145,39 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
           </div>
         </div>
 
-        {/* Module 3: Career Synthesis */}
+        {/* Module 3: Organization by Experience & Achievements */}
         <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-3 flex flex-col justify-between">
           <div>
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-3">
               <Sparkles className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white mb-1.5 flex items-center gap-2">
-              <span>3. Motor de Síntesis de Carrera (CV & STAR)</span>
-              <span className="text-[10px] font-mono text-purple-400 bg-purple-950 px-1.5 py-0.5 rounded">Automatizado</span>
+              <span>3. Empresa / Experiencia & Logros</span>
+              <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded">Estructura Real</span>
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Transforma notas técnicas en activos listos para postularte a vacantes senior o negociar aumentos salariales:
+              Tus experiencias importadas del CV sirven como contenedores de tus victorias técnicas. Todo cuelga de la empresa correspondiente:
             </p>
             <ul className="mt-2.5 space-y-1.5 text-xs text-slate-400">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
-                <span><strong>Fórmula Google XYZ:</strong> Genera bullets con estructura <em className="text-slate-300">"Accomplished [X] as measured by [Y] by doing [Z]"</em>.</span>
+                <span><strong>Salida fiel de tu CV:</strong> Se preservan tus viñetas reales y tecnologías por cada empresa donde trabajaste.</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
-                <span><strong>Fichas STAR:</strong> Organiza tus respuestas en Situación, Tarea, Acción y Resultado para entrevistas de conducta.</span>
+                <span><strong>Extracción con 1 Clic:</strong> Convierte cualquier viñeta del CV en un logro atómico cuantificado.</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
-                <span><strong>Casos de Estudio en Markdown:</strong> Exporta dossiers técnicos completos en formato .md para GitHub o Notion.</span>
+                <span><strong>Catálogo de Logros:</strong> Filtra victorias por empresa, categoría técnica o nivel de impacto.</span>
               </li>
             </ul>
           </div>
           <button
-            onClick={onGoToSynthesis}
+            onClick={onGoToTimeline}
             className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold pt-2"
           >
-            <span>Ir al Sintetizador de Carrera</span>
+            <span>Ir a mi Bitácora</span>
             <ArrowRight className="w-3 h-3" />
           </button>
         </div>

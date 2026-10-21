@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Navbar } from "./components/Navbar";
 import { LandingPage } from "./components/LandingPage";
 import { TimelineView } from "./components/TimelineView";
-import { SynthesisHub } from "./components/SynthesisHub";
 import { InboxView } from "./components/InboxView";
 import { DocumentationView } from "./components/DocumentationView";
 import { PublicDeck } from "./components/PublicDeck";
@@ -37,7 +36,7 @@ import {
   INITIAL_INBOX,
   INITIAL_USER
 } from "./utils/storage";
-import { LogEntry, UserProfile, VisitorMessage, WorkExperience } from "./types";
+import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 
 export default function App() {
@@ -209,6 +208,85 @@ export default function App() {
     setIsQuickLogOpen(true);
   };
 
+  const handleExtractBulletToLog = (
+    experienceId: string,
+    company: string,
+    role: string,
+    bulletText: string,
+    technologies?: string[]
+  ) => {
+    const cleanBullet = bulletText.trim();
+    if (!cleanBullet) return;
+
+    let category: LogCategory = "Feature ✨";
+    const lower = cleanBullet.toLowerCase();
+    if (lower.includes("fix") || lower.includes("bug") || lower.includes("error") || lower.includes("resolv") || lower.includes("patch")) {
+      category = "Fix 🐛";
+    } else if (lower.includes("refactor") || lower.includes("migrat") || lower.includes("reorganiz") || lower.includes("clean") || lower.includes("moderniz")) {
+      category = "Refactor 🧹";
+    } else if (lower.includes("architect") || lower.includes("microservic") || lower.includes("system") || lower.includes("design") || lower.includes("vertical slice") || lower.includes("notion-style")) {
+      category = "Architecture 🏗️";
+    } else if (lower.includes("deploy") || lower.includes("ci/cd") || lower.includes("docker") || lower.includes("kubernetes") || lower.includes("pipeline") || lower.includes("azure devops") || lower.includes("aws") || lower.includes("observability") || lower.includes("opentelemetry") || lower.includes("new relic")) {
+      category = "Infra/DevOps 🚀";
+    } else if (lower.includes("ai") || lower.includes("spike") || lower.includes("research") || lower.includes("r&d") || lower.includes("copilot") || lower.includes("investigat") || lower.includes("poc")) {
+      category = "Spike/R&D 🔬";
+    }
+
+    let title = cleanBullet;
+    const firstPeriod = cleanBullet.indexOf(".");
+    if (firstPeriod > 20 && firstPeriod < 120) {
+      title = cleanBullet.substring(0, firstPeriod);
+    } else if (title.length > 110) {
+      title = title.substring(0, 107) + "...";
+    }
+
+    const tags = technologies && technologies.length > 0
+      ? technologies.slice(0, 4).map((t) => `#${t.replace(/[\s\.]/g, "")}`)
+      : ["#CVVerídico", "#Producción"];
+
+    const newLog: Omit<LogEntry, "id" | "createdAt" | "updatedAt"> = {
+      experienceId,
+      originalBullet: cleanBullet,
+      date: new Date().toISOString().substring(0, 10),
+      client: company,
+      project: role || "Ingeniería",
+      category,
+      title,
+      description: `Logro extraído de viñeta real de CV (${company}).`,
+      impact: cleanBullet,
+      tags,
+      isPublic: false,
+    };
+
+    addLog(newLog);
+    setLogs(getStoredLogs());
+    showToast(`¡Viñeta extraída como logro en ${company}! ✨`, "success");
+  };
+
+  const handleExtractAllBulletsForExperience = (experienceId: string) => {
+    const exp = experiences.find((e) => e.id === experienceId);
+    if (!exp || !exp.bullets || exp.bullets.length === 0) return;
+
+    const currentLogs = getStoredLogs();
+    const existingBullets = new Set(
+      currentLogs
+        .filter((l) => l.experienceId === experienceId)
+        .map((l) => (l.originalBullet || l.impact).trim())
+    );
+
+    const unextracted = exp.bullets.filter((b) => !existingBullets.has(b.trim()));
+    if (unextracted.length === 0) {
+      showToast("Todas las viñetas de esta experiencia ya están en tu Bitácora.", "info");
+      return;
+    }
+
+    unextracted.forEach((b) => {
+      handleExtractBulletToLog(exp.id, exp.company, exp.role, b, exp.technologies);
+    });
+
+    showToast(`¡Se extrajeron ${unextracted.length} logros a la Bitácora para ${exp.company}! 🚀`, "success");
+  };
+
   // Inbox Actions
   const handleSendVisitorMessage = (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => {
     addVisitorMessage(msg);
@@ -229,6 +307,7 @@ export default function App() {
 
   // User Actions
   const handleLogin = (newUser: UserProfile) => {
+    purgeDummyPresetData();
     saveUser(newUser);
     setUser(newUser);
     setLogs(getStoredLogs());
@@ -382,11 +461,9 @@ export default function App() {
                   onEditExperience={handleOpenEditExperience}
                   onDeleteExperience={handleDeleteExperience}
                   onAddLogToExperience={handleOpenAddLogToExperience}
+                  onExtractBulletToLog={handleExtractBulletToLog}
+                  onExtractAllBulletsForExperience={handleExtractAllBulletsForExperience}
                 />
-              )}
-
-              {activeQuartersTab === "synthesis" && (
-                <SynthesisHub logs={logs} userName={user?.name || "Senior Software Engineer"} />
               )}
 
               {activeQuartersTab === "inbox" && (
@@ -404,7 +481,7 @@ export default function App() {
                     setInitialExperienceIdForLog(undefined);
                     setIsQuickLogOpen(true);
                   }}
-                  onGoToSynthesis={() => setActiveQuartersTab("synthesis")}
+                  onGoToTimeline={() => setActiveQuartersTab("timeline")}
                   onGoToPublicDeck={() => setActiveView("public")}
                 />
               )}

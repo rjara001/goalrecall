@@ -624,7 +624,7 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
 // Master Extraction Endpoint supporting both full CV & achievements
 app.post("/api/cv/extract-full-cv", async (req, res) => {
   try {
-    const { textContent, fileBase64, mimeType, fileName } = req.body;
+    let { textContent, fileBase64, mimeType, fileName } = req.body;
 
     if (!textContent && !fileBase64) {
       return res.status(400).json({
@@ -632,9 +632,21 @@ app.post("/api/cv/extract-full-cv", async (req, res) => {
       });
     }
 
-    // If Gemini key is missing, use strict local extraction
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn("GEMINI_API_KEY no detectada. Usando extractor estricto verídico local.");
+    // 1. Strict Physical Size Restriction (2 MB max payload for Free Tier sustainability)
+    if (fileBase64 && fileBase64.length > 2.9 * 1024 * 1024) {
+      return res.status(400).json({
+        error: "El archivo excede el límite de 2 MB permitido para cuentas gratuitas. Por favor sube un archivo optimizado.",
+      });
+    }
+
+    // 2. Strict Text Length Restriction (15,000 chars max)
+    if (textContent && textContent.length > 15000) {
+      textContent = textContent.substring(0, 15000);
+    }
+
+    // If Gemini key is missing OR user explicitly requested local extraction
+    if (!process.env.GEMINI_API_KEY || req.body.forceLocal) {
+      console.warn("Usando extractor estricto verídico local.");
       const cvData = extractFullCvLocally(textContent || "", fileName || "documento");
       const audit = calculateCvAudit(cvData);
       const achievements = cvToAchievements(cvData, fileName);

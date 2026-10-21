@@ -1,118 +1,66 @@
-# Reestructuración de Bitácora: Empresa / Experiencia & Extracción de Logros
+# Plan: Sistema de Cuota de IA ($0.00 Free Tier Garantizado) y Arquitectura Freemium
 
-Reorganiza la vista principal de la bitácora técnica (**Goal Recall**) sustituyendo el selector anterior por dos pestañas principales: **Empresa / Experiencia** (fiel al diseño de salida del extractor de CV) y **Logros** (catálogo de victorias técnicas estructuradas con métricas XYZ), donde absolutamente todo cuelga de la experiencia laboral.
-
----
-
-### User Review & Critical Decisions
-
-> [!IMPORTANT]
-> **Decisiones confirmadas para esta sección**:
-> 1. **Navegación Principal de Bitácora**:
->    - Pestaña 1: **Empresa / Experiencia** (Vista por defecto, salida visual idéntica a la radiografía del CV).
->    - Pestaña 2: **Logros** (Logros estructurados con métricas de impacto, visibilidad Sandbox Privado vs. Vitrina Pública).
-> 2. **Extracción In-Situ desde la Viñeta**: Cada viñeta de la experiencia contará con un botón interactivo **"Extraer a Logro"** que pre-carga el texto y permite enriquecerlo con métrica e impacto Google XYZ.
-> 3. **Fuente Única de Verdad (`WorkExperience`)**: Al cargar o pegar el CV, se preservan íntegramente las viñetas textuales (`bullets`) y las tecnologías por cada empresa, sirviendo de base para la extracción.
+Este plan define la implementación de las restricciones de uso de IA para la carga y extracción de CVs, asegurando que la cuenta de IA permanezca **100% libre de costo ($0.00)** para el desarrollador, implementando la **Alternativa 1** validada y preparando la estructura para el futuro **Plan Pro**.
 
 ---
 
-### 1. Vista Previa del Diseño & Mockup de Interfaz
+## 1. Reglas y Restricciones del Free Tier
 
-#### A. Selector de Modos Superior
-```
-┌────────────────────────────────────────────────────────┐
-│  [ 🏢 Empresa / Experiencia (7) ]   [ ⚡ Logros (44) ] │
-└────────────────────────────────────────────────────────┘
-```
+### A. Límites Físicos del Archivo
+1. **Tamaño Máximo:** **2 MB** por archivo (PDF, DOCX o TXT).
+   - Validación inmediata en el cliente (`CvUploadModal.tsx`) antes de enviar bytes al servidor o consumir memoria.
+   - Si supera los 2 MB, alerta amigable: *"El archivo pesa más de 2 MB. Por favor sube una versión optimizada o en texto plano."*
+2. **Longitud Máxima de Texto:** **15.000 caracteres**.
+   - Si el usuario sube un archivo con más de 15.000 caracteres o pega texto excesivo, se trunca o se solicita recortar anexos irrelevantes.
 
-#### B. Pestaña 1: Empresa / Experiencia (Salida Fiel del CV)
-Cada experiencia replica exactamente el formato de salida del extractor de CV:
+### B. Límites de Frecuencia y Cuota Mensual
+1. **3 extracciones de CV con IA por mes calendario** para cuentas con `plan: "free"`:
+   - Persistido por usuario con clave de mes (ej. `2026-10`).
+   - El contador se resetea automáticamente el día 1 de cada mes.
+2. **Cooldown Anti-Spam:** Mínimo **2 minutos** entre extracciones consecutivas de IA para evitar clics dobles accidentales o scripts automatizados.
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Senior Full Stack Developer                                    Oct 2025 — Presente     │
-│ @ ParserDigital / Chambers & Partners                                                  │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ • Delivered the Digital Submissions platform for Chambers & Partners in 7 months...    │
-│   [ ⚡ Extraer a Logro ]                                                               │
-│                                                                                        │
-│ • Replaced a fragmented, document-heavy process with structured digital workflows...   │
-│   [ ⚡ Extraer a Logro ]                                                               │
-│                                                                                        │
-│ • Owned the end-to-end development of the History Navigation component...             │
-│   [ ✓ Enlazado como Logro ]                                                            │
-│                                                                                        │
-│ • Developed frontend applications within a Microfrontend architecture with Angular 21 │
-│   [ ⚡ Extraer a Logro ]                                                               │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ Tecnologías:                                                                           │
-│ [Angular 21] [.NET 10] [Minimal APIs] [MediatR] [Vertical Slice] [Azure DevOps] [Docker]│
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-#### C. Flujo de Extracción: Diálogo Rápido "Extraer Logro"
-Al hacer clic en `[⚡ Extraer a Logro]` en cualquier viñeta:
-1. Se abre un drawer o modal enfocado que muestra:
-   - **Empresa & Rol vinculados**: *ParserDigital / Chambers & Partners* (fijo).
-   - **Viñeta original**: Texto íntegro del CV.
-   - **Título del Logro**: Resumen de alto impacto.
-   - **Métrica / Impacto (Fórmula Google XYZ)**: Cuantificación del resultado (ej. *Despliegue a 10,000+ firmas sin retrasos*).
-   - **Categoría**: *Architecture, Performance, Feature, Fix, Spike/R&D*.
-   - **Visibilidad**: *Sandbox Privado* o *Public Deck*.
-2. Al guardar, la viñeta cambia su estado visual a `[✓ Enlazado como Logro]` y el registro aparece inmediatamente en la pestaña **Logros**.
-
-#### D. Pestaña 2: Logros (Vitrina de Logros Extraídos)
-- Filtros por: Empresa contenedora, Categoría y Visibilidad.
-- Tarjetas de logros atómicos con su métrica destacada, tags y acceso a edición o duplicado.
+### C. Fallback sin Costo al Agotar el Cupo
+- Si el usuario alcanza 3/3 extracciones:
+  1. **Opción Local Gratuita:** Puede procesar el CV con el extractor local sin IA (`extractFullCvLocally` a costo $0.00).
+  2. **Opción Manual:** Puede usar el modal de *Pegar Viñetas*.
+  3. **No hay bloqueo destructivo:** El usuario nunca pierde acceso a su cuenta ni a su historial.
 
 ---
 
-### 2. Arquitectura de Datos y Componentes
+## 2. Preparación para el Plan Pro (Validación Temprana)
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           ARQUITECTURA DE DATOS                          │
-│                                                                          │
-│   [ Extractor CV (PDF/DOCX/Texto) ]                                      │
-│                  │                                                       │
-│                  ▼                                                       │
-│   ┌──────────────────────────────────────────────────────────────────┐   │
-│   │ WorkExperience                                                   │   │
-│   │ - id: string                                                     │   │
-│   │ - company: string ("ParserDigital / Chambers & Partners")        │   │
-│   │ - role: string ("Senior Full Stack Developer")                   │   │
-│   │ - startDate / endDate: string ("Oct 2025" — "Present")           │   │
-│   │ - bullets: string[] (todas las viñetas reales extraídas)         │   │
-│   │ - technologies: string[] ("Angular 21", ".NET 10"...)            │   │
-│   └────────────────────────────────┬─────────────────────────────────┘   │
-│                                    │ Contiene viñetas y 1:N logs         │
-│                                    ▼                                     │
-│   ┌──────────────────────────────────────────────────────────────────┐   │
-│   │ LogEntry (Logros Atómicos Extraídos)                             │   │
-│   │ - id: string                                                     │   │
-│   │ - experienceId: string (Clave foránea obligatoria)               │   │
-│   │ - originalBullet?: string (Referencia a la viñeta de origen)     │   │
-│   │ - title: string                                                  │   │
-│   │ - impact: string (Métrica cuantificable Google XYZ)              │   │
-│   │ - category: LogCategory                                          │   │
-│   │ - isPublic: boolean                                              │   │
-│   └──────────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+### A. Modelo de Datos (`UserProfile` y `storage.ts`)
+- Añadir campo:
+  ```ts
+  plan?: "free" | "pro"; // Por defecto "free"
+  aiUsage?: {
+    monthKey: string; // ej. "2026-10"
+    count: number;    // usos en el mes
+    lastUsed: number; // timestamp para cooldown
+  };
+  ```
+
+### B. Elementos Visuales en la UI
+1. **Contador en `CvUploadModal.tsx`**:
+   - Píldora discreta en la cabecera del modal:
+     `⚡ 1 de 3 extracciones con IA utilizadas este mes (Plan Gratuito)`
+2. **Modal / Alerta informativa de "Plan Pro (Próximamente)"**:
+   - Al alcanzar 3/3 usos, aparece el botón: `[⚡ Desbloquear extracciones ilimitadas — Plan Pro]`.
+   - Muestra un modal sutil con los beneficios futuros (Fase 2: CVs personalizados por oferta, preparación STAR y tracker de postulaciones) y un botón para anotarse en la lista de espera, permitiendo medir intención real de compra sin implementar pasarelas de pago antes de tiempo.
 
 ---
 
-### 3. Plan de Cambios en Código
+## 3. Preservación y Documentación en el Repositorio (`/docs/plans/`)
 
-1. **`src/types/index.ts`**:
-   - Agregar a `WorkExperience` el campo `bullets?: string[]` para conservar el texto real de cada viñeta del CV.
-   - Agregar en `LogEntry` la referencia opcional `originalBullet?: string`.
-2. **`src/components/TimelineView.tsx`**:
-   - Cambiar los modos a `viewMode: "experiences" | "logs"`.
-   - Implementar el diseño visual exacto de salida del CV para la pestaña **Empresa / Experiencia** con viñetas reales, viñeta morada (`•`) y chips de tecnologías.
-   - Añadir el botón `Extraer a Logro` en cada viñeta y el estado `Enlazado`.
-   - Ajustar la pestaña **Logros** para visualizar todos los logros vinculados a las experiencias.
-3. **`src/components/CvUploadModal.tsx`**:
-   - Sincronizar el guardado de experiencias para que persista `bullets: exp.bullets` en `captains_experiences_v1`.
-4. **`src/utils/storage.ts`**:
-   - Asegurar que `getStoredExperiences` y `saveExperiences` retengan las viñetas reales (`bullets`).
+Para que todos los planes y decisiones de arquitectura no se pierdan al cerrar sesiones o compactar el historial, se registrarán formalmente en el repositorio:
+* `/docs/plans/01-mvp-consolidation-and-future-roadmap.md` (El plan maestro de Fase 1, Fase 2 y Fase 3).
+* `/docs/plans/02-ai-quota-and-freemium-architecture.md` (Este plan de cuotas y costos).
+
+---
+
+## 4. Archivos a Modificar
+1. `src/types/index.ts`: Añadir `plan` y estructura `AiUsageRecord`.
+2. `src/utils/storage.ts`: Métodos de registro y validación de cuota mensual y cooldown.
+3. `server.ts`: Validación de tamaño máximo de 2 MB y truncado de texto a 15k caracteres en `/api/cv/extract-full-cv`.
+4. `src/components/CvUploadModal.tsx`: Validación de 2 MB en el input de archivo, píldora con contador de cuota y fallback amigable cuando se agota el cupo con tarjeta informativa de Plan Pro.
+5. `/docs/plans/*`: Documentación de planes guardada en el repo.

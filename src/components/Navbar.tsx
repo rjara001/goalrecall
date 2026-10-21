@@ -71,7 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 hidden sm:block">
-              Brag Document & Career Synthesis
+              Bitácora Técnica & Historial de Logros
             </p>
           </div>
         </button>
@@ -98,17 +98,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onOpenAuth();
                 } else {
                   setActiveView("quarters");
+                  setActiveQuartersTab("timeline");
                 }
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                activeView === "quarters"
+                activeView === "quarters" && activeQuartersTab === "timeline"
                   ? "bg-cyan-500 text-slate-950 font-semibold shadow-sm shadow-cyan-500/30"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Goal Recall</span>
-              <span className="hidden md:inline text-[10px] opacity-75">(Privado)</span>
+              <span>Mi Bitácora</span>
+              <span className="hidden md:inline text-[10px] opacity-75">(Privada)</span>
             </button>
 
             <button
@@ -120,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Public Deck</span>
+              <span>Vitrina Pública</span>
               <span className="text-[10px] font-mono font-bold bg-slate-800/80 px-1.5 py-0.2 rounded text-emerald-300">
                 {publicLogsCount}
               </span>
@@ -130,24 +131,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Sub-navigation depending on mode */}
           {activeView === "quarters" && (
             <div className="hidden xl:flex items-center gap-1 text-xs font-medium text-slate-400">
-              <button
-                onClick={() => setActiveQuartersTab("timeline")}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
-                  activeQuartersTab === "timeline" ? "text-cyan-400 bg-slate-800/50" : "hover:text-slate-200"
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Timeline</span>
-              </button>
-              <button
-                onClick={() => setActiveQuartersTab("synthesis")}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors ${
-                  activeQuartersTab === "synthesis" ? "text-cyan-400 bg-slate-800/50" : "hover:text-slate-200"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Sintetizador CV/STAR</span>
-              </button>
               <button
                 onClick={() => setActiveQuartersTab("inbox")}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors relative ${
@@ -169,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>Guía / Docs</span>
+                <span>Guía</span>
               </button>
             </div>
           )}
@@ -184,14 +167,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="hover:text-cyan-300 transition-colors flex items-center gap-1"
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span>Manual de Vuelo</span>
+                <span>Guía de Uso</span>
               </button>
               <button
                 onClick={() => setActiveView("public")}
                 className="hover:text-emerald-300 transition-colors flex items-center gap-1"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Vitrina Reclutadores</span>
+                <span>Vitrina Pública</span>
               </button>
             </div>
           )}
@@ -252,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={onOpenSettings}
-            title="Ajustes y Respaldo JSON"
+            title="Copia de Seguridad & Respaldo JSON"
             className="p-2 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors"
           >
             <SettingsIcon className="w-4 h-4" />
@@ -305,38 +288,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Sub-Navigation Bar */}
       {activeView === "quarters" && (
-        <div className="flex xl:hidden items-center justify-between gap-1 pt-2.5 mt-2 border-t border-slate-800/60 text-xs overflow-x-auto">
-          <button
-            onClick={() => setActiveQuartersTab("timeline")}
-            className={`px-3 py-1 rounded-md shrink-0 ${
-              activeQuartersTab === "timeline" ? "text-cyan-400 bg-slate-800/70" : "text-slate-400"
-            }`}
-          >
-            Timeline
-          </button>
-          <button
-            onClick={() => setActiveQuartersTab("synthesis")}
-            className={`px-3 py-1 rounded-md shrink-0 ${
-              activeQuartersTab === "synthesis" ? "text-cyan-400 bg-slate-800/70" : "text-slate-400"
-            }`}
-          >
-            Sintetizador CV
-          </button>
+        <div className="flex xl:hidden items-center justify-end gap-2 pt-2 mt-2 border-t border-slate-800/60 text-xs">
           <button
             onClick={() => setActiveQuartersTab("inbox")}
-            className={`px-3 py-1 rounded-md shrink-0 flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-md shrink-0 flex items-center gap-1.5 ${
               activeQuartersTab === "inbox" ? "text-cyan-400 bg-slate-800/70" : "text-slate-400"
             }`}
           >
-            Inbox {unreadInboxCount > 0 && `(${unreadInboxCount})`}
+            <Inbox className="w-3.5 h-3.5" />
+            <span>Inbox {unreadInboxCount > 0 && `(${unreadInboxCount})`}</span>
           </button>
           <button
             onClick={() => setActiveQuartersTab("docs")}
-            className={`px-3 py-1 rounded-md shrink-0 ${
+            className={`px-3 py-1 rounded-md shrink-0 flex items-center gap-1.5 ${
               activeQuartersTab === "docs" ? "text-cyan-400 bg-slate-800/70" : "text-slate-400"
             }`}
           >
-            Guía / Docs
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Guía</span>
           </button>
         </div>
       )}
