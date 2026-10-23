@@ -4,6 +4,9 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import mammoth from "mammoth";
+// @ts-ignore
+import { PDFParse } from "pdf-parse";
 
 dotenv.config();
 
@@ -11,10 +14,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Serve static assets from public/ (including sample PDF CVs)
+app.use(express.static(path.resolve(__dirname, "public")));
 
 // Initialize Google GenAI
 const ai = new GoogleGenAI({
@@ -116,6 +122,9 @@ export interface ExtractedAchievementItem {
   title: string;
   description: string;
   impact: string;
+  whatWasSought?: string;
+  whyImportant?: string;
+  howApplied?: string;
   category: "Feature ✨" | "Fix 🐛" | "Refactor 🧹" | "Architecture 🏗️" | "Infra/DevOps 🚀" | "Spike/R&D 🔬";
   tags: string[];
   xyzScore: number;
@@ -380,16 +389,34 @@ function cvToAchievements(cv: ExtractedCvData, fileName?: string): ExtractedAchi
             tags.push("#Ingeniería", "#Producción");
           }
 
+          // Determine accurate category for this specific achievement
+          let bulletCategory: CvExperience["category"] = exp.category || "Feature ✨";
+          const lowerBullet = cleanBullet.toLowerCase();
+          if (/arquitect|architec|migra|monolit|distribuid|cloud|event|kafka|microserv|federation|microfrontend/i.test(lowerBullet)) {
+            bulletCategory = "Architecture 🏗️";
+          } else if (/ci\/cd|pipeline|docker|kubernetes|k8s|devops|terraform|aks|aws|azure|gcp|despliegue/i.test(lowerBullet)) {
+            bulletCategory = "Infra/DevOps 🚀";
+          } else if (/refactor|optimiz|rendimient|latenc|p99|speed|vitals|performance/i.test(lowerBullet)) {
+            bulletCategory = "Refactor 🧹";
+          } else if (/bug|fix|error|vulnerab|security|seguridad|pci/i.test(lowerBullet)) {
+            bulletCategory = "Fix 🐛";
+          } else if (/spike|poc|r&d|evalu|investig|prototip|laboratorio/i.test(lowerBullet)) {
+            bulletCategory = "Spike/R&D 🔬";
+          }
+
           achievements.push({
             id: `ach-${Date.now()}-${expIdx}-${bIdx}`,
             client: company,
             project: project,
-            title: cleanBullet.length > 120 ? cleanBullet.substring(0, 117) + "..." : cleanBullet,
+            title: cleanBullet, // Logro multilínea completo (viñeta de CV sin truncar)
             description: `Documento fuente: ${fileName || "CV"}. Rol: ${exp.role || "Ingeniero"}.`,
-            impact: cleanBullet, // Strictly truthful: text from the document!
-            category: exp.category || "Feature ✨",
+            impact: cleanBullet, // Strictly truthful: texto de la viñeta
+            whatWasSought: `Entrega de capacidades vinculadas a: ${cleanBullet.slice(0, 100)}`,
+            whyImportant: `Alineado con los objetivos del rol en ${company}.`,
+            howApplied: exp.technologies?.length ? `Implementado con ${exp.technologies.slice(0, 6).join(", ")}.` : undefined,
+            category: bulletCategory,
             tags: tags,
-            xyzScore: metricMatch ? 90 : 80,
+            xyzScore: metricMatch ? 92 : 82,
             metricHighlight: metricHighlight,
           });
         });
@@ -398,7 +425,7 @@ function cvToAchievements(cv: ExtractedCvData, fileName?: string): ExtractedAchi
           id: `ach-${Date.now()}-${expIdx}-0`,
           client: company,
           project: project,
-          title: exp.description.substring(0, 120),
+          title: exp.description, // Logro completo sin truncar
           description: `Documento: ${fileName || "CV"}. Rol: ${exp.role || "Ingeniero"}.`,
           impact: exp.description,
           category: exp.category || "Feature ✨",
@@ -429,8 +456,86 @@ function cvToAchievements(cv: ExtractedCvData, fileName?: string): ExtractedAchi
   return achievements;
 }
 
+// Binary text extraction for PDF, DOCX, and plain text
+async function extractTextFromBuffer(buffer: Buffer, mimeType?: string, fileName?: string): Promise<string> {
+  const lowerName = (fileName || "").toLowerCase();
+  const lowerMime = (mimeType || "").toLowerCase();
+
+  // 1. PDF extraction
+  if (lowerMime.includes("pdf") || lowerName.endsWith(".pdf")) {
+    try {
+      // @ts-ignore
+      const parser = new PDFParse({ data: buffer });
+      const res = await parser.getText();
+      try {
+        await parser.destroy();
+      } catch (_) {}
+      if (res && typeof res.text === "string" && res.text.trim().length > 0) {
+        return res.text;
+      }
+    } catch (pdfErr) {
+      console.warn("PDF extraction warning:", pdfErr);
+    }
+  }
+
+  // 2. Word (.docx) extraction
+  if (
+    lowerMime.includes("word") ||
+    lowerMime.includes("docx") ||
+    lowerMime.includes("officedocument") ||
+    lowerName.endsWith(".docx")
+  ) {
+    try {
+      const docxRes = await mammoth.extractRawText({ buffer });
+      if (docxRes && docxRes.value && docxRes.value.trim().length > 0) {
+        return docxRes.value;
+      }
+    } catch (docxErr) {
+      console.warn("DOCX extraction warning:", docxErr);
+    }
+  }
+
+  // 3. Plain text UTF-8 fallback
+  try {
+    const raw = buffer.toString("utf-8");
+    if (raw && !/[\x00-\x08\x0E-\x1F]/.test(raw.slice(0, 100))) {
+      return raw;
+    }
+  } catch (_) {}
+
+  return "";
+}
+
 // Local strict parser for offline/fallback scenarios (NEVER invents data)
 function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvData {
+  if (!rawText || rawText.trim().length === 0) {
+    return {
+      contact: {
+        name: "",
+        headline: "",
+        email: "",
+        phone: "",
+        location: "",
+        linkedin: "",
+        github: "",
+        portfolio: "",
+      },
+      summary: "",
+      skills: {
+        technical: [],
+        frameworks: [],
+        toolsCloud: [],
+        softSkills: [],
+      },
+      experiences: [],
+      education: [],
+      certifications: [],
+      projects: [],
+      languages: [],
+      rawTextPreview: "",
+    };
+  }
+
   const lines = rawText
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -441,7 +546,7 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
   const email = emailMatch ? emailMatch[0] : "";
 
   // Phone regex
-  const phoneMatch = rawText.match(/(?:\+?\d{1,3}[\s-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,5}/);
+  const phoneMatch = rawText.match(/(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{1,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{3,5}/);
   const phone = phoneMatch ? phoneMatch[0] : "";
 
   // LinkedIn regex
@@ -452,136 +557,361 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
   const githubMatch = rawText.match(/(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_-]+)/i);
   const github = githubMatch ? githubMatch[0] : "";
 
+  // Portfolio regex
+  const portfolioMatch = rawText.match(/(?:https?:\/\/)(?!linkedin|github|twitter|facebook|instagram)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/i);
+  const portfolio = portfolioMatch ? portfolioMatch[0] : "";
+
   // Location detection
   const locationMatch = rawText.match(
-    /([A-ZÁÉÍÓÚ][a-záéíóú]+(?:[\s,]+[A-ZÁÉÍÓÚ][a-záéíóú]+)*)\s*[,|\/]\s*([A-ZÁÉÍÓÚ][a-záéíóú]+|\bChile\b|\bMéxico\b|\bArgentina\b|\bEspaña\b|\bColombia\b|\bPerú\b|\bUSA\b|\bRemoto\b|\bRemote\b)/i
+    /(?:[A-ZÁÉÍÓÚ][a-záéíóú]+(?:\s+[A-ZÁÉÍÓÚ][a-záéíóú]+)*)\s*[,|\/]\s*([A-ZÁÉÍÓÚ][a-záéíóú]+|\bChile\b|\bMéxico\b|\bArgentina\b|\bEspaña\b|\bColombia\b|\bPerú\b|\bUSA\b|\bRemoto\b|\bRemote\b)/i
   );
   const location = locationMatch ? locationMatch[0] : "";
 
-  // Name: first short non-header line that has 2-4 capitalized words
+  // Name & headline detection:
+  // Usually in top 8 non-empty lines, avoiding headers or contact info
   let name = "";
   let headline = "";
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
+
+  for (let i = 0; i < Math.min(8, lines.length); i++) {
     const l = lines[i];
-    if (
-      !name &&
-      l.length > 3 &&
-      l.length < 50 &&
-      !l.includes("@") &&
-      !l.includes("http") &&
-      !/curriculum|cv|resume|hoja de vida/i.test(l)
-    ) {
+    const isHeaderOrSection = /^(?:experiencia|historial|resumen|perfil|summary|skills|habilidades|educaci[oó]n|certificac|curriculum|cv|resume|hoja de vida)/i.test(l);
+    const isContactLine = l.includes("@") || l.includes("http") || l.includes("github.com") || l.includes("linkedin.com") || /^\+?\d[\d\s-]{6,}/.test(l);
+
+    if (!name && !isHeaderOrSection && !isContactLine && l.length > 2 && l.length < 50) {
       name = l;
-      // The next line might be the headline
-      if (lines[i + 1] && lines[i + 1].length < 80 && !lines[i + 1].includes("@")) {
-        headline = lines[i + 1];
+      // Check next line for potential headline
+      const next = lines[i + 1];
+      if (next && !next.includes("@") && !next.includes("http") && !/^(?:experiencia|resumen|habilidades|skills)/i.test(next) && next.length < 80) {
+        headline = next;
       }
       break;
     }
   }
 
-  // Parse sections
+  // Section parsing
   const experiences: CvExperience[] = [];
   const education: CvEducation[] = [];
   const certifications: CvCertification[] = [];
   const projects: CvProject[] = [];
   const languages: CvLanguage[] = [];
   const technicalSkills: string[] = [];
+  const frameworks: string[] = [];
+  const toolsCloud: string[] = [];
+  const softSkills: string[] = [];
   let summary = "";
 
   let currentSection = "header";
   let currentExp: CvExperience | null = null;
 
+  const pushCurrentExp = () => {
+    if (currentExp) {
+      // If bullets exist but description is missing, synthesize summary
+      if (currentExp.bullets.length > 0 && !currentExp.description) {
+        currentExp.description = currentExp.bullets.join(". ");
+      }
+      // If description exists but 0 bullets, split description into bullets!
+      if (currentExp.bullets.length === 0 && currentExp.description) {
+        const sentences = currentExp.description
+          .split(/(?<=[.!?])\s+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 8);
+        if (sentences.length > 0) {
+          currentExp.bullets = sentences;
+        } else {
+          currentExp.bullets = [currentExp.description];
+        }
+      }
+
+      // Deduplicate bullets and strip stray empty items
+      currentExp.bullets = Array.from(
+        new Set(currentExp.bullets.map((b) => b.trim()))
+      ).filter((b) => b.length > 8);
+
+      // Infer technologies from bullets, role, or description if technologies is empty
+      if (currentExp.technologies.length === 0) {
+        const textToScan = `${currentExp.role} ${currentExp.company} ${currentExp.bullets.join(" ")} ${currentExp.description || ""}`;
+        const commonTech = [
+          "TypeScript", "JavaScript", "Python", "Go", "Java", "C#", ".NET", ".NET 10", ".NET 9", ".NET Core",
+          "React", "Next.js", "Angular", "Angular 21", "Vue", "NestJS", "Node.js", "Express", "GraphQL", "REST APIs",
+          "PostgreSQL", "SQL Server", "MongoDB", "Redis", "Databricks", "Kafka",
+          "AWS", "Azure", "GCP", "Docker", "Kubernetes", "AKS", "CI/CD", "Azure DevOps", "GitLab", "Jenkins",
+          "Tailwind CSS", "Bootstrap 5", "Native Federation", "Microservices", "Microfrontends", "Copilot", "LLMs", "AI"
+        ];
+        commonTech.forEach((tech) => {
+          const regex = new RegExp(`\\b${tech.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          if (regex.test(textToScan) && !currentExp!.technologies.includes(tech)) {
+            currentExp!.technologies.push(tech);
+            if (!technicalSkills.includes(tech)) technicalSkills.push(tech);
+          }
+        });
+      }
+
+      // Categorize based on content
+      const fullExpText = `${currentExp.role} ${currentExp.company} ${currentExp.bullets.join(" ")} ${currentExp.technologies.join(" ")}`.toLowerCase();
+      if (/arquitect|architec|migra|monolit|distribuid|cloud|event|kafka|microserv|federation|microfrontend/i.test(fullExpText)) {
+        currentExp.category = "Architecture 🏗️";
+      } else if (/ci\/cd|pipeline|docker|kubernetes|k8s|devops|terraform|aks|aws|azure|gcp|despliegue/i.test(fullExpText)) {
+        currentExp.category = "Infra/DevOps 🚀";
+      } else if (/refactor|optimiz|rendimient|latenc|p99|speed|vitals|performance/i.test(fullExpText)) {
+        currentExp.category = "Refactor 🧹";
+      } else if (/bug|fix|error|vulnerab|security|seguridad|pci/i.test(fullExpText)) {
+        currentExp.category = "Fix 🐛";
+      } else if (/spike|poc|r&d|evalu|investig|prototip|laboratorio/i.test(fullExpText)) {
+        currentExp.category = "Spike/R&D 🔬";
+      } else {
+        currentExp.category = "Feature ✨";
+      }
+
+      // Check current status
+      if (/(?:presente|present|actualidad)/i.test(currentExp.startDate || "") || /(?:presente|present|actualidad)/i.test(currentExp.endDate || "")) {
+        currentExp.isCurrent = true;
+      }
+
+      experiences.push(currentExp);
+      currentExp = null;
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const upper = line.toUpperCase();
 
+    // 0. If currently in an experience and line starts with Tecnologías/Tech Stack, don't confuse with skills header!
+    if (currentSection === "experience" && /^(?:Tecnolog[ií]as|Tech Stack|Stack|Tools):/i.test(line)) {
+      if (currentExp) {
+        const techStr = line.replace(/^(?:Tecnolog[ií]as|Tech Stack|Stack|Tools):\s*/i, "");
+        const techs = techStr.split(/[,|•·;]/).map((t) => t.trim()).filter((t) => t.length > 0);
+        currentExp.technologies.push(...techs);
+        techs.forEach((t) => {
+          if (!technicalSkills.includes(t)) technicalSkills.push(t);
+        });
+      }
+      continue;
+    }
+
     // Section detection
-    if (/^(EXPERIENCIA|EXPERIENCE|HISTORIAL LABORAL|TRAYECTORIA)/i.test(upper)) {
+    if (/^(?:EXPERIENCIA|EXPERIENCE|HISTORIAL LABORAL|TRAYECTORIA|WORK EXPERIENCE|EXPERIENCIA LABORAL)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "experience";
       continue;
-    } else if (/^(EDUCACI[OÓ]N|EDUCATION|FORMACI[OÓ]N ACAD[EÉ]MICA)/i.test(upper)) {
-      if (currentExp) experiences.push(currentExp);
-      currentExp = null;
+    } else if (/^(?:EDUCACI[OÓ]N|EDUCATION|FORMACI[OÓ]N ACAD[EÉ]MICA|ACADEMIC|ESTUDIOS)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "education";
       continue;
-    } else if (/^(HABILIDADES|SKILLS|COMPETENCIAS|TECNOLOG[IÍ]AS)/i.test(upper)) {
-      if (currentExp) experiences.push(currentExp);
-      currentExp = null;
+    } else if (/^(?:HABILIDADES|SKILLS|COMPETENCIAS|TECNOLOG[IÍ]AS|TECH STACK|TECHNICAL SKILLS)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "skills";
       continue;
-    } else if (/^(CERTIFICACI[OÓ]N|CERTIFICACIONES|CERTIFICATES)/i.test(upper)) {
-      if (currentExp) experiences.push(currentExp);
-      currentExp = null;
+    } else if (/^(?:CERTIFICACI[OÓ]N|CERTIFICACIONES|CERTIFICATES|CREDENTIALS)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "certifications";
       continue;
-    } else if (/^(PROYECTOS|PROJECTS)/i.test(upper)) {
-      if (currentExp) experiences.push(currentExp);
-      currentExp = null;
+    } else if (/^(?:PROYECTOS|PROJECTS|PORTAFOLIO)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "projects";
       continue;
-    } else if (/^(IDIOMAS|LANGUAGES)/i.test(upper)) {
-      if (currentExp) experiences.push(currentExp);
-      currentExp = null;
+    } else if (/^(?:IDIOMAS|LANGUAGES)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "languages";
       continue;
-    } else if (/^(RESUMEN|PERFIL|SOBRE M[IÍ]|SUMMARY|ABOUT)/i.test(upper)) {
+    } else if (/^(?:RESUMEN|PERFIL|SOBRE M[IÍ]|SUMMARY|ABOUT|PROFILE)/i.test(upper)) {
+      pushCurrentExp();
       currentSection = "summary";
       continue;
     }
 
+    // Section Handlers
     if (currentSection === "summary") {
-      if (line.length > 20 && !summary) {
+      if (!summary && line.length > 20) {
         summary = line;
-      } else if (summary && summary.length < 300) {
+      } else if (summary && summary.length < 500) {
         summary += " " + line;
       }
-    } else if (currentSection === "experience") {
-      // Is it a job header? (contains company or date)
-      const hasDate = /20\d\d|19\d\d|presente|present|actualidad/i.test(line);
-      const isBullet = /^[•\-*–—\d\.]+|[A-Z][a-z]+ed|[L|D|I|M|O|R|C|A][a-z]+ó/.test(line);
+    } else if (currentSection === "skills") {
+      const cleanTokens = line
+        .replace(/^(?:lenguajes|frameworks|librerías|herramientas|cloud & devops|metodologías|técnicas|skills):/i, "")
+        .split(/[,|•·;]/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 1 && t.length < 35);
 
-      if (hasDate && !isBullet && line.length < 90) {
-        if (currentExp) experiences.push(currentExp);
-        const parts = line.split(/[-–|·•]/).map((p) => p.trim());
+      cleanTokens.forEach((tok) => {
+        const tokLower = tok.toLowerCase();
+        if (/react|next|vue|angular|svelte|express|nest|django|flask|spring|laravel/i.test(tokLower)) {
+          if (!frameworks.includes(tok)) frameworks.push(tok);
+        } else if (/aws|azure|gcp|docker|kubernetes|k8s|terraform|git|linux|ci\/cd|kafka|redis|jenkins/i.test(tokLower)) {
+          if (!toolsCloud.includes(tok)) toolsCloud.push(tok);
+        } else if (/scrum|kanban|agile|leadership|liderazgo|comunicación/i.test(tokLower)) {
+          if (!softSkills.includes(tok)) softSkills.push(tok);
+        } else {
+          if (!technicalSkills.includes(tok)) technicalSkills.push(tok);
+        }
+      });
+    } else if (currentSection === "experience" || currentExp !== null || line.startsWith("@") || (lines[i + 1] && lines[i + 1].startsWith("@"))) {
+      currentSection = "experience";
+
+      // 1. Technologies line within experience
+      if (/^(?:Tecnolog[ií]as|Tech Stack|Stack|Tools):/i.test(line)) {
+        if (currentExp) {
+          const techStr = line.replace(/^(?:Tecnolog[ií]as|Tech Stack|Stack|Tools):\s*/i, "");
+          const techs = techStr.split(/[,|•·;]/).map((t) => t.trim()).filter((t) => t.length > 0);
+          currentExp.technologies.push(...techs);
+          techs.forEach((t) => {
+            if (!technicalSkills.includes(t)) technicalSkills.push(t);
+          });
+        }
+        continue;
+      }
+
+      // 2. Lookahead: Check if this line is a job role preceding an upcoming "@ Company" line
+      if (lines[i + 1] && lines[i + 1].startsWith("@")) {
+        pushCurrentExp();
+        // The next iteration will parse "@ Company" and take this line as its role
+        continue;
+      }
+
+      // 3. Pattern: @ Company
+      if (line.startsWith("@")) {
+        pushCurrentExp();
+        currentSection = "experience";
+        const company = line.replace(/^@\s*/, "").trim();
+        const prevLine = lines[i - 1];
+        let role = prevLine && !prevLine.startsWith("@") && !prevLine.startsWith("•") && !/^(?:Experiencia|Historial|Experience|Work)/i.test(prevLine) ? prevLine : (headline || "Ingeniero");
+        let dateRange = "";
+
+        // Consume following date, location, or metadata lines
+        let j = i + 1;
+        while (j < lines.length && (
+          lines[j].toLowerCase().includes("actualidad") ||
+          lines[j].toLowerCase().includes("present") ||
+          /(?:19|20)\d\d/.test(lines[j]) ||
+          lines[j].toLowerCase().includes("remote") ||
+          lines[j].toLowerCase().includes("remoto") ||
+          lines[j].toLowerCase().includes("laboratorio") ||
+          lines[j].toLowerCase().includes("chile") ||
+          lines[j].toLowerCase().includes("santiago")
+        )) {
+          if (!dateRange) {
+            dateRange = lines[j];
+          } else {
+            dateRange += " · " + lines[j];
+          }
+          j++;
+        }
+        i = j - 1;
+
+        currentExp = {
+          id: `exp-${Date.now()}-${experiences.length}`,
+          company: company,
+          role: role,
+          startDate: dateRange,
+          description: "",
+          bullets: [],
+          technologies: [],
+          category: "Feature ✨",
+        };
+        continue;
+      }
+
+      // 4. Pattern: Role | Company | Date OR Company | Role | Date
+      if ((line.includes("|") || line.includes(" — ") || line.includes(" - ")) && /(?:19|20)\d\d|presente|present|actualidad/i.test(line) && line.length < 130) {
+        const parts = line.split(/[|—–-]/).map((p) => p.trim());
+        pushCurrentExp();
         currentExp = {
           id: `exp-${Date.now()}-${experiences.length}`,
           company: parts[0] || "Empresa",
           role: parts[1] || headline || "Ingeniero",
           startDate: parts[2] || "",
+          description: "",
           bullets: [],
           technologies: [],
           category: "Feature ✨",
         };
-      } else if (isBullet && currentExp) {
-        const cleanBullet = line.replace(/^[•\-*–—\d\.\)\s]+/, "").trim();
-        if (cleanBullet.length > 15) {
-          currentExp.bullets.push(cleanBullet);
+        continue;
+      }
+
+      // Filter page footers or page numbering (e.g. "4 of 6 --", "Page 4 of 6", "of 6 --") before stripping
+      if (/\b\d+\s+of\s+\d+\b/i.test(line) || /of\s+\d+\s*--/i.test(line) || /^page\s+\d+/i.test(line) || /^--\s*\d+/i.test(line) || /--$/.test(line.trim())) {
+        continue;
+      }
+
+      // 5. Clean line and strip any combination of bullet markers (•, ●, ○, ▪, ■, ◆, -, *, etc.)
+      const cleanLine = line.replace(/^[•●○▪■◆\-*–—›\d\.\)\>\s]+/g, "").trim();
+
+      if (!cleanLine || /^\d+\s*(?:of|\/)\s*\d+/i.test(cleanLine) || /^page\s+\d+/i.test(cleanLine)) {
+        continue;
+      }
+
+      // Check if it's a technology list line (e.g. "Jest, GCP (serverless), JWT, REST APIs, Linux")
+      if (cleanLine.includes(",")) {
+        const tokens = cleanLine.split(/[,|•·;]/).map((t) => t.trim()).filter(Boolean);
+        const isTechList = tokens.length >= 3 && tokens.every((p) => p.length < 30 && !/\b(?:developed|led|managed|delivered|oversaw|built|fostered|implemented|cre[oó]|desarroll[oó]|lider[oó])\b/i.test(p));
+        if (isTechList) {
+          if (currentExp) {
+            currentExp.technologies.push(...tokens);
+            tokens.forEach((t) => {
+              if (!technicalSkills.includes(t)) technicalSkills.push(t);
+            });
+          }
+          continue;
         }
       }
-    } else if (currentSection === "skills") {
-      const tokens = line.split(/[,|•·;]/).map((t) => t.trim()).filter((t) => t.length > 1 && t.length < 28);
-      tokens.forEach((tok) => {
-        if (!technicalSkills.includes(tok)) technicalSkills.push(tok);
-      });
+
+      // Check if single technology word line under dates (e.g. "Kubernetes")
+      const words = cleanLine.split(/\s+/);
+      if (words.length <= 2 && cleanLine.length < 25 && !/\b(?:developed|led|built)\b/i.test(cleanLine)) {
+        if (currentExp && !currentExp.technologies.includes(cleanLine)) {
+          currentExp.technologies.push(cleanLine);
+          if (!technicalSkills.includes(cleanLine)) technicalSkills.push(cleanLine);
+        }
+        continue;
+      }
+
+      // 6. Substantive job responsibility or accomplishment bullet
+      if (currentExp) {
+        // Multi-line continuation: check if previous bullet ended with dangling word (using, and, with, for, etc.)
+        const lastBullet = currentExp.bullets.length > 0 ? currentExp.bullets[currentExp.bullets.length - 1] : "";
+        const danglingPrev = /(?:using|and|with|for|in|to|of|the|a|an|across|between|including|throughout)\s*$/i.test(lastBullet);
+        const isLowercaseContinuation = /^[a-z,;]/.test(cleanLine);
+
+        if (currentExp.bullets.length > 0 && (danglingPrev || isLowercaseContinuation)) {
+          const lastIdx = currentExp.bullets.length - 1;
+          currentExp.bullets[lastIdx] += " " + cleanLine;
+          if (currentExp.description) currentExp.description += " " + cleanLine;
+          continue;
+        }
+
+        if (cleanLine.length > 10) {
+          currentExp.bullets.push(cleanLine);
+          if (!currentExp.description) {
+            currentExp.description = cleanLine;
+          } else {
+            currentExp.description += " " + cleanLine;
+          }
+        }
+        continue;
+      }
     } else if (currentSection === "education") {
-      if (line.length > 8 && line.length < 100) {
+      if (line.length > 5 && line.length < 120 && !line.startsWith("•")) {
+        const parts = line.split(/[|—–,-]/).map((p) => p.trim());
         education.push({
           id: `edu-${Date.now()}-${education.length}`,
-          degree: line,
-          institution: "",
+          degree: parts[0] || line,
+          institution: parts[1] || "",
+          year: parts[2] || "",
         });
       }
     } else if (currentSection === "certifications") {
-      if (line.length > 8 && line.length < 100) {
+      if (line.length > 5 && line.length < 120 && !line.startsWith("•")) {
+        const parts = line.split(/[|—–,-]/).map((p) => p.trim());
         certifications.push({
           id: `cert-${Date.now()}-${certifications.length}`,
-          name: line,
-          issuer: "",
+          name: parts[0] || line,
+          issuer: parts[1] || "",
+          year: parts[2] || "",
         });
       }
     } else if (currentSection === "languages") {
-      if (line.length > 3 && line.length < 60) {
+      if (line.length > 3 && line.length < 70) {
         const parts = line.split(/[:\-\(]/).map((p) => p.trim());
         languages.push({
           id: `lang-${Date.now()}-${languages.length}`,
@@ -592,7 +922,12 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
     }
   }
 
-  if (currentExp) experiences.push(currentExp);
+  pushCurrentExp();
+
+  // If headline wasn't found at top, infer from first experience role
+  if (!headline && experiences.length > 0 && experiences[0].role) {
+    headline = experiences[0].role;
+  }
 
   return {
     contact: {
@@ -603,14 +938,14 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
       location: location || "",
       linkedin: linkedin || "",
       github: github || "",
-      portfolio: "",
+      portfolio: portfolio || "",
     },
     summary: summary || "",
     skills: {
-      technical: technicalSkills.slice(0, 8),
-      frameworks: [],
-      toolsCloud: [],
-      softSkills: [],
+      technical: technicalSkills.slice(0, 15),
+      frameworks: frameworks.slice(0, 10),
+      toolsCloud: toolsCloud.slice(0, 10),
+      softSkills: softSkills.slice(0, 6),
     },
     experiences: experiences,
     education: education,
@@ -623,8 +958,12 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
 
 // Master Extraction Endpoint supporting both full CV & achievements
 app.post("/api/cv/extract-full-cv", async (req, res) => {
+  let textContent: string = req.body?.textContent || "";
+  let fileBase64: string = req.body?.fileBase64 || "";
+  let mimeType: string = req.body?.mimeType || "";
+  let fileName: string = req.body?.fileName || "cv.txt";
+
   try {
-    let { textContent, fileBase64, mimeType, fileName } = req.body;
 
     if (!textContent && !fileBase64) {
       return res.status(400).json({
@@ -639,7 +978,21 @@ app.post("/api/cv/extract-full-cv", async (req, res) => {
       });
     }
 
-    // 2. Strict Text Length Restriction (15,000 chars max)
+    // 2. Decode binary file to text upfront so both Gemini & local fallback have real text
+    if (fileBase64) {
+      const cleanBase64 = fileBase64.includes(",") ? fileBase64.split(",")[1] : fileBase64;
+      try {
+        const fileBuffer = Buffer.from(cleanBase64, "base64");
+        const extracted = await extractTextFromBuffer(fileBuffer, mimeType, fileName);
+        if (extracted && extracted.trim().length > 0) {
+          textContent = extracted;
+        }
+      } catch (bufErr) {
+        console.warn("No se pudo extraer texto del buffer binario:", bufErr);
+      }
+    }
+
+    // 3. Strict Text Length Restriction (15,000 chars max)
     if (textContent && textContent.length > 15000) {
       textContent = textContent.substring(0, 15000);
     }
@@ -860,13 +1213,26 @@ Devuelve un JSON estrictamente válido que coincida con el schema.`;
         toolsCloud: parsedData.skills?.toolsCloud || [],
         softSkills: parsedData.skills?.softSkills || [],
       },
-      experiences: (parsedData.experiences || []).map((exp, idx) => ({
-        ...exp,
-        id: exp.id || `exp-${Date.now()}-${idx}`,
-        category: exp.category || "Feature ✨",
-        bullets: exp.bullets || [],
-        technologies: exp.technologies || [],
-      })),
+      experiences: (parsedData.experiences || []).map((exp, idx) => {
+        let bullets = Array.isArray(exp.bullets)
+          ? exp.bullets.filter((b) => b && b.trim().length > 6)
+          : [];
+        if (bullets.length === 0 && exp.description) {
+          const splitSentences = exp.description
+            .split(/(?<=[.!?])\s+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 8);
+          bullets = splitSentences.length > 0 ? splitSentences : [exp.description];
+        }
+        return {
+          ...exp,
+          id: exp.id || `exp-${Date.now()}-${idx}`,
+          category: exp.category || "Feature ✨",
+          bullets: bullets,
+          description: exp.description || (bullets.length > 0 ? bullets.join(". ") : ""),
+          technologies: exp.technologies || [],
+        };
+      }),
       education: (parsedData.education || []).map((edu, idx) => ({
         ...edu,
         id: edu.id || `edu-${Date.now()}-${idx}`,
@@ -912,12 +1278,12 @@ Devuelve un JSON estrictamente válido que coincida con el schema.`;
   } catch (err: any) {
     console.error("Error en extracción completa con Gemini:", err);
 
-    // Fallback to strict local parser so user is never stranded
-    const fallbackText = req.body?.textContent || "";
-    const fileName = req.body?.fileName || "cv.txt";
-    const cvData = extractFullCvLocally(fallbackText, fileName);
+    // Fallback to strict local parser with the decoded textContent
+    const fallbackText = textContent || req.body?.textContent || "";
+    const effectiveFileName = fileName || req.body?.fileName || "cv.txt";
+    const cvData = extractFullCvLocally(fallbackText, effectiveFileName);
     const audit = calculateCvAudit(cvData);
-    const achievements = cvToAchievements(cvData, fileName);
+    const achievements = cvToAchievements(cvData, effectiveFileName);
 
     return res.json({
       cvData,
@@ -928,7 +1294,7 @@ Devuelve un JSON estrictamente válido que coincida con el schema.`;
       completenessScore: audit.completenessScore,
       engine: "local-strict-parser",
       warning: "Extracción procesada mediante motor de fidelidad local.",
-      fileName,
+      fileName: effectiveFileName,
     });
   }
 });
@@ -938,6 +1304,19 @@ app.post("/api/cv/extract-achievements", async (req, res) => {
   // Delegate directly to the full extractor
   req.url = "/api/cv/extract-full-cv";
   return app._router.handle(req, res, () => {});
+});
+
+// Explicit endpoint to download the test PDF CV
+app.get("/api/cv/download-sample-pdf", (_req, res) => {
+  const filePath = path.resolve(__dirname, "public", "CV_Rodrigo_Jara_Pruebas.pdf");
+  res.download(filePath, "CV_Rodrigo_Jara_Pruebas.pdf", (err) => {
+    if (err) {
+      console.error("Error sending sample PDF:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "No se pudo descargar el archivo PDF de prueba." });
+      }
+    }
+  });
 });
 
 // App Startup with Vite Integration

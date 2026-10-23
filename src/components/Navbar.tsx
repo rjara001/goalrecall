@@ -235,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={onOpenSettings}
-            title="Copia de Seguridad & Respaldo JSON"
+            title="Configuración, Redes de Empleo & Respaldo JSON"
             className="p-2 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors"
           >
             <SettingsIcon className="w-4 h-4" />

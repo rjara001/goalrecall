@@ -21,7 +21,10 @@ import {
   Briefcase,
   ArrowRight,
   Layers,
-  Award
+  Award,
+  Target,
+  HelpCircle,
+  FileText
 } from "lucide-react";
 import { LogCategory, LogEntry, WorkExperience } from "../types";
 
@@ -86,15 +89,31 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const [selectedTag, setSelectedTag] = useState("all");
   const [selectedVisibility, setSelectedVisibility] = useState<"all" | "public_only" | "private_only">("all");
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
+  const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+
+  const toggleField = (key: string) => {
+    setExpandedFields((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Filter lists
   const clients = useMemo(() => Array.from(new Set(logs.map((l) => l.client))).filter(Boolean), [logs]);
   const allTags = useMemo(() => Array.from(new Set(logs.flatMap((l) => l.tags))).filter(Boolean), [logs]);
 
-  // Total bullets across all experiences
+  // Total bullets across all experiences (including auto-promoted summaries and linked Bitácora logros)
   const totalBulletsCount = useMemo(() => {
-    return experiences.reduce((acc, exp) => acc + (exp.bullets?.length || 0), 0);
-  }, [experiences]);
+    return experiences.reduce((acc, exp) => {
+      if (exp.bullets && exp.bullets.length > 0) {
+        return acc + exp.bullets.length;
+      }
+      const expLogsCount = logs.filter(
+        (l) => l.experienceId === exp.id || (!l.experienceId && l.client.trim().toLowerCase() === exp.company.trim().toLowerCase())
+      ).length;
+      if (expLogsCount > 0) {
+        return acc + expLogsCount;
+      }
+      return acc + (exp.summary && !exp.summary.includes("extraída de CV") ? 1 : 0);
+    }, 0);
+  }, [experiences, logs]);
 
   // Set of all extracted bullet texts (normalized) for quick matching
   const extractedBulletSet = useMemo(() => {
@@ -377,8 +396,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   (l) => l.experienceId === exp.id || (!l.experienceId && l.client.trim().toLowerCase() === exp.company.trim().toLowerCase())
                 );
                 
-                // Count unextracted bullets
-                const bullets = exp.bullets || [];
+                // Count unextracted bullets, deriving from expLogs or summary if bullets array is empty
+                const expLogsBullets = expLogs
+                  .map((l) => l.originalBullet || l.impact || l.title)
+                  .filter(Boolean);
+                const rawBullets = (exp.bullets && exp.bullets.length > 0)
+                  ? exp.bullets
+                  : (expLogsBullets.length > 0
+                      ? expLogsBullets
+                      : (exp.summary && !exp.summary.includes("extraída de CV") ? [exp.summary] : []));
+                
+                // Clean markers (strip leading ●, •, -, etc.) and filter out page numbers/footers
+                const bullets = rawBullets
+                  .map((b) => b.replace(/^[•●○▪■◆\-*–—›\d\.\)\>]+\s*/, "").trim())
+                  .filter((b) => b.length > 10 && !/^\d+\s*(?:of|\/)\s*\d+/i.test(b));
+
                 const unextractedBullets = bullets.filter(
                   (b) => !extractedBulletSet.has(b.trim().toLowerCase())
                 );
@@ -479,8 +511,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Summary (if present) */}
-                    {exp.summary && (
+                    {/* Summary (only if distinct, not redundant with bullets, and not generic placeholder) */}
+                    {exp.summary && 
+                     !exp.summary.includes("extraída de CV") && 
+                     bullets.length === 0 && (
                       <p className="text-xs text-slate-400 leading-relaxed max-w-3xl border-l-2 border-slate-800 pl-3 italic">
                         {exp.summary}
                       </p>
@@ -843,37 +877,134 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                               </div>
                             </div>
 
-                            {/* Headline Title */}
-                            <h4 className="text-sm font-bold text-white mb-2 group-hover:text-cyan-200 transition-colors">
-                              {log.title}
-                            </h4>
+                            {/* Logro (Multilínea) - Campo resumen principal / Viñeta del CV */}
+                            <div className="mb-3">
+                              <span className="text-[10px] font-mono text-cyan-400 font-semibold tracking-wider uppercase block mb-1">
+                                Logro (Viñeta CV)
+                              </span>
+                              <h4 className="text-sm font-semibold text-white leading-relaxed whitespace-pre-wrap group-hover:text-cyan-100 transition-colors">
+                                {log.title}
+                              </h4>
+                            </div>
 
-                            {/* Impact Metric Highlight (Google XYZ Formula) */}
-                            <div className="p-2.5 bg-slate-950/80 border border-emerald-950/60 rounded-lg mb-2 flex items-start gap-2">
-                              <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                              <div>
-                                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
-                                  Impacto Cuantificable
-                                </span>
-                                <p className="text-xs text-emerald-200 font-mono font-medium leading-relaxed">
-                                  {log.impact}
-                                </p>
+                            {/* Desglose Estructurado en Acordeones con signo + */}
+                            <div className="space-y-2 mb-3">
+                              {/* 5. El impacto (Resultado medible) */}
+                              <div className="p-2.5 bg-slate-950/80 border border-emerald-950/60 rounded-lg flex items-start gap-2">
+                                <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
+                                    El impacto (Fórmula XYZ)
+                                  </span>
+                                  <p className="text-xs text-emerald-200 font-mono font-medium leading-relaxed whitespace-pre-wrap">
+                                    {log.impact}
+                                  </p>
+                                </div>
                               </div>
+
+                              {/* 2. ¿Qué se buscaba lograr? */}
+                              {log.whatWasSought && (
+                                <div className="border border-indigo-950/70 rounded-lg overflow-hidden bg-slate-950/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleField(`${log.id}-what`)}
+                                    className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-indigo-300 hover:bg-slate-900/60 transition-colors text-left"
+                                  >
+                                    <span className="flex items-center gap-1.5 font-medium truncate">
+                                      <Target className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                      <span className="font-semibold">{expandedFields[`${log.id}-what`] ? "−" : "+"} ¿Qué se buscaba lograr?</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-indigo-400/70 shrink-0 ml-2">
+                                      {expandedFields[`${log.id}-what`] ? "Ocultar" : "Ver"}
+                                    </span>
+                                  </button>
+                                  {expandedFields[`${log.id}-what`] && (
+                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-300 border-t border-indigo-950/70 leading-relaxed whitespace-pre-wrap animate-in fade-in duration-100">
+                                      {log.whatWasSought}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 3. ¿Por qué era importante? */}
+                              {log.whyImportant && (
+                                <div className="border border-amber-950/70 rounded-lg overflow-hidden bg-slate-950/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleField(`${log.id}-why`)}
+                                    className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-amber-300 hover:bg-slate-900/60 transition-colors text-left"
+                                  >
+                                    <span className="flex items-center gap-1.5 font-medium truncate">
+                                      <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span className="font-semibold">{expandedFields[`${log.id}-why`] ? "−" : "+"} ¿Por qué era importante?</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-amber-400/70 shrink-0 ml-2">
+                                      {expandedFields[`${log.id}-why`] ? "Ocultar" : "Ver"}
+                                    </span>
+                                  </button>
+                                  {expandedFields[`${log.id}-why`] && (
+                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-300 border-t border-amber-950/70 leading-relaxed whitespace-pre-wrap animate-in fade-in duration-100">
+                                      {log.whyImportant}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 4. ¿Cómo se aplicó la solución? */}
+                              {log.howApplied && (
+                                <div className="border border-cyan-950/70 rounded-lg overflow-hidden bg-slate-950/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleField(`${log.id}-how`)}
+                                    className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-cyan-300 hover:bg-slate-900/60 transition-colors text-left"
+                                  >
+                                    <span className="flex items-center gap-1.5 font-medium truncate">
+                                      <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                      <span className="font-semibold">{expandedFields[`${log.id}-how`] ? "−" : "+"} ¿Cómo se aplicó la solución?</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-cyan-400/70 shrink-0 ml-2">
+                                      {expandedFields[`${log.id}-how`] ? "Ocultar" : "Ver"}
+                                    </span>
+                                  </button>
+                                  {expandedFields[`${log.id}-how`] && (
+                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-300 border-t border-cyan-950/70 leading-relaxed whitespace-pre-wrap animate-in fade-in duration-100">
+                                      {log.howApplied}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* 7. Detalle o Descripción (espacio amplio para explayarse) */}
+                              {log.description && (
+                                <div className="border border-purple-950/70 rounded-lg overflow-hidden bg-slate-950/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleField(`${log.id}-desc`)}
+                                    className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-purple-300 hover:bg-slate-900/60 transition-colors text-left"
+                                  >
+                                    <span className="flex items-center gap-1.5 font-medium truncate">
+                                      <FileText className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                      <span className="font-semibold">{expandedFields[`${log.id}-desc`] ? "−" : "+"} Detalle o Descripción</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-purple-400/70 shrink-0 ml-2">
+                                      {expandedFields[`${log.id}-desc`] ? "Ocultar" : "Explayarse"}
+                                    </span>
+                                  </button>
+                                  {expandedFields[`${log.id}-desc`] && (
+                                    <div className="px-3 pb-2.5 pt-1 text-xs text-slate-300 border-t border-purple-950/70 leading-relaxed whitespace-pre-wrap animate-in fade-in duration-100">
+                                      {log.description}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {/* Reference to original CV bullet if available */}
-                            {log.originalBullet && (
+                            {log.originalBullet && log.originalBullet !== log.title && (
                               <div className="text-[11px] text-slate-400 italic bg-slate-950/50 p-2 rounded border border-slate-800/80 mb-2 flex items-start gap-1.5">
                                 <Sparkles className="w-3 h-3 text-purple-400 shrink-0 mt-0.5" />
                                 <span className="line-clamp-2">Viñeta origen CV: "{log.originalBullet}"</span>
                               </div>
-                            )}
-
-                            {/* Technical Description (if any) */}
-                            {log.description && (
-                              <p className="text-xs text-slate-300/90 leading-relaxed mb-2.5">
-                                {log.description}
-                              </p>
                             )}
 
                             {/* Tags List */}

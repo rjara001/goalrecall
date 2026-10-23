@@ -25,6 +25,7 @@ import {
   markMessageRead, 
   deleteMessage,
   getStoredExperiences,
+  saveExperiences,
   addExperience,
   updateExperience,
   deleteExperience,
@@ -69,11 +70,40 @@ export default function App() {
     }, 3500);
   };
 
-  // Initial Data Load
+  // Initial Data Load & Auto-Healing of Experiences from Bitácora Logs
   useEffect(() => {
     purgeDummyPresetData();
-    setLogs(getStoredLogs());
-    setExperiences(getStoredExperiences());
+    const storedLogs = getStoredLogs();
+    const storedExps = getStoredExperiences();
+
+    // Auto-heal experiences: if an experience has 0 bullets, but logs exist for this company in Bitácora,
+    // re-hydrate its bullets array from those logs so the user sees all their real bullets!
+    let expsChanged = false;
+    const healedExps = storedExps.map((exp) => {
+      if (!exp.bullets || exp.bullets.length === 0) {
+        const companyKey = exp.company.trim().toLowerCase();
+        const matched = storedLogs.filter(
+          (l) => l.experienceId === exp.id || l.client.trim().toLowerCase() === companyKey
+        );
+        if (matched.length > 0) {
+          expsChanged = true;
+          return {
+            ...exp,
+            bullets: matched.map((l) => l.originalBullet || l.impact || l.title).filter(Boolean),
+          };
+        }
+      }
+      return exp;
+    });
+
+    if (expsChanged) {
+      saveExperiences(healedExps);
+      setExperiences(healedExps);
+    } else {
+      setExperiences(storedExps);
+    }
+
+    setLogs(storedLogs);
     setUser(getStoredUser());
     setInbox(getStoredInbox());
   }, []);
@@ -265,7 +295,13 @@ export default function App() {
 
   const handleExtractAllBulletsForExperience = (experienceId: string) => {
     const exp = experiences.find((e) => e.id === experienceId);
-    if (!exp || !exp.bullets || exp.bullets.length === 0) return;
+    if (!exp) return;
+
+    const bullets = (exp.bullets && exp.bullets.length > 0)
+      ? exp.bullets
+      : (exp.summary && !exp.summary.includes("extraída de CV") ? [exp.summary] : []);
+
+    if (bullets.length === 0) return;
 
     const currentLogs = getStoredLogs();
     const existingBullets = new Set(
@@ -274,7 +310,7 @@ export default function App() {
         .map((l) => (l.originalBullet || l.impact).trim())
     );
 
-    const unextracted = exp.bullets.filter((b) => !existingBullets.has(b.trim()));
+    const unextracted = bullets.filter((b) => !existingBullets.has(b.trim()));
     if (unextracted.length === 0) {
       showToast("Todas las viñetas de esta experiencia ya están en tu Bitácora.", "info");
       return;
@@ -529,6 +565,7 @@ export default function App() {
         isOpen={isCvUploadOpen}
         onClose={() => setIsCvUploadOpen(false)}
         onImportLogs={handleImportBatchLogs}
+        onExperiencesUpdated={(updated) => setExperiences(updated)}
         currentUser={user}
         onUpdateProfile={handleUpdateProfile}
       />
@@ -557,6 +594,8 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         onDataChanged={reloadDataFromStorage}
         totalLogs={logs.length}
+        currentUser={user}
+        onUpdateProfile={handleUpdateProfile}
       />
 
       {/* Toast Feedback Banner */}
@@ -620,7 +659,7 @@ export default function App() {
               onClick={() => setIsSettingsOpen(true)}
               className="hover:text-cyan-400 transition-colors"
             >
-              Respaldo JSON
+              Redes & Respaldo
             </button>
           </div>
         </div>

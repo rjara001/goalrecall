@@ -13,7 +13,13 @@ import {
   FolderGit2, 
   Zap, 
   ChevronDown,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Plus,
+  Minus,
+  Target,
+  HelpCircle,
+  Layers,
+  FileText
 } from "lucide-react";
 import { LogCategory, LogEntry, PresetTemplate } from "../types";
 
@@ -41,6 +47,9 @@ const PRESETS: PresetTemplate[] = [
     name: "Incidente P0 / Bug Crítico",
     category: "Fix 🐛",
     title: "Resolución de fallo crítico de concurrencia en producción",
+    whatWasSought: "Garantizar consistencia transaccional y eliminar la degradación del servicio bajo alta concurrencia.",
+    whyImportant: "El error provocaba bloqueos en pasarela transaccional con riesgo inminente de penalización económica y fuga de usuarios.",
+    howApplied: "Implementación de cerrojo distribuido en Redis, reconciliación asíncrona de estado y validación con pruebas de carga k6.",
     description: "Identificación de condición de carrera bajo alta carga. Implementación de cerrojo distribuido y reconciliación de estado.",
     impact: "Recuperación de servicio en <15 min; cero pérdida de datos transaccionales",
     tags: ["#BugFix", "#P0", "#Concurrencia", "#HighAvailability"],
@@ -49,6 +58,9 @@ const PRESETS: PresetTemplate[] = [
     name: "Decisión de Arquitectura",
     category: "Architecture 🏗️",
     title: "Transición a arquitectura orientada a eventos desacoplada",
+    whatWasSought: "Desacoplar servicios centrales para permitir despliegues independientes y escalar el procesamiento sin bloqueos.",
+    whyImportant: "Las llamadas síncronas bloqueantes generaban cascadas de fallos en servicios aguas abajo en horas de alto tráfico.",
+    howApplied: "Diseño de patrón orquestador / saga con garantías de idempotencia y particionado de tópicos en bus de eventos.",
     description: "Diseño de patrón orquestador / saga con garantías de idempotencia para sustituir llamadas síncronas bloqueantes.",
     impact: "Reducción de latencia p99 en 80% y desacoplamiento de 4 microservicios",
     tags: ["#Architecture", "#EventDriven", "#Microservices", "#Escalabilidad"],
@@ -57,6 +69,9 @@ const PRESETS: PresetTemplate[] = [
     name: "Optimización de Rendimiento",
     category: "Refactor 🧹",
     title: "Optimización de consultas de base de datos y estrategia de caché multinivel",
+    whatWasSought: "Acelerar los tiempos de respuesta del dashboard para soportar analítica interactiva sin sobrecargar el cluster relacional.",
+    whyImportant: "Los usuarios experimentaban timeouts de más de 5 segundos, degradando la adopción de la herramienta de reporte.",
+    howApplied: "Reestructuración de consultas complejas, índices compuestos y caché reactiva L1/L2 con invalidación granular.",
     description: "Creación de índices compuestos, optimización de queries complejas y cacheo en Redis con invalidación reactiva.",
     impact: "Disminución del tiempo de respuesta de 2.4s a 110ms y -40% de carga en CPU",
     tags: ["#Performance", "#Redis", "#Database", "#Latency"],
@@ -65,6 +80,9 @@ const PRESETS: PresetTemplate[] = [
     name: "Infraestructura & CI/CD",
     category: "Infra/DevOps 🚀",
     title: "Automatización de pipeline de despliegue continuo con pruebas canarias",
+    whatWasSought: "Acelerar el ciclo de entrega de software de semanas a horas de forma segura y automatizada.",
+    whyImportant: "Los despliegues manuales generaban errores humanos recurrentes y requerían ventanas nocturnas de mantenimiento.",
+    howApplied: "Configuración de pipelines en CI/CD, contenedores Docker optimizados y pruebas canarias automatizadas.",
     description: "Implementación de pipelines paralelos en GitHub Actions y verificación automatizada de salud.",
     impact: "Reducción del tiempo de build de 25 min a 4 min; despliegues sin interrupción",
     tags: ["#DevOps", "#CICD", "#Docker", "#Automatizacion"],
@@ -80,13 +98,27 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   initialExperienceId,
   initialBulletText,
 }) => {
-  // Primary focused fields
+  // 1. Logro (multilínea): campo resumen, es la viñeta que aparecerá en el CV o que fue cargada
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [impact, setImpact] = useState("");
 
-  // Progressive Disclosure states - ALWAYS START COLLAPSED
-  const [isImpactVisible, setIsImpactVisible] = useState(false);
+  // Acordeones estructurados con signo +:
+  // 2. ¿Qué se buscaba lograr?
+  const [whatWasSought, setWhatWasSought] = useState("");
+  // 3. ¿Por qué era importante?
+  const [whyImportant, setWhyImportant] = useState("");
+  // 4. ¿Cómo se aplicó la solución?
+  const [howApplied, setHowApplied] = useState("");
+  // 5. El impacto (fórmula XYZ)
+  const [impact, setImpact] = useState("");
+  // 7. Detalle o Descripción (espacio amplio para explayarse en todo lo que se hizo)
+  const [description, setDescription] = useState("");
+
+  // Progressive Disclosure states - Cada elemento es un acordeón separado que inicia colapsado con signo +
+  const [isWhatSoughtOpen, setIsWhatSoughtOpen] = useState(false);
+  const [isWhyImportantOpen, setIsWhyImportantOpen] = useState(false);
+  const [isHowAppliedOpen, setIsHowAppliedOpen] = useState(false);
+  const [isImpactOpen, setIsImpactOpen] = useState(false);
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
   const [isContextVisible, setIsContextVisible] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
 
@@ -109,8 +141,8 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
 
-  // Refs
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Refs: title is now a multiline textarea
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const templatesDropdownRef = useRef<HTMLDivElement>(null);
 
   // Auto-complete suggestion lists
@@ -135,12 +167,16 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
     };
   }, [isTemplatesOpen]);
 
-  // Initialize or reset form - ALWAYS START WITH ACCORDIONS COLLAPSED
+  // Initialize or reset form - TODOS LOS ACORDEONES INICIAN COLAPSADOS
   useEffect(() => {
     if (!isOpen) return;
 
-    // Both accordions ALWAYS arrive collapsed
-    setIsImpactVisible(false);
+    // Todos los acordeones independientes con signo + inician cerrados
+    setIsWhatSoughtOpen(false);
+    setIsWhyImportantOpen(false);
+    setIsHowAppliedOpen(false);
+    setIsImpactOpen(false);
+    setIsDescriptionOpen(false);
     setIsContextVisible(false);
     setIsTemplatesOpen(false);
 
@@ -150,8 +186,11 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
 
       if (initialData) {
         setTitle(initialData.title);
+        setWhatWasSought(initialData.whatWasSought || "");
+        setWhyImportant(initialData.whyImportant || "");
+        setHowApplied(initialData.howApplied || "");
+        setImpact(initialData.impact || "");
         setDescription(initialData.description || "");
-        setImpact(initialData.impact);
 
         setDate(initialData.date);
         setExperienceId(initialData.experienceId || exps[0]?.id || "exp-personal");
@@ -174,8 +213,14 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
 
         if (initialBulletText) {
           const cleanText = initialBulletText.trim();
-          setTitle(cleanText.length > 95 ? cleanText.substring(0, 92) + "..." : cleanText);
+          // Logro (multilínea): preserva la viñeta completa sin truncar
+          setTitle(cleanText);
           setDescription(cleanText);
+          setWhatWasSought(`Entrega y despliegue de capacidades vinculadas a: ${cleanText.slice(0, 100)}`);
+          setWhyImportant(`Alineado con los objetivos de ${defaultExp.company}.`);
+          setHowApplied(defaultExp.technologies && defaultExp.technologies.length > 0 
+            ? `Implementado con ${defaultExp.technologies.slice(0, 5).join(", ")}.` 
+            : "");
           setImpact("Entregado con éxito y métricas verificables en producción");
           const techTags = defaultExp.technologies && defaultExp.technologies.length > 0 
             ? defaultExp.technologies.slice(0, 4).map((t: string) => t.startsWith("#") ? t : `#${t.replace(/\s+/g, '')}`)
@@ -183,6 +228,9 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
           setTags(techTags);
         } else {
           setTitle("");
+          setWhatWasSought("");
+          setWhyImportant("");
+          setHowApplied("");
           setDescription("");
           setImpact("");
           setTags(["#FullStack", "#TypeScript"]);
@@ -265,6 +313,9 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const applyPreset = (preset: PresetTemplate) => {
     setCategory(preset.category);
     setTitle(preset.title);
+    setWhatWasSought(preset.whatWasSought || "");
+    setWhyImportant(preset.whyImportant || "");
+    setHowApplied(preset.howApplied || "");
     setDescription(preset.description);
     setImpact(preset.impact);
     setTags(preset.tags);
@@ -316,6 +367,9 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
       project: project.trim() || "General",
       category,
       title: title.trim(),
+      whatWasSought: whatWasSought.trim() || undefined,
+      whyImportant: whyImportant.trim() || undefined,
+      howApplied: howApplied.trim() || undefined,
       description: description.trim() || undefined,
       impact: finalImpact,
       tags,
@@ -403,12 +457,12 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         {/* Form Body - Maximum room for Title & Description */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
           
-          {/* 1. TÍTULO DEL LOG + ACCIONES (DICTAR Y USAR PLANTILLAS) */}
+          {/* 1. LOGRO (MULTILÍNEA) - CAMPO RESUMEN / VIÑETA DE CV + DICTAR Y PLANTILLAS */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                Título del Log (Qué se hizo) *
+              <label className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                Logro (Multilínea — Viñeta para CV) *
               </label>
 
               <div className="flex items-center gap-2">
@@ -422,7 +476,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                         ? "bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse"
                         : "bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
                     }`}
-                    title="Dictar título con voz"
+                    title="Dictar viñeta con voz"
                   >
                     {isListening ? (
                       <>
@@ -473,51 +527,178 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
               </div>
             </div>
 
-            <input
+            <textarea
               ref={titleInputRef}
-              type="text"
+              rows={3}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="ej. Reemplazo de arquitectura síncrona por pipelines asíncronos con Kafka"
+              placeholder="Escribe la viñeta de logro completa tal como aparecerá en el CV o fue extraída..."
               required
-              className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner"
+              className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner resize-y leading-relaxed"
             />
+            <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <span>💡 Campo resumen: es la viñeta principal de tu CV. Desglosa los detalles abajo con los acordeones (+).</span>
+            </p>
           </div>
 
-          {/* 2. PASOS TÉCNICOS / DETALLES (MÁS ALTO - rows={6}, min-h-[145px]) */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-300">
-                Pasos Técnicos / Detalles (Opcional)
-              </label>
-              <span className="text-[11px] text-slate-500">
-                Arquitectura, librerías, refactor o problemas resueltos
-              </span>
-            </div>
-            <textarea
-              rows={6}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe cómo lo resolviste: decisiones de arquitectura, patrones de diseño (ej. Saga, CQRS), optimizaciones de queries, índices creados o trampas de concurrencia superadas..."
-              className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all resize-y min-h-[145px] leading-relaxed"
-            />
-          </div>
+          {/* ACORDEONES ESTRUCTURADOS CON SIGNO + */}
 
-          {/* 3. IMPACTO MEDIBLE (ACORDEÓN - LLEGA COLAPSADO POR DEFECTO) */}
+          {/* 2. ¿QUÉ SE BUSCABA LOGRAR? (ACORDEÓN +) */}
           <div>
-            {!isImpactVisible ? (
+            {!isWhatSoughtOpen ? (
               <button
                 type="button"
-                onClick={() => setIsImpactVisible(true)}
-                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-emerald-500/40 hover:border-emerald-500 hover:bg-emerald-950/20 text-emerald-400 transition-all flex items-center justify-between group"
+                onClick={() => setIsWhatSoughtOpen(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-indigo-500/40 hover:border-indigo-400 hover:bg-indigo-950/20 text-indigo-300 transition-all flex items-center justify-between group"
               >
-                <div className="flex items-center gap-2 text-xs">
-                  <Zap className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span className="font-semibold underline decoration-emerald-500/40 underline-offset-4 group-hover:decoration-emerald-400">
-                    {impact ? `⚡ Impacto: "${impact.slice(0, 50)}${impact.length > 50 ? '...' : ''}"` : "+ Agregar Impacto Medible / Resultado Cuantitativo (Fórmula XYZ)"}
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Plus className="w-3.5 h-3.5 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-indigo-500/40 underline-offset-4 group-hover:decoration-indigo-300 truncate">
+                    {whatWasSought ? `🎯 Qué se buscaba lograr: "${whatWasSought.slice(0, 50)}${whatWasSought.length > 50 ? '...' : ''}"` : "+ ¿Qué se buscaba lograr?"}
                   </span>
                 </div>
-                <span className="text-[11px] font-mono text-emerald-500/70 group-hover:text-emerald-300">
+                <span className="text-[11px] font-mono text-indigo-400/80 group-hover:text-indigo-200 shrink-0 ml-2">
+                  {whatWasSought ? "Editar" : "Definir"} ▾
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/30 via-slate-900/80 to-slate-900 border border-indigo-500/50 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-indigo-400" />
+                    ¿Qué se buscaba lograr?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsWhatSoughtOpen(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Ocultar
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={whatWasSought}
+                  onChange={(e) => setWhatWasSought(e.target.value)}
+                  placeholder="¿Cuál era el objetivo inicial, la meta de negocio o el requerimiento que dio origen a este trabajo? (ej. Desacoplar el checkout síncrono para soportar 15,000 rps en Black Friday)..."
+                  className="w-full bg-slate-900 border border-indigo-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/40 transition-all resize-y leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Define el problema de negocio o requerimiento inicial que motivó esta iniciativa.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 3. ¿POR QUÉ ERA IMPORTANTE? (ACORDEÓN +) */}
+          <div>
+            {!isWhyImportantOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsWhyImportantOpen(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-amber-500/40 hover:border-amber-400 hover:bg-amber-950/20 text-amber-300 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Plus className="w-3.5 h-3.5 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-amber-500/40 underline-offset-4 group-hover:decoration-amber-300 truncate">
+                    {whyImportant ? `💡 Por qué era importante: "${whyImportant.slice(0, 50)}${whyImportant.length > 50 ? '...' : ''}"` : "+ ¿Por qué era importante?"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-amber-400/80 group-hover:text-amber-200 shrink-0 ml-2">
+                  {whyImportant ? "Editar" : "Definir"} ▾
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-gradient-to-r from-amber-950/30 via-slate-900/80 to-slate-900 border border-amber-500/50 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                    ¿Por qué era importante?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsWhyImportantOpen(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Ocultar
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={whyImportant}
+                  onChange={(e) => setWhyImportant(e.target.value)}
+                  placeholder="¿Por qué era crítico resolverlo? (Dolor del cliente, riesgo mitigado, coste de inacción o impacto estratégico para la empresa)..."
+                  className="w-full bg-slate-900 border border-amber-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/40 transition-all resize-y leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Explica el riesgo o valor de negocio en juego si esto no se hubiera implementado.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 4. ¿CÓMO SE APLICÓ LA SOLUCIÓN? (ACORDEÓN +) */}
+          <div>
+            {!isHowAppliedOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsHowAppliedOpen(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-950/20 text-cyan-300 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Plus className="w-3.5 h-3.5 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-cyan-500/40 underline-offset-4 group-hover:decoration-cyan-300 truncate">
+                    {howApplied ? `🛠️ Cómo se aplicó: "${howApplied.slice(0, 50)}${howApplied.length > 50 ? '...' : ''}"` : "+ ¿Cómo se aplicó la solución?"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-cyan-400/80 group-hover:text-cyan-200 shrink-0 ml-2">
+                  {howApplied ? "Editar" : "Definir"} ▾
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/30 via-slate-900/80 to-slate-900 border border-cyan-500/50 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                    ¿Cómo se aplicó la solución?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsHowAppliedOpen(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Ocultar
+                  </button>
+                </div>
+                <textarea
+                  rows={3}
+                  value={howApplied}
+                  onChange={(e) => setHowApplied(e.target.value)}
+                  placeholder="Estrategia técnica aplicada: arquitectura, patrones de diseño (CQRS, Saga), herramientas, bibliotecas y decisiones de diseño..."
+                  className="w-full bg-slate-900 border border-cyan-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all resize-y leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Resume el método técnico y las herramientas empleadas para construir la solución.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 5. EL IMPACTO (ACORDEÓN +) */}
+          <div>
+            {!isImpactOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsImpactOpen(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-emerald-500/40 hover:border-emerald-500 hover:bg-emerald-950/20 text-emerald-400 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Plus className="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-emerald-500/40 underline-offset-4 group-hover:decoration-emerald-400 truncate">
+                    {impact ? `⚡ El impacto: "${impact.slice(0, 50)}${impact.length > 50 ? '...' : ''}"` : "+ El impacto (Resultado medible / Fórmula XYZ)"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-emerald-500/70 group-hover:text-emerald-300 shrink-0 ml-2">
                   {impact ? "Editar" : "Definir"} ▾
                 </span>
               </button>
@@ -526,25 +707,72 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                    Impacto Medible / Resultado Cuantitativo *
+                    El impacto (Resultado medible / Fórmula XYZ) *
                   </label>
                   <button
                     type="button"
-                    onClick={() => setIsImpactVisible(false)}
+                    onClick={() => setIsImpactOpen(false)}
                     className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
                   >
                     Ocultar
                   </button>
                 </div>
-                <input
-                  type="text"
+                <textarea
+                  rows={2}
                   value={impact}
                   onChange={(e) => setImpact(e.target.value)}
-                  placeholder="ej. Reducción de latencia p99 en 85% (de 2.4s a 180ms) y cero caídas en tráfico pico"
-                  className="w-full bg-slate-900 border border-emerald-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40 transition-all"
+                  placeholder="ej. Reducción de latencia p99 en 85% (de 2.4s a 180ms) y despliegue exitoso para 10,000+ firmas sin fallos"
+                  className="w-full bg-slate-900 border border-emerald-500/60 rounded-lg px-3.5 py-2 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/40 transition-all resize-y leading-relaxed"
                 />
                 <p className="text-[11px] text-slate-400">
                   <span className="text-emerald-300 font-semibold">Fórmula XYZ de Google:</span> Logró [X] medido por [Y] haciendo [Z]. Expresa el resultado en %, tiempo o volumen.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 7. DETALLE O DESCRIPCIÓN (ACORDEÓN +) - ESPACIO DONDE PODEMOS EXPLAYARNOS */}
+          <div>
+            {!isDescriptionOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsDescriptionOpen(true)}
+                className="w-full text-left py-2.5 px-3.5 rounded-lg border border-dashed border-purple-500/40 hover:border-purple-400 hover:bg-purple-950/20 text-purple-300 transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Plus className="w-3.5 h-3.5 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-semibold underline decoration-purple-500/40 underline-offset-4 group-hover:decoration-purple-300 truncate">
+                    {description ? `📝 Detalle o Descripción: "${description.slice(0, 50)}${description.length > 50 ? '...' : ''}"` : "+ Detalle o Descripción (Espacio amplio para explayarse)"}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-purple-400/80 group-hover:text-purple-200 shrink-0 ml-2">
+                  {description ? "Editar" : "Explayarse"} ▾
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 p-3.5 rounded-xl bg-gradient-to-r from-purple-950/30 via-slate-900/80 to-slate-900 border border-purple-500/50 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-400" />
+                    Detalle o Descripción (Espacio para explayarse en profundidad)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsDescriptionOpen(false)}
+                    className="text-[10px] font-mono text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Ocultar
+                  </button>
+                </div>
+                <textarea
+                  rows={6}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Aquí podemos explayarnos: pon todo el detalle técnico de lo que se hizo con respecto a este logro. Decisiones de arquitectura, patrones de diseño, optimizaciones de queries, índices creados, trampas de concurrencia superadas, fragmentos conceptuales o lecciones clave..."
+                  className="w-full bg-slate-900/90 border border-purple-500/60 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400/40 transition-all resize-y min-h-[145px] leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Espacio amplio y sin límites para conservar todo el trasfondo técnico para entrevistas, revisiones de arquitectura o recuerdos de diseño.
                 </p>
               </div>
             )}

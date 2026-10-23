@@ -767,7 +767,7 @@ export const clearSessionData = (): void => {
 // --- AI Usage Quota & Rate Limiting ---
 
 export const MAX_FREE_MONTHLY_AI_USES = 3;
-export const AI_COOLDOWN_MS = 120_000; // 2 minutes in ms
+export const AI_COOLDOWN_MS = 10_000; // 10 seconds cooldown between uploads
 
 export const getAiUsage = (): AiUsageRecord => {
   const currentMonthKey = new Date().toISOString().substring(0, 7);

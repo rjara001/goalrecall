@@ -34,6 +34,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   const [isCurrent, setIsCurrent] = useState(false);
   const [location, setLocation] = useState("");
   const [summary, setSummary] = useState("");
+  const [bulletsText, setBulletsText] = useState("");
   const [technologies, setTechnologies] = useState<string[]>([]);
   const [techInput, setTechInput] = useState("");
   const [isPersonalProjects, setIsPersonalProjects] = useState(false);
@@ -48,6 +49,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setIsCurrent(initialData.isCurrent || false);
       setLocation(initialData.location || "");
       setSummary(initialData.summary || "");
+      setBulletsText(initialData.bullets?.join("\n") || "");
       setTechnologies(initialData.technologies || []);
       setIsPersonalProjects(initialData.isPersonalProjects || false);
     } else {
@@ -58,6 +60,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setIsCurrent(true);
       setLocation("Remoto");
       setSummary("");
+      setBulletsText("");
       setTechnologies(["TypeScript", "React", "Node.js"]);
       setIsPersonalProjects(false);
     }
@@ -94,6 +97,11 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       return;
     }
 
+    const parsedBullets = bulletsText
+      .split(/\n+/)
+      .map((l) => l.replace(/^[•\-*–—›▪\d\.]+\s*/, "").trim())
+      .filter((l) => l.length > 5);
+
     onSave({
       id: initialData?.id,
       company: company.trim(),
@@ -103,7 +111,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       isCurrent,
       location: location.trim(),
       summary: summary.trim(),
-      bullets: initialData?.bullets || [],
+      bullets: parsedBullets.length > 0 ? parsedBullets : (initialData?.bullets || []),
       technologies,
       isPersonalProjects,
     });
@@ -296,6 +304,25 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               onChange={(e) => setSummary(e.target.value)}
               placeholder="Breve resumen de la misión del equipo, alcance arquitectónico o responsabilidad principal..."
               className="w-full bg-[#080C14] border border-slate-700/80 rounded-lg p-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs"
+            />
+          </div>
+
+          {/* Viñetas / Logros del Rol */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-slate-300">
+                Viñetas & Logros del CV (una por línea)
+              </label>
+              <span className="text-[10px] text-cyan-400 font-mono">
+                {bulletsText ? bulletsText.split("\n").filter((l) => l.trim().length > 5).length : 0} viñetas
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              value={bulletsText}
+              onChange={(e) => setBulletsText(e.target.value)}
+              placeholder="• Entregué plataforma digital reduciendo tiempos de gestión en 40%&#10;• Diseñé arquitectura con Angular 21 y Microfrontends..."
+              className="w-full bg-[#080C14] border border-slate-700/80 rounded-lg p-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs leading-relaxed font-sans"
             />
           </div>
 

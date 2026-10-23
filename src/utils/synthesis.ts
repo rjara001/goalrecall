@@ -34,18 +34,22 @@ export const generateXYZBullets = (logs: LogEntry[]): XYZBullet[] => {
  */
 export const generateSTARStories = (logs: LogEntry[]): STARStory[] => {
   return logs.map((log) => {
-    // Generate context-aware STAR components
-    const situation = `At ${log.client} during the ${log.project} initiative, the team faced architectural constraints where ${log.title.toLowerCase()}.`;
+    // Generate context-aware STAR components using structured fields when present
+    const situation = log.whatWasSought 
+      ? `At ${log.client} during ${log.project}: ${log.whatWasSought}`
+      : `At ${log.client} during the ${log.project} initiative, the team faced architectural constraints where ${log.title.toLowerCase()}.`;
     
-    let task = `The mandate was to remediate the underlying issue while preserving strict system uptime, zero data loss, and predictable latency under high concurrency.`;
-    if (log.category.includes("Fix")) {
+    let task = log.whyImportant 
+      ? log.whyImportant
+      : `The mandate was to remediate the underlying issue while preserving strict system uptime, zero data loss, and predictable latency under high concurrency.`;
+    if (!log.whyImportant && log.category.includes("Fix")) {
       task = `The critical objective was to isolate the root cause of the defect, prevent cascading failures, and safeguard transaction integrity without regressions.`;
-    } else if (log.category.includes("Architecture")) {
+    } else if (!log.whyImportant && log.category.includes("Architecture")) {
       task = `The goal was to replace fragile legacy dependencies with a decoupled, horizontally scalable architecture compliant with enterprise SLOs.`;
     }
 
-    const action = log.description 
-      ? `${log.description} Coordinated technical rollout, instrumented monitoring checkpoints, and validated reliability using ${log.tags.join(", ") || "production benchmarks"}.`
+    const action = log.howApplied || log.description
+      ? `${log.howApplied || log.description} Coordinated technical rollout, instrumented monitoring checkpoints, and validated reliability using ${log.tags.join(", ") || "production benchmarks"}.`
       : `Led technical design and implementation, established automated safeguards, and verified end-to-end telemetry using ${log.tags.join(", ") || "standard benchmarks"}.`;
 
     const result = `${log.impact}. Documented the design architecture, mentored engineering peers, and eliminated recurring operational overhead.`;
@@ -100,9 +104,8 @@ ${targetLogs
     (log, i) => `### ${i + 1}. ${log.title} (${log.category})
 - **Client / Initiative:** ${log.client} · ${log.project}
 - **Date Delivered:** ${log.date}
-- **Technical Steps:** ${log.description || "Executed standard architectural implementation and verification."}
-- **Measurable Outcome:** **${log.impact}**
-- **Technologies:** ${log.tags.join(" ") || "#FullStack"}
+${log.whatWasSought ? `- **Target Objective:** ${log.whatWasSought}\n` : ""}${log.whyImportant ? `- **Business Context / Why Critical:** ${log.whyImportant}\n` : ""}${log.howApplied ? `- **Applied Solution:** ${log.howApplied}\n` : ""}- **Measurable Outcome:** **${log.impact}**
+${log.description ? `- **In-Depth Details:** ${log.description}\n` : ""}- **Technologies:** ${log.tags.join(" ") || "#FullStack"}
 `
   )
   .join("\n")}

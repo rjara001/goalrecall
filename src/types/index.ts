@@ -32,9 +32,17 @@ export interface LogEntry {
   client: string; // e.g. "ParserDigital", "ClientX"
   project: string; // e.g. "Digital Submissions", "Checkout Revamp"
   category: LogCategory;
+  // 1. Logro (multilínea): campo resumen, es la viñeta que aparecerá en el CV o que fue cargada desde el CV
   title: string;
-  description?: string;
-  impact: string; // Quantitative/qualitative outcome (Google XYZ formula)
+  logro?: string; // Alias opcional para title
+  
+  // Acordeones estructurados independientes con signo +:
+  whatWasSought?: string; // 2. ¿Qué se buscaba lograr?
+  whyImportant?: string;  // 3. ¿Por qué era importante?
+  howApplied?: string;    // 4. ¿Cómo se aplicó la solución?
+  impact: string;         // 5. El impacto (resultado medible / fórmula XYZ)
+  description?: string;   // 7. Detalle o Descripción: espacio amplio para explayarse en todo lo que se hizo
+  
   tags: string[];
   isPublic: boolean; // Default false (Sandbox). If true, appears in Public Deck & First Mate
   createdAt: number;
@@ -47,6 +55,18 @@ export interface AiUsageRecord {
   lastUsed: number; // timestamp ms for 2-minute cooldown
 }
 
+export interface EmploymentSocialLinks {
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+  leetcode?: string;
+  wellfound?: string; // AngelList
+  stackoverflow?: string;
+  techBlog?: string; // Dev.to, Substack, Medium
+  twitter?: string; // X / Tech Twitter
+  [key: string]: string | undefined;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -57,6 +77,8 @@ export interface UserProfile {
   location: string;
   github?: string;
   linkedin?: string;
+  socialLinks?: EmploymentSocialLinks;
+  availabilityStatus?: string;
   skills: { name: string; category: "Languages" | "Frameworks" | "Cloud/DevOps" | "Architecture" }[];
   authProvider?: "google" | "custom";
   plan?: "free" | "pro"; // Default "free"
@@ -77,6 +99,8 @@ export interface CustomAccount {
   location?: string;
   github?: string;
   linkedin?: string;
+  socialLinks?: EmploymentSocialLinks;
+  availabilityStatus?: string;
   skills?: { name: string; category: "Languages" | "Frameworks" | "Cloud/DevOps" | "Architecture" }[];
   createdAt: number;
 }
@@ -108,6 +132,9 @@ export interface PresetTemplate {
   title: string;
   description: string;
   impact: string;
+  whatWasSought?: string;
+  whyImportant?: string;
+  howApplied?: string;
   tags: string[];
 }
 

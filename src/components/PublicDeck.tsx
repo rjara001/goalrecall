@@ -15,7 +15,18 @@ import {
   Filter, 
   MessageSquare,
   ShieldCheck,
-  Compass
+  Compass,
+  Target,
+  HelpCircle,
+  Layers,
+  FileText,
+  Globe,
+  Code2,
+  Rocket,
+  BookOpen,
+  Twitter,
+  Plus,
+  Minus
 } from "lucide-react";
 import { LogCategory, LogEntry, UserProfile, VisitorMessage } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
@@ -37,6 +48,40 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
+  const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+  const [showOtherNetworks, setShowOtherNetworks] = useState<boolean>(false);
+
+  // Compute secondary employment networks
+  const secondaryNetworks = useMemo(() => {
+    const list: { name: string; url: string; icon: React.ReactNode }[] = [];
+    const s = userProfile.socialLinks;
+    if (s?.portfolio?.trim()) {
+      list.push({ name: "Portafolio", url: s.portfolio.trim(), icon: <Globe className="w-3.5 h-3.5 text-emerald-400" /> });
+    }
+    if (s?.leetcode?.trim()) {
+      list.push({ name: "LeetCode", url: s.leetcode.trim(), icon: <Code2 className="w-3.5 h-3.5 text-amber-400" /> });
+    }
+    if (s?.wellfound?.trim()) {
+      list.push({ name: "Wellfound", url: s.wellfound.trim(), icon: <Rocket className="w-3.5 h-3.5 text-red-400" /> });
+    }
+    if (s?.stackoverflow?.trim()) {
+      list.push({ name: "Stack Overflow", url: s.stackoverflow.trim(), icon: <Layers className="w-3.5 h-3.5 text-orange-400" /> });
+    }
+    if (s?.techBlog?.trim()) {
+      list.push({ name: "Blog Técnico", url: s.techBlog.trim(), icon: <BookOpen className="w-3.5 h-3.5 text-blue-400" /> });
+    }
+    if (s?.twitter?.trim()) {
+      list.push({ name: "X (Twitter)", url: s.twitter.trim(), icon: <Twitter className="w-3.5 h-3.5 text-sky-400" /> });
+    }
+    return list;
+  }, [userProfile.socialLinks]);
+
+  const primaryLinkedin = userProfile.socialLinks?.linkedin || userProfile.linkedin;
+  const primaryGithub = userProfile.socialLinks?.github || userProfile.github;
+
+  const toggleField = (key: string) => {
+    setExpandedFields((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Form State for "Leave a Note for the Captain"
   const [visitorName, setVisitorName] = useState("");
@@ -112,6 +157,11 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   <ShieldCheck className="w-3.5 h-3.5" />
                   Vitrina Verificada
                 </span>
+                {userProfile.availabilityStatus && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-cyan-300 bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+                    {userProfile.availabilityStatus}
+                  </span>
+                )}
               </div>
 
               <p className="text-sm font-semibold text-cyan-300">
@@ -128,36 +178,80 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
           </div>
 
           {/* Social Links & Quick Contact */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {userProfile.github && (
+          <div className="flex flex-col sm:items-end gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Primary LinkedIn (High relevance) */}
+              {primaryLinkedin && (
+                <a
+                  href={primaryLinkedin.startsWith("http") ? primaryLinkedin : `https://${primaryLinkedin}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-[#0A66C2]/20 hover:bg-[#0A66C2]/30 border border-[#0A66C2]/50 text-cyan-200 hover:text-white rounded-xl text-xs font-semibold transition-all shadow-sm shadow-[#0A66C2]/10"
+                  title="Perfil Profesional en LinkedIn"
+                >
+                  <Linkedin className="w-4 h-4 text-[#0A66C2] fill-current" />
+                  <span>LinkedIn</span>
+                </a>
+              )}
+
+              {/* Primary GitHub (High relevance) */}
+              {primaryGithub && (
+                <a
+                  href={primaryGithub.startsWith("http") ? primaryGithub : `https://${primaryGithub}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-semibold transition-all"
+                  title="Código & Repositorios en GitHub"
+                >
+                  <Github className="w-4 h-4" />
+                  <span>GitHub</span>
+                </a>
+              )}
+
+              {/* Secondary networks accordion toggle with [+] */}
+              {secondaryNetworks.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowOtherNetworks(!showOtherNetworks)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-medium transition-colors"
+                  title="Ver otras redes de empleo y presencia técnica"
+                >
+                  <span className="font-mono text-cyan-400 font-bold text-xs">
+                    {showOtherNetworks ? "−" : "+"}
+                  </span>
+                  <span>Otras Redes</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-cyan-400">
+                    {secondaryNetworks.length}
+                  </span>
+                </button>
+              )}
+
               <a
-                href={userProfile.github}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-medium transition-colors"
+                href="#leave-note"
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs shadow-sm shadow-emerald-500/20 transition-all"
               >
-                <Github className="w-4 h-4" />
-                <span>GitHub</span>
+                <Mail className="w-4 h-4" />
+                <span>Dejar un Recado</span>
               </a>
+            </div>
+
+            {/* Secondary networks expandable bar */}
+            {showOtherNetworks && secondaryNetworks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 p-2 bg-slate-900/95 border border-slate-800 rounded-xl animate-in fade-in slide-in-from-top-1 duration-150">
+                {secondaryNetworks.map((net) => (
+                  <a
+                    key={net.name}
+                    href={net.url.startsWith("http") ? net.url : `https://${net.url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded-lg text-[11px] font-medium transition-colors"
+                  >
+                    {net.icon}
+                    <span>{net.name}</span>
+                  </a>
+                ))}
+              </div>
             )}
-            {userProfile.linkedin && (
-              <a
-                href={userProfile.linkedin}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-medium transition-colors"
-              >
-                <Linkedin className="w-4 h-4" />
-                <span>LinkedIn</span>
-              </a>
-            )}
-            <a
-              href="#leave-note"
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs shadow-sm shadow-emerald-500/20 transition-all"
-            >
-              <Mail className="w-4 h-4" />
-              <span>Dejar un Recado</span>
-            </a>
           </div>
         </div>
 
@@ -250,10 +344,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                       </span>
                     </div>
 
-                    {/* Headline */}
-                    <h3 className="text-base font-bold text-white mb-2 leading-snug">
-                      {log.title}
-                    </h3>
+                    {/* Headline - Logro (Multilínea) */}
+                    <div className="mb-2.5">
+                      <span className="text-[10px] font-mono text-emerald-400 font-semibold tracking-wider uppercase block mb-1">
+                        Logro Verificado (Viñeta CV)
+                      </span>
+                      <h3 className="text-base font-semibold text-white leading-relaxed whitespace-pre-wrap">
+                        {log.title}
+                      </h3>
+                    </div>
 
                     {/* Impact Metric Box */}
                     <div className="p-3 bg-slate-950 border border-emerald-950 rounded-xl mb-3 flex items-start gap-2.5">
@@ -262,17 +361,107 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                         <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
                           Impacto Medible
                         </span>
-                        <p className="text-xs sm:text-sm text-emerald-200 font-mono font-medium">
+                        <p className="text-xs sm:text-sm text-emerald-200 font-mono font-medium whitespace-pre-wrap">
                           {log.impact}
                         </p>
                       </div>
                     </div>
 
-                    {/* Description */}
-                    {log.description && (
-                      <p className="text-xs text-slate-300/90 leading-relaxed mb-3">
-                        {log.description}
-                      </p>
+                    {/* Breakdown Accordions for Recruiters & Visitors */}
+                    {(log.whatWasSought || log.whyImportant || log.howApplied || log.description) && (
+                      <div className="space-y-1.5 mb-3">
+                        {log.whatWasSought && (
+                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                            <button
+                              type="button"
+                              onClick={() => toggleField(`${log.id}-what`)}
+                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-indigo-300 hover:bg-slate-900 transition-colors text-left"
+                            >
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <Target className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>{expandedFields[`${log.id}-what`] ? "−" : "+"} ¿Qué se buscaba lograr?</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {expandedFields[`${log.id}-what`] ? "Cerrar" : "Ver"}
+                              </span>
+                            </button>
+                            {expandedFields[`${log.id}-what`] && (
+                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                {log.whatWasSought}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {log.whyImportant && (
+                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                            <button
+                              type="button"
+                              onClick={() => toggleField(`${log.id}-why`)}
+                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-amber-300 hover:bg-slate-900 transition-colors text-left"
+                            >
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{expandedFields[`${log.id}-why`] ? "−" : "+"} ¿Por qué era importante?</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {expandedFields[`${log.id}-why`] ? "Cerrar" : "Ver"}
+                              </span>
+                            </button>
+                            {expandedFields[`${log.id}-why`] && (
+                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                {log.whyImportant}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {log.howApplied && (
+                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                            <button
+                              type="button"
+                              onClick={() => toggleField(`${log.id}-how`)}
+                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-cyan-300 hover:bg-slate-900 transition-colors text-left"
+                            >
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>{expandedFields[`${log.id}-how`] ? "−" : "+"} ¿Cómo se aplicó la solución?</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {expandedFields[`${log.id}-how`] ? "Cerrar" : "Ver"}
+                              </span>
+                            </button>
+                            {expandedFields[`${log.id}-how`] && (
+                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                {log.howApplied}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {log.description && (
+                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                            <button
+                              type="button"
+                              onClick={() => toggleField(`${log.id}-desc`)}
+                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-purple-300 hover:bg-slate-900 transition-colors text-left"
+                            >
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <FileText className="w-3.5 h-3.5 text-purple-400" />
+                                <span>{expandedFields[`${log.id}-desc`] ? "−" : "+"} Detalle o Descripción profunda</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {expandedFields[`${log.id}-desc`] ? "Cerrar" : "Ver"}
+                              </span>
+                            </button>
+                            {expandedFields[`${log.id}-desc`] && (
+                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                {log.description}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {/* Tags */}

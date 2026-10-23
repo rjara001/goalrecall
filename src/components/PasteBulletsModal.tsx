@@ -53,7 +53,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
         client: defaultClient.trim() || "Cliente General",
         project: defaultProject.trim() || "Core Platform",
         category: defaultCategory,
-        title: line.length > 80 ? line.substring(0, 77) + "..." : line,
+        title: line, // Logro multilínea completo (la viñeta cargada)
         description: line,
         impact: impactText,
         tags: ["#Importado", "#Viñeta"],

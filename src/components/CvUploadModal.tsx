@@ -70,6 +70,9 @@ interface ExtractedBullet {
   title: string;
   description: string;
   impact: string;
+  whatWasSought?: string;
+  whyImportant?: string;
+  howApplied?: string;
   tags: string[];
   xyzScore: number;
   metricHighlight?: string;
@@ -82,6 +85,7 @@ interface CvUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => void;
+  onExperiencesUpdated?: (updated: WorkExperience[]) => void;
   currentUser?: UserProfile | null;
   onUpdateProfile?: (updated: UserProfile) => void;
 }
@@ -171,6 +175,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   isOpen,
   onClose,
   onImportLogs,
+  onExperiencesUpdated,
   currentUser,
   onUpdateProfile,
 }) => {
@@ -212,8 +217,30 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   const [showProModal, setShowProModal] = useState(false);
   const [proEmail, setProEmail] = useState("");
   const [proEmailSaved, setProEmailSaved] = useState(false);
+  const [isLoadingSamplePdf, setIsLoadingSamplePdf] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadSamplePdf = async () => {
+    try {
+      setIsLoadingSamplePdf(true);
+      setErrorMessage(null);
+      const response = await fetch("/CV_Rodrigo_Jara_Pruebas.pdf");
+      if (!response.ok) {
+        throw new Error("No se pudo obtener el PDF de pruebas");
+      }
+      const blob = await response.blob();
+      const sampleFile = new File([blob], "CV_Rodrigo_Jara_Pruebas.pdf", {
+        type: "application/pdf",
+      });
+      await processUploadedFile(sampleFile);
+    } catch (err: any) {
+      console.error("Error al cargar PDF de pruebas:", err);
+      setErrorMessage(err.message || "Error al cargar el PDF de muestra");
+    } finally {
+      setIsLoadingSamplePdf(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -427,6 +454,9 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       title: item.title || "Logro técnico verídico",
       description: item.description || item.title || "",
       impact: item.impact || item.title || "",
+      whatWasSought: item.whatWasSought,
+      whyImportant: item.whyImportant,
+      howApplied: item.howApplied,
       tags: Array.isArray(item.tags) ? item.tags : ["#Ingeniería"],
       xyzScore: item.xyzScore || 80,
       metricHighlight: item.metricHighlight,
@@ -606,17 +636,32 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
         if (!companyKey) return;
 
         const existing = updatedExperiences.find(
-          (e) => e.company.toLowerCase() === companyKey
+          (e) => e.company.toLowerCase() === companyKey ||
+                 e.company.toLowerCase().includes(companyKey) ||
+                 companyKey.includes(e.company.toLowerCase())
         );
+
+        const finalBullets = Array.isArray(exp.bullets) && exp.bullets.length > 0
+          ? [...exp.bullets]
+          : (exp.description ? [exp.description] : []);
 
         if (existing) {
           expIdMap.set(companyKey, existing.id);
-          // Preserve bullets if existing doesn't have them or new are extracted
-          if (Array.isArray(exp.bullets) && exp.bullets.length > 0) {
-            existing.bullets = exp.bullets;
+          // Overwrite/update bullets if new ones were extracted
+          if (finalBullets.length > 0) {
+            existing.bullets = finalBullets;
           }
           if (Array.isArray(exp.technologies) && exp.technologies.length > 0) {
             existing.technologies = Array.from(new Set([...(existing.technologies || []), ...exp.technologies]));
+          }
+          if (exp.description && (!existing.summary || existing.summary.includes("extraída de CV"))) {
+            existing.summary = exp.description;
+          }
+          if (exp.role && (!existing.role || existing.role === "Ingeniero")) {
+            existing.role = exp.role;
+          }
+          if (exp.startDate && !existing.startDate) {
+            existing.startDate = exp.startDate;
           }
         } else {
           const newWorkExp: WorkExperience = {
@@ -627,8 +672,8 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
             endDate: exp.endDate || "",
             isCurrent: exp.isCurrent || false,
             location: exp.location || "",
-            summary: exp.description || `Experiencia profesional extraída de CV.`,
-            bullets: Array.isArray(exp.bullets) ? [...exp.bullets] : [],
+            summary: exp.description || (finalBullets.length > 0 ? finalBullets[0] : ""),
+            bullets: finalBullets,
             technologies: exp.technologies || [],
             isPersonalProjects: false,
             createdAt: Date.now(),
@@ -640,6 +685,9 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       });
 
       saveExperiences(updatedExperiences);
+      if (onExperiencesUpdated) {
+        onExperiencesUpdated(updatedExperiences);
+      }
     }
 
     // 4. Import Selected Bullets to Bitácora (LogEntry) linked to Experience Container
@@ -658,6 +706,9 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
             project: b.project.trim() || "Ingeniería",
             category: b.category,
             title: b.title.trim(),
+            whatWasSought: b.whatWasSought,
+            whyImportant: b.whyImportant,
+            howApplied: b.howApplied,
             description: b.description || `Extraído de CV verídico (${selectedFile?.name || "Documento"}).`,
             impact: b.impact.trim(),
             tags: b.tags.length > 0 ? b.tags : ["#CVVerídico", "#Producción"],
@@ -788,45 +839,101 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
 
               {/* Tab 1: File Dropzone */}
               {activeTab === "file" && (
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDragging(true);
-                  }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all ${
-                    isDragging
-                      ? "border-purple-400 bg-purple-500/10 scale-[1.01]"
-                      : "border-slate-700/80 hover:border-purple-500/60 bg-slate-900/40 hover:bg-slate-900/70"
-                  }`}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    accept=".pdf,.docx,.doc,.txt,.md"
-                    className="hidden"
-                  />
-                  <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center mx-auto mb-4 text-purple-400 group-hover:scale-110 transition-transform">
-                    <UploadCloud className="w-8 h-8" />
+                <div className="space-y-4">
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragging(true);
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? "border-purple-400 bg-purple-500/10 scale-[1.01]"
+                        : "border-slate-700/80 hover:border-purple-500/60 bg-slate-900/40 hover:bg-slate-900/70"
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onClick={(e) => {
+                        (e.target as HTMLInputElement).value = "";
+                      }}
+                      onChange={handleFileChange}
+                      accept=".pdf,.docx,.doc,.txt,.md"
+                      className="hidden"
+                    />
+                    <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center mx-auto mb-4 text-purple-400 group-hover:scale-110 transition-transform">
+                      <UploadCloud className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-base font-semibold text-white mb-1">
+                      Arrastra tu CV aquí o haz clic para seleccionarlo
+                    </h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mb-4">
+                      Soporta PDFs nativos, documentos Word (.docx) o texto plano (máx. 2 MB). Extrae automáticamente
+                      contacto, resumen, experiencias, viñetas, educación y habilidades.
+                    </p>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
+                      <span>PDF</span>
+                      <span>•</span>
+                      <span>DOCX</span>
+                      <span>•</span>
+                      <span>TXT / Markdown</span>
+                      <span>•</span>
+                      <span className="text-purple-300 font-medium">Hasta 2 MB</span>
+                    </div>
                   </div>
-                  <h4 className="text-base font-semibold text-white mb-1">
-                    Arrastra tu CV aquí o haz clic para seleccionarlo
-                  </h4>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto mb-4">
-                    Soporta PDFs nativos, documentos Word (.docx) o texto plano (máx. 2 MB). Extrae automáticamente
-                    contacto, resumen, experiencias, viñetas, educación y habilidades.
-                  </p>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
-                    <span>PDF</span>
-                    <span>•</span>
-                    <span>DOCX</span>
-                    <span>•</span>
-                    <span>TXT / Markdown</span>
-                    <span>•</span>
-                    <span className="text-purple-300 font-medium">Hasta 2 MB</span>
+
+                  {/* Sample PDF Testing & Verification Card */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-500/30 shadow-lg">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0 mt-0.5">
+                          <FileText className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="text-sm font-bold text-white tracking-tight">
+                              CV de Pruebas Generado (PDF Real)
+                            </h5>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-700/50">
+                              CV_Rodrigo_Jara_Pruebas.pdf
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+                            Contiene tu trayectoria profesional íntegra: 8 empresas (Chambers & Partners, Dunnhumby, Raisin, AndBank, PayPal, Falabella Bank, Falabella Retail, Proyectos Personales), 28 viñetas técnicas reales, tecnologías y educación.
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">8 Experiencias</span>
+                            <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">28 Viñetas Reales</span>
+                            <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">Stack Tecnológico</span>
+                            <span className="text-[10px] text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">100% Sin Alucinaciones</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex sm:flex-row flex-col items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleLoadSamplePdf}
+                          disabled={isLoadingSamplePdf || isProcessing}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md shadow-purple-900/40 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                        >
+                          <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                          <span>{isLoadingSamplePdf ? "Cargando PDF..." : "Probar en 1 Clic"}</span>
+                        </button>
+
+                        <a
+                          href="/CV_Rodrigo_Jara_Pruebas.pdf"
+                          download="CV_Rodrigo_Jara_Pruebas.pdf"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium border border-slate-700 hover:border-slate-600 transition-all cursor-pointer"
+                        >
+                          <Download className="w-4 h-4 text-slate-300" />
+                          <span>Descargar PDF</span>
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
