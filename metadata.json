@@ -1,0 +1,6 @@
+{
+  "name": "Captain's Log",
+  "description": "Private local-first brag document tracker, career synthesis engine, and interactive public deck.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
