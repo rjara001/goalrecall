@@ -621,6 +621,43 @@ export const saveUser = (user: UserProfile | null): void => {
   }
 };
 
+export const updateUserAvatar = (newAvatarUrl: string): UserProfile | null => {
+  const current = getStoredUser();
+  if (!current) return null;
+
+  const updated: UserProfile = {
+    ...current,
+    avatar: newAvatarUrl,
+  };
+  saveUser(updated);
+
+  // Also update corresponding custom account if applicable
+  try {
+    const rawAccounts = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
+    if (rawAccounts) {
+      const accounts: CustomAccount[] = JSON.parse(rawAccounts);
+      if (Array.isArray(accounts)) {
+        const idx = accounts.findIndex(
+          (acc) =>
+            acc.id === current.id ||
+            (current.email && acc.email.toLowerCase() === current.email.toLowerCase())
+        );
+        if (idx !== -1) {
+          accounts[idx] = {
+            ...accounts[idx],
+            avatar: newAvatarUrl,
+          };
+          saveStoredCustomAccounts(accounts);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Error updating avatar in custom accounts:", err);
+  }
+
+  return updated;
+};
+
 // --- Inbox Utilities ---
 
 export const getStoredInbox = (): VisitorMessage[] => {

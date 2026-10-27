@@ -11,6 +11,8 @@ import { SettingsBackupModal } from "./components/SettingsBackupModal";
 import { PasteBulletsModal } from "./components/PasteBulletsModal";
 import { CvUploadModal } from "./components/CvUploadModal";
 import { ExperienceModal } from "./components/ExperienceModal";
+import { FeaturesView } from "./components/FeaturesView";
+import { AvatarModal } from "./components/AvatarModal";
 import { 
   getStoredLogs, 
   saveLogs, 
@@ -20,6 +22,7 @@ import {
   deleteLog, 
   getStoredUser, 
   saveUser, 
+  updateUserAvatar,
   getStoredInbox, 
   addVisitorMessage, 
   markMessageRead, 
@@ -42,7 +45,7 @@ import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory } fr
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<"landing" | "quarters" | "public">("landing");
+  const [activeView, setActiveView] = useState<"landing" | "quarters" | "public" | "features">("landing");
   const [activeQuartersTab, setActiveQuartersTab] = useState<"timeline" | "synthesis" | "inbox" | "docs">("timeline");
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -60,6 +63,7 @@ export default function App() {
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "warning" } | null>(null);
@@ -464,6 +468,14 @@ export default function App() {
     showToast("Perfil de usuario actualizado correctamente.", "success");
   };
 
+  const handleUpdateAvatar = (newAvatarUrl: string) => {
+    const updated = updateUserAvatar(newAvatarUrl);
+    if (updated) {
+      setUser(updated);
+      showToast("¡Foto de perfil actualizada y sincronizada en la nube!", "success");
+    }
+  };
+
   const reloadDataFromStorage = () => {
     setLogs(getStoredLogs());
     setExperiences(getStoredExperiences());
@@ -490,6 +502,7 @@ export default function App() {
         onOpenCvUpload={() => setIsCvUploadOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
         onLogout={handleLogout}
         user={user}
         unreadInboxCount={unreadInboxCount}
@@ -497,7 +510,9 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6">
+      <main className={`flex-1 w-full mx-auto ${
+        activeView === "features" ? "px-0 py-0 max-w-none" : "max-w-7xl px-4 lg:px-8 py-6"
+      }`}>
         
         {/* VIEW 1: PUBLIC LANDING PAGE */}
         {activeView === "landing" && (
@@ -519,6 +534,7 @@ export default function App() {
               setEditingLog(null);
               setIsQuickLogOpen(true);
             }}
+            onOpenFeatures={() => setActiveView("features")}
             user={user}
             logsCount={logs.length}
           />
@@ -612,6 +628,27 @@ export default function App() {
             onSendVisitorMessage={handleSendVisitorMessage}
           />
         )}
+
+        {/* VIEW 4: DEDICATED FEATURES SHOWCASE PAGE */}
+        {activeView === "features" && (
+          <FeaturesView
+            onBackToLanding={() => setActiveView("landing")}
+            onGoToQuarters={() => {
+              if (!user) {
+                setIsAuthOpen(true);
+              } else {
+                setActiveView("quarters");
+                setActiveQuartersTab("timeline");
+              }
+            }}
+            onOpenQuickLog={() => {
+              setEditingLog(null);
+              setIsQuickLogOpen(true);
+            }}
+            onOpenAuth={() => setIsAuthOpen(true)}
+            user={user}
+          />
+        )}
       </main>
 
       {/* Quick Log Modal */}
@@ -666,6 +703,7 @@ export default function App() {
         onLogin={handleLogin}
         onLogout={handleLogout}
         onUpdateProfile={handleUpdateProfile}
+        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
       />
 
       {/* Settings & Backup Modal */}
@@ -676,6 +714,16 @@ export default function App() {
         totalLogs={logs.length}
         currentUser={user}
         onUpdateProfile={handleUpdateProfile}
+        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
+      />
+
+      {/* Avatar Changer Modal */}
+      <AvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatar={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
+        userName={user?.name || "Usuario"}
+        onSaveAvatar={handleUpdateAvatar}
       />
 
       {/* Toast Feedback Banner */}
@@ -706,6 +754,13 @@ export default function App() {
               className="hover:text-cyan-400 transition-colors"
             >
               Inicio
+            </button>
+            <span>·</span>
+            <button
+              onClick={() => setActiveView("features")}
+              className="hover:text-cyan-400 transition-colors"
+            >
+              Características
             </button>
             <span>·</span>
             <button

@@ -23,12 +23,13 @@ import {
   Sparkles,
   Eye,
   Info,
-  Palette
+  Palette,
+  Camera
 } from "lucide-react";
 import { 
   exportBackupJson, 
   importBackupJson,
-  getStoredUser,
+  getStoredUser, 
   saveUser 
 } from "../utils/storage";
 import { UserProfile, EmploymentSocialLinks } from "../types";
@@ -40,6 +41,7 @@ interface SettingsBackupModalProps {
   totalLogs: number;
   currentUser?: UserProfile | null;
   onUpdateProfile?: (updated: UserProfile) => void;
+  onOpenAvatarModal?: () => void;
 }
 
 export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
@@ -49,6 +51,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
   totalLogs,
   currentUser,
   onUpdateProfile,
+  onOpenAvatarModal,
 }) => {
   const [activeTab, setActiveTab] = useState<"social" | "backup">("social");
   const [importStatus, setImportStatus] = useState<{ success: boolean; msg: string } | null>(null);
@@ -278,6 +281,41 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* Profile Photo Quick Section */}
+              {currentUser && (
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-11 h-11 rounded-xl object-cover border border-cyan-500/40 bg-slate-950 shadow"
+                    />
+                    <div>
+                      <h5 className="font-bold text-white text-xs flex items-center gap-1.5">
+                        <span>Foto de Perfil</span>
+                        <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.2 rounded border border-cyan-800/50">
+                          {currentUser.name.split(" ")[0]}
+                        </span>
+                      </h5>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Visible en tu bitácora, vitrina pública (Public Deck) y exportaciones
+                      </p>
+                    </div>
+                  </div>
+
+                  {onOpenAvatarModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenAvatarModal}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-semibold transition-all shrink-0"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Cambiar Foto</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Status / Availability Selector */}
               <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">

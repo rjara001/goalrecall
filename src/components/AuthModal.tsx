@@ -19,6 +19,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Edit3,
+  Camera,
 } from "lucide-react";
 import { UserProfile } from "../types";
 import {
@@ -34,6 +35,7 @@ interface AuthModalProps {
   onLogin: (user: UserProfile) => void;
   onLogout: () => void;
   onUpdateProfile: (user: UserProfile) => void;
+  onOpenAvatarModal?: () => void;
 }
 
 // Decode standard Google Identity Services JWT payload safely
@@ -68,6 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLogin,
   onLogout,
   onUpdateProfile,
+  onOpenAvatarModal,
 }) => {
   // Modal tabs: "login" (custom or google) vs "signup" (custom register)
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -329,13 +332,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Profile Card */}
               <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-3">
                 <div className="flex items-start gap-3.5">
-                  <img
-                    src={currentUser.avatar}
-                    alt=""
-                    aria-hidden="true"
-                    referrerPolicy="no-referrer"
-                    className="w-14 h-14 rounded-2xl object-cover border border-cyan-500/40 bg-slate-800 shrink-0"
-                  />
+                  <div className="relative group shrink-0">
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      aria-hidden="true"
+                      referrerPolicy="no-referrer"
+                      className="w-14 h-14 rounded-2xl object-cover border border-cyan-500/40 bg-slate-800"
+                    />
+                    {onOpenAvatarModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenAvatarModal}
+                        title="Cambiar foto de perfil"
+                        className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center shadow-md transition-all active:scale-95 group-hover:scale-110"
+                      >
+                        <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </button>
+                    )}
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-base font-bold text-white truncate">
@@ -398,9 +413,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onSubmit={handleSaveProfile}
                   className="p-4 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3 animate-in fade-in text-xs"
                 >
-                  <h5 className="font-bold text-white text-xs uppercase tracking-wider text-cyan-400">
-                    Editar Datos del Perfil
-                  </h5>
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-bold text-white text-xs uppercase tracking-wider text-cyan-400">
+                      Editar Datos del Perfil
+                    </h5>
+                    {onOpenAvatarModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenAvatarModal}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 hover:text-white text-[11px] font-semibold transition-colors"
+                      >
+                        <Camera className="w-3 h-3 text-cyan-400" />
+                        <span>Cambiar Foto</span>
+                      </button>
+                    )}
+                  </div>
 
                   <div>
                     <label className="block text-slate-300 font-medium mb-1">Nombre</label>

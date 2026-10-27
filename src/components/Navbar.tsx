@@ -14,21 +14,24 @@ import {
   User, 
   Settings as SettingsIcon,
   HelpCircle,
-  Home,
   LogIn,
-  Users
+  Users,
+  Camera,
+  Layers,
+  Home
 } from "lucide-react";
 import { UserProfile } from "../types";
 
 interface NavbarProps {
-  activeView: "landing" | "quarters" | "public";
-  setActiveView: (view: "landing" | "quarters" | "public") => void;
+  activeView: "landing" | "quarters" | "public" | "features";
+  setActiveView: (view: "landing" | "quarters" | "public" | "features") => void;
   activeQuartersTab: "timeline" | "synthesis" | "inbox" | "docs";
   setActiveQuartersTab: (tab: "timeline" | "synthesis" | "inbox" | "docs") => void;
   onOpenQuickLog: () => void;
   onOpenCvUpload: () => void;
   onOpenAuth: () => void;
   onOpenSettings: () => void;
+  onOpenAvatarModal?: () => void;
   onLogout: () => void;
   user: UserProfile | null;
   unreadInboxCount: number;
@@ -44,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCvUpload,
   onOpenAuth,
   onOpenSettings,
+  onOpenAvatarModal,
   onLogout,
   user,
   unreadInboxCount,
@@ -79,14 +83,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Zone 2: Navigation & Mode Switcher */}
         <nav className="flex items-center gap-2 lg:gap-4 overflow-x-auto py-1">
           {activeView === "landing" ? (
-            /* Contextual Navigation for Landing Page (REQ-01) */
+            /* Contextual Navigation for Landing Page */
             <div className="flex items-center gap-1 sm:gap-2 text-xs">
-              <a
-                href="#features"
-                className="px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors font-medium hidden md:inline-block"
+              <button
+                onClick={() => setActiveView("features")}
+                className="px-2.5 py-1.5 rounded-lg text-cyan-300 hover:text-white hover:bg-slate-800/80 transition-colors font-medium flex items-center gap-1.5 border border-cyan-500/20 bg-cyan-950/30"
               >
-                Características
-              </a>
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Características</span>
+              </button>
               <a
                 href="#workflow"
                 className="px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors font-medium hidden sm:inline-block"
@@ -117,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
           ) : (
-            /* Contextual Navigation for App Views (Quarters & Public Deck) */
+            /* Contextual Navigation for App Views (Quarters, Public Deck & Features) */
             <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800 rounded-lg shrink-0">
               <button
                 onClick={() => setActiveView("landing")}
@@ -146,6 +151,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Mi Bitácora</span>
                 <span className="hidden md:inline text-[10px] opacity-75">(Privada)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveView("features")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  activeView === "features"
+                    ? "bg-purple-600 text-white font-semibold shadow-sm shadow-purple-900/40"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden md:inline">Características</span>
               </button>
 
               <button
@@ -279,27 +296,44 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Active User Profile Pill Button or Login Button in App Mode */}
           {user ? (
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={onOpenAuth}
-                title={`Sesión activa: ${user.name} (${user.title}). Clic para ver perfil o credenciales.`}
-                className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 bg-slate-900 border border-slate-800 hover:border-cyan-500/60 rounded-xl text-xs text-slate-300 transition-all group"
-              >
-                <img
-                  src={user.avatar}
-                  alt=""
-                  aria-hidden="true"
-                  referrerPolicy="no-referrer"
-                  className="w-6 h-6 rounded-lg object-cover border border-slate-700 group-hover:border-cyan-400 transition-colors"
-                />
-                <div className="text-left hidden sm:block">
+              <div className="flex items-center p-1 pl-1.5 pr-2.5 bg-slate-900 border border-slate-800 hover:border-cyan-500/60 rounded-xl text-xs text-slate-300 transition-all group">
+                <div className="relative mr-2">
+                  <img
+                    src={user.avatar}
+                    alt=""
+                    aria-hidden="true"
+                    referrerPolicy="no-referrer"
+                    className="w-7 h-7 rounded-lg object-cover border border-slate-700 group-hover:border-cyan-400 transition-colors"
+                  />
+                  {onOpenAvatarModal && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenAvatarModal();
+                      }}
+                      title="Cambiar foto de perfil"
+                      className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-cyan-500 hover:bg-cyan-400 rounded-full flex items-center justify-center text-slate-950 shadow-sm"
+                    >
+                      <Camera className="w-2 h-2 stroke-[3]" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onOpenAuth}
+                  title={`Sesión activa: ${user.name} (${user.title}). Clic para ver perfil o credenciales.`}
+                  className="text-left hidden sm:block focus:outline-none"
+                >
                   <span className="font-semibold text-white block max-w-[100px] truncate text-[11px] leading-tight">
                     {user.name.split(" ")[0]}
                   </span>
                   <span className="text-[9px] font-mono block leading-tight text-cyan-400">
                     {user.authProvider === "google" ? "Google" : "Custom"} ▾
                   </span>
-                </div>
-              </button>
+                </button>
+              </div>
 
               <button
                 onClick={onLogout}

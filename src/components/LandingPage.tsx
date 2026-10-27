@@ -39,6 +39,7 @@ interface LandingPageProps {
   onEnterPublicDeck: () => void;
   onOpenDocs: () => void;
   onOpenQuickLog?: () => void;
+  onOpenFeatures?: () => void;
   user: UserProfile | null;
   logsCount?: number;
 }
@@ -125,6 +126,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onEnterPublicDeck,
   onOpenDocs,
   onOpenQuickLog,
+  onOpenFeatures,
   user,
   logsCount = 0,
 }) => {
@@ -615,6 +617,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Full Features Showcase View Banner */}
+          {onOpenFeatures && (
+            <div className="md:col-span-12 p-6 rounded-3xl bg-gradient-to-r from-purple-950/40 via-slate-900 to-cyan-950/40 border border-purple-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                  <Sparkles className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Catálogo Exhaustivo de Características & Micro-Simuladores</span>
+                    <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-800/60 font-semibold">
+                      12 Módulos
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Descubre el constructor de fórmula Google XYZ, desglose STAR, ingesta de CV, Cloud Sync y comparativa técnica frente a Notion y Word.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onOpenFeatures}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-900/40 transition-all hover:scale-105 active:scale-95 shrink-0"
+              >
+                <span>Explorar Catálogo de Características</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
         </div>
       </section>
