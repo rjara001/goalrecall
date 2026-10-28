@@ -30,6 +30,7 @@ import {
   Sparkle
 } from "lucide-react";
 import { UserProfile } from "../types";
+import { useI18n, LanguageSelector } from "../i18n";
 
 interface DocumentationViewProps {
   onOpenQuickLog: () => void;
@@ -59,6 +60,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
   onOpenCvUpload,
   user,
 }) => {
+  const { t } = useI18n();
   const [activeSection, setActiveSection] = useState<DocSection>("overview");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [copiedExample, setCopiedExample] = useState(false);
@@ -90,18 +92,19 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
               onClick={onBackToLanding}
               className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors flex items-center gap-1.5"
             >
-              ← Inicio
+              ← {t.common.back}
             </button>
             <div className="h-4 w-[1px] bg-slate-800" />
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
               <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-                Documentación Oficial & Guía de Usuario
+                {t.docs.badge}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2.5">
+            <LanguageSelector />
             <button
               onClick={onOpenQuickLog}
               className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-sm shadow-cyan-500/20 transition-all"
@@ -275,12 +278,22 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
                         <li>Arrastra tu archivo o selecciónalo desde tu computadora.</li>
                         <li>El sistema lee automáticamente tus empresas, fechas, cargos y viñetas sin que tengas que escribir nada.</li>
                       </ol>
-                      {onOpenCvUpload && (
+                      {user ? (
+                        onOpenCvUpload && (
+                          <button
+                            onClick={onOpenCvUpload}
+                            className="mt-2 text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                          >
+                            <span>Abrir importador de CV</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )
+                      ) : (
                         <button
-                          onClick={onOpenCvUpload}
+                          onClick={onOpenAuth}
                           className="mt-2 text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1"
                         >
-                          <span>Abrir importador de CV</span>
+                          <span>Crear cuenta o iniciar sesión para importar</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       )}

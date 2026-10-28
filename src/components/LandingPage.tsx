@@ -33,6 +33,7 @@ import {
   BookOpen
 } from "lucide-react";
 import { UserProfile } from "../types";
+import { useI18n } from "../i18n";
 
 interface LandingPageProps {
   onOpenAuth: () => void;
@@ -131,6 +132,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   user,
   logsCount = 0,
 }) => {
+  const { t } = useI18n();
   // Live Playground State (REQ-02)
   const [selectedPresetId, setSelectedPresetId] = useState<string>("tech-redis");
   const [customInput, setCustomInput] = useState<string>(DEMO_PRESETS[0].rawInput);
@@ -198,7 +200,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Ir a Mi Bitácora Privada</span>
+              <span>{t.nav.logbook}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -218,17 +220,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Tagline Kicker */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono text-cyan-400 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span>CLOUD SYNC SEGURO · MOTOR GOOGLE XYZ · AGENTE DE IA</span>
+              <span>{t.landing.badge}</span>
             </div>
 
             {/* Main Headline */}
             <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.08]">
-              El <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">Brag Document</span> Definitivo para Ingenieros.
+              {t.landing.heroTitlePrefix} <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">{t.landing.heroTitleHighlight}</span> {t.landing.heroTitleSuffix}
             </h1>
 
             {/* Concrete Value Subhead */}
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-xl">
-              Registra victorias profesionales diarias en 30 segundos con <strong>sincronización segura en la nube</strong>. Sintetízalas en <strong>bullets Google XYZ</strong>, historias <strong>STAR</strong> para entrevistas y un <strong>portafolio interactivo</strong> con respaldo continuo contra pérdida de datos.
+              {t.landing.heroDescription}
             </p>
 
             {/* Primary & Secondary CTAs (REQ-01 & REQ-03) */}
@@ -238,9 +240,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:scale-95 group"
               >
                 <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                <span>Probar Sandbox en Vivo</span>
+                <span>{t.landing.ctaPrimary}</span>
                 <span className="text-[11px] font-mono bg-cyan-950/40 text-slate-950 px-1.5 py-0.5 rounded font-bold">
-                  Sin Registro
+                  {t.landing.stat3Value}
                 </span>
               </button>
 
@@ -249,7 +251,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className="w-full sm:w-auto px-5 py-3.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
               >
                 <UserCheck className="w-4 h-4 text-cyan-400" />
-                <span>Iniciar Sesión (Google)</span>
+                <span>{t.nav.signIn}</span>
               </button>
 
               <button
@@ -258,7 +260,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 title="Documentación Oficial y Guía de Usuario (/docs)"
               >
                 <BookOpen className="w-4 h-4 text-cyan-400" />
-                <span>Guía (/docs)</span>
+                <span>{t.landing.ctaDocs}</span>
               </button>
             </div>
 

@@ -22,6 +22,7 @@ import {
   Briefcase
 } from "lucide-react";
 import { UserProfile } from "../types";
+import { useI18n, LanguageSelector } from "../i18n";
 
 interface NavbarProps {
   activeView: "landing" | "quarters" | "public" | "features" | "docs" | "offers";
@@ -54,6 +55,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   unreadInboxCount,
   publicLogsCount,
 }) => {
+  const { t } = useI18n();
+
   return (
     <header className="sticky top-0 z-40 bg-[#090D16]/95 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-3 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -76,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400 hidden sm:block">
-              Bitácora Técnica & Historial de Logros
+              {t.common.tagline}
             </p>
           </div>
         </button>
@@ -91,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="px-2.5 py-1.5 rounded-lg text-cyan-300 hover:text-white hover:bg-slate-800/80 transition-colors font-medium flex items-center gap-1.5 border border-cyan-500/20 bg-cyan-950/30"
               >
                 <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Características</span>
+                <span>{t.nav.features}</span>
               </button>
               <button
                 onClick={() => {
@@ -102,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Motor de Ofertas & CVs Enfocados"
               >
                 <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">Ofertas & CVs</span>
+                <span className="hidden sm:inline">{t.nav.offers}</span>
               </button>
               <button
                 onClick={() => setActiveView("docs")}
@@ -110,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title="Documentación y Guía del Usuario (/docs)"
               >
                 <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Guía (/docs)</span>
+                <span>{t.nav.docs}</span>
               </button>
               <a
                 href="#workflow"
@@ -264,6 +267,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: Actions & Profile */}
         <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+          {/* Global Language Selector (i18n) */}
+          <LanguageSelector />
+
           {/* Landing State Action Buttons (REQ-01) */}
           {activeView === "landing" && (
             <>
@@ -277,7 +283,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 font-bold text-xs rounded-lg shadow-sm shadow-cyan-500/20 transition-all active:scale-95"
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Ir a Mi Bitácora →</span>
+                    <span>{t.nav.logbook} →</span>
                   </button>
                 </div>
               ) : (
@@ -287,7 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="flex items-center gap-1.5 px-3 py-2 text-slate-300 hover:text-white font-medium text-xs rounded-lg hover:bg-slate-800/60 transition-colors"
                   >
                     <LogIn className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Iniciar Sesión</span>
+                    <span>{t.nav.signIn}</span>
                   </button>
 
                   <button
@@ -317,7 +323,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     title="Importar logros y empresas desde tu CV (PDF o DOCX)"
                   >
                     <FileUp className="w-3.5 h-3.5 text-purple-300" />
-                    <span className="hidden md:inline">Importar CV</span>
+                    <span className="hidden md:inline">{t.nav.importCv}</span>
                   </button>
 
                   <button
@@ -325,7 +331,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 font-bold text-xs rounded-lg shadow-sm shadow-cyan-500/20 transition-all active:scale-95"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" />
-                    <span className="hidden sm:inline">Nuevo Log</span>
+                    <span className="hidden sm:inline">{t.nav.newLog}</span>
                     <kbd className="hidden md:inline-block font-mono text-[10px] bg-cyan-950/40 text-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800/30">
                       ⌘K
                     </kbd>
@@ -335,7 +341,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={onOpenSettings}
-                title="Configuración, Redes de Empleo & Respaldo JSON"
+                title={t.nav.settings}
                 className="p-2 text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg transition-colors"
               >
                 <SettingsIcon className="w-4 h-4" />
@@ -362,7 +368,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         e.stopPropagation();
                         onOpenAvatarModal();
                       }}
-                      title="Cambiar foto de perfil"
+                      title={t.nav.changeAvatar}
                       className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-cyan-500 hover:bg-cyan-400 rounded-full flex items-center justify-center text-slate-950 shadow-sm"
                     >
                       <Camera className="w-2 h-2 stroke-[3]" />
@@ -373,7 +379,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={onOpenAuth}
-                  title={`Sesión activa: ${user.name} (${user.title}). Clic para ver perfil o credenciales.`}
+                  title={`Sesión activa: ${user.name} (${user.title || ""}).`}
                   className="text-left hidden sm:block focus:outline-none"
                 >
                   <span className="font-semibold text-white block max-w-[100px] truncate text-[11px] leading-tight">
@@ -387,7 +393,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={onLogout}
-                title="Cerrar sesión y limpiar sesión activa"
+                title={t.nav.signOut}
                 className="p-2 text-slate-400 hover:text-red-300 hover:bg-red-950/40 border border-slate-800 hover:border-red-800/60 rounded-xl transition-all"
               >
                 <LogOut className="w-4 h-4" />
@@ -400,7 +406,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-lg transition-colors shadow-sm shadow-cyan-500/20"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Iniciar Sesión</span>
+                <span>{t.nav.signIn}</span>
               </button>
             )
           )}
