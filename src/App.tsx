@@ -44,9 +44,35 @@ import {
 import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 
+export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs";
+
 export default function App() {
-  const [activeView, setActiveView] = useState<"landing" | "quarters" | "public" | "features">("landing");
+  const [activeView, setActiveView] = useState<ActiveView>(() => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname.toLowerCase();
+      const h = window.location.hash.toLowerCase();
+      if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) return "docs";
+      if (p === "/features" || h === "#features") return "features";
+      if (p === "/public" || h === "#public") return "public";
+    }
+    return "landing";
+  });
   const [activeQuartersTab, setActiveQuartersTab] = useState<"timeline" | "synthesis" | "inbox" | "docs">("timeline");
+
+  const handleNavigateView = (view: ActiveView) => {
+    setActiveView(view);
+    if (typeof window !== "undefined") {
+      const targetPath = 
+        view === "docs" ? "/docs" :
+        view === "features" ? "/features" :
+        view === "public" ? "/public" :
+        view === "quarters" ? "/quarters" : "/";
+      
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, "", targetPath);
+      }
+    }
+  };
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [experiences, setExperiences] = useState<WorkExperience[]>([]);
@@ -147,6 +173,28 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Browser Navigation & History Handling (/docs, /features, /public)
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      const h = window.location.hash.toLowerCase();
+      if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) {
+        setActiveView("docs");
+      } else if (p === "/features" || h === "#features") {
+        setActiveView("features");
+      } else if (p === "/public" || h === "#public") {
+        setActiveView("public");
+      } else if (p === "/quarters" || h === "#quarters") {
+        setActiveView("quarters");
+      } else {
+        setActiveView("landing");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   // Log Actions
@@ -492,7 +540,7 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={handleNavigateView}
         activeQuartersTab={activeQuartersTab}
         setActiveQuartersTab={setActiveQuartersTab}
         onOpenQuickLog={() => {
@@ -511,7 +559,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full mx-auto ${
-        activeView === "features" ? "px-0 py-0 max-w-none" : "max-w-7xl px-4 lg:px-8 py-6"
+        activeView === "features" || activeView === "docs" ? "px-0 py-0 max-w-none" : "max-w-7xl px-4 lg:px-8 py-6"
       }`}>
         
         {/* VIEW 1: PUBLIC LANDING PAGE */}
@@ -522,19 +570,17 @@ export default function App() {
               if (!user) {
                 setIsAuthOpen(true);
               } else {
-                setActiveView("quarters");
+                handleNavigateView("quarters");
+                setActiveQuartersTab("timeline");
               }
             }}
-            onEnterPublicDeck={() => setActiveView("public")}
-            onOpenDocs={() => {
-              setActiveView("quarters");
-              setActiveQuartersTab("docs");
-            }}
+            onEnterPublicDeck={() => handleNavigateView("public")}
+            onOpenDocs={() => handleNavigateView("docs")}
             onOpenQuickLog={() => {
               setEditingLog(null);
               setIsQuickLogOpen(true);
             }}
-            onOpenFeatures={() => setActiveView("features")}
+            onOpenFeatures={() => handleNavigateView("features")}
             user={user}
             logsCount={logs.length}
           />
@@ -561,7 +607,7 @@ export default function App() {
                   Iniciar Sesión
                 </button>
                 <button
-                  onClick={() => setActiveView("landing")}
+                  onClick={() => handleNavigateView("landing")}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
                 >
                   Volver al Inicio
@@ -613,7 +659,11 @@ export default function App() {
                     setIsQuickLogOpen(true);
                   }}
                   onGoToTimeline={() => setActiveQuartersTab("timeline")}
-                  onGoToPublicDeck={() => setActiveView("public")}
+                  onGoToPublicDeck={() => handleNavigateView("public")}
+                  onBackToLanding={() => handleNavigateView("landing")}
+                  onOpenAuth={() => setIsAuthOpen(true)}
+                  onOpenCvUpload={() => setIsCvUploadOpen(true)}
+                  user={user}
                 />
               )}
             </div>
@@ -632,12 +682,12 @@ export default function App() {
         {/* VIEW 4: DEDICATED FEATURES SHOWCASE PAGE */}
         {activeView === "features" && (
           <FeaturesView
-            onBackToLanding={() => setActiveView("landing")}
+            onBackToLanding={() => handleNavigateView("landing")}
             onGoToQuarters={() => {
               if (!user) {
                 setIsAuthOpen(true);
               } else {
-                setActiveView("quarters");
+                handleNavigateView("quarters");
                 setActiveQuartersTab("timeline");
               }
             }}
@@ -646,6 +696,30 @@ export default function App() {
               setIsQuickLogOpen(true);
             }}
             onOpenAuth={() => setIsAuthOpen(true)}
+            user={user}
+          />
+        )}
+
+        {/* VIEW 5: PUBLIC USER GUIDE & DOCUMENTATION (/docs) */}
+        {activeView === "docs" && (
+          <DocumentationView
+            onOpenQuickLog={() => {
+              setEditingLog(null);
+              setInitialExperienceIdForLog(undefined);
+              setIsQuickLogOpen(true);
+            }}
+            onGoToTimeline={() => {
+              if (!user) {
+                setIsAuthOpen(true);
+              } else {
+                handleNavigateView("quarters");
+                setActiveQuartersTab("timeline");
+              }
+            }}
+            onGoToPublicDeck={() => handleNavigateView("public")}
+            onBackToLanding={() => handleNavigateView("landing")}
+            onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenCvUpload={() => setIsCvUploadOpen(true)}
             user={user}
           />
         )}
@@ -750,44 +824,45 @@ export default function App() {
 
           <div className="flex flex-wrap items-center gap-4 text-xs">
             <button
-              onClick={() => setActiveView("landing")}
+              onClick={() => handleNavigateView("landing")}
               className="hover:text-cyan-400 transition-colors"
             >
               Inicio
             </button>
             <span>·</span>
             <button
-              onClick={() => setActiveView("features")}
+              onClick={() => handleNavigateView("features")}
               className="hover:text-cyan-400 transition-colors"
             >
               Características
             </button>
             <span>·</span>
             <button
-              onClick={() => {
-                setActiveView("quarters");
-                setActiveQuartersTab("timeline");
-              }}
-              className="hover:text-cyan-400 transition-colors"
+              onClick={() => handleNavigateView("docs")}
+              className="hover:text-cyan-400 transition-colors font-medium text-cyan-300"
             >
-              Captain's Quarters
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => setActiveView("public")}
-              className="hover:text-cyan-400 transition-colors"
-            >
-              Public Deck
+              Guía & Documentación (/docs)
             </button>
             <span>·</span>
             <button
               onClick={() => {
-                setActiveView("quarters");
-                setActiveQuartersTab("docs");
+                if (!user) {
+                  setIsAuthOpen(true);
+                } else {
+                  handleNavigateView("quarters");
+                  setActiveQuartersTab("timeline");
+                }
               }}
               className="hover:text-cyan-400 transition-colors"
             >
-              Manual de Vuelo (Guía)
+              Mi Bitácora
+            </button>
+            <span>·</span>
+            <button
+              onClick={() => handleNavigateView("public")}
+              className="hover:text-cyan-400 transition-colors"
+            >
+              Vitrina Pública
             </button>
             <span>·</span>
             <button

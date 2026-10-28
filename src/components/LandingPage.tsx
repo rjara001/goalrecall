@@ -29,7 +29,8 @@ import {
   ShieldAlert,
   HardDrive,
   Cpu,
-  Cloud
+  Cloud,
+  BookOpen
 } from "lucide-react";
 import { UserProfile } from "../types";
 
@@ -249,6 +250,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 <UserCheck className="w-4 h-4 text-cyan-400" />
                 <span>Iniciar Sesión (Google)</span>
+              </button>
+
+              <button
+                onClick={onOpenDocs}
+                className="w-full sm:w-auto px-4 py-3.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-700/60 hover:border-cyan-500/40 text-cyan-300 hover:text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
+                title="Documentación Oficial y Guía de Usuario (/docs)"
+              >
+                <BookOpen className="w-4 h-4 text-cyan-400" />
+                <span>Guía (/docs)</span>
               </button>
             </div>
 
