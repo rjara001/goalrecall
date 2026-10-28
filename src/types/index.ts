@@ -278,3 +278,63 @@ export interface CvPendingField {
   suggestedPrompt: string;
 }
 
+export type JobOfferStatus = 
+  | "saved"         // Guardada / En análisis
+  | "applied"       // Postulado
+  | "interviewing"  // En proceso de entrevistas
+  | "offered"       // Oferta recibida
+  | "rejected"      // Rechazada / Descartada
+  | "accepted";     // Aceptada
+
+export interface JobOffer {
+  id: string;
+  userId?: string;
+  company: string;
+  role: string;
+  description: string;
+  url?: string;
+  location?: string;
+  modality: "100% Remoto" | "Híbrido" | "Presencial";
+  contractType: "B2B / Contractor" | "Dependencia Directa" | "Freelance" | "Indefinido";
+  salaryExpectation?: {
+    min?: number;
+    max?: number;
+    currency: string;
+    period: "mensual" | "anual" | "hora";
+  };
+  extraConditions?: string;
+  status: JobOfferStatus;
+  
+  atsAnalysis?: {
+    score: number; // 0 - 100
+    matchedKeywords: string[];
+    missingKeywords: string[];
+    recommendations: string[];
+    keyRequirements: string[];
+  };
+
+  tailoredCv?: {
+    headline: string;
+    targetSummary: string;
+    selectedLogIds: string[];
+    selectedExperienceIds: string[];
+    highlightedSkills: string[];
+  };
+
+  interviewPrep?: {
+    cheatSheet: string[];
+    frequentQuestions: {
+      question: string;
+      focus: string;
+      recommendedLogId?: string;
+      suggestedStrategy: string;
+    }[];
+  };
+
+  appliedDate?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+

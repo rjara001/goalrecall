@@ -18,15 +18,16 @@ import {
   Users,
   Camera,
   Layers,
-  Home
+  Home,
+  Briefcase
 } from "lucide-react";
 import { UserProfile } from "../types";
 
 interface NavbarProps {
-  activeView: "landing" | "quarters" | "public" | "features" | "docs";
-  setActiveView: (view: "landing" | "quarters" | "public" | "features" | "docs") => void;
-  activeQuartersTab: "timeline" | "synthesis" | "inbox" | "docs";
-  setActiveQuartersTab: (tab: "timeline" | "synthesis" | "inbox" | "docs") => void;
+  activeView: "landing" | "quarters" | "public" | "features" | "docs" | "offers";
+  setActiveView: (view: "landing" | "quarters" | "public" | "features" | "docs" | "offers") => void;
+  activeQuartersTab: "timeline" | "synthesis" | "inbox" | "docs" | "offers";
+  setActiveQuartersTab: (tab: "timeline" | "synthesis" | "inbox" | "docs" | "offers") => void;
   onOpenQuickLog: () => void;
   onOpenCvUpload: () => void;
   onOpenAuth: () => void;
@@ -93,6 +94,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Características</span>
               </button>
               <button
+                onClick={() => {
+                  if (!user) onOpenAuth();
+                  else setActiveView("offers");
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors font-medium flex items-center gap-1.5"
+                title="Motor de Ofertas & CVs Enfocados"
+              >
+                <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">Ofertas & CVs</span>
+              </button>
+              <button
                 onClick={() => setActiveView("docs")}
                 className="px-2.5 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors font-medium flex items-center gap-1.5"
                 title="Documentación y Guía del Usuario (/docs)"
@@ -130,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
           ) : (
-            /* Contextual Navigation for App Views (Quarters, Public Deck, Features & Docs) */
+            /* Contextual Navigation for App Views (Quarters, Public Deck, Features, Docs & Offers) */
             <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800 rounded-lg shrink-0">
               <button
                 onClick={() => setActiveView("landing")}
@@ -159,6 +171,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Mi Bitácora</span>
                 <span className="hidden md:inline text-[10px] opacity-75">(Privada)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!user) {
+                    onOpenAuth();
+                  } else {
+                    setActiveView("offers");
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  activeView === "offers"
+                    ? "bg-indigo-600 text-white font-semibold shadow-sm shadow-indigo-900/40"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden md:inline">Ofertas & CVs</span>
               </button>
 
               <button

@@ -13,6 +13,7 @@ import { CvUploadModal } from "./components/CvUploadModal";
 import { ExperienceModal } from "./components/ExperienceModal";
 import { FeaturesView } from "./components/FeaturesView";
 import { AvatarModal } from "./components/AvatarModal";
+import { OffersView } from "./components/OffersView";
 import { 
   getStoredLogs, 
   saveLogs, 
@@ -32,6 +33,11 @@ import {
   addExperience,
   updateExperience,
   deleteExperience,
+  getStoredJobOffers,
+  saveJobOffers,
+  addJobOffer,
+  updateJobOffer,
+  deleteJobOffer,
   clearSessionData,
   resetToDemoData,
   purgeDummyPresetData,
@@ -41,10 +47,10 @@ import {
   INITIAL_INBOX,
   INITIAL_USER
 } from "./utils/storage";
-import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory } from "./types";
+import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 
-export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs";
+export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
 
 export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>(() => {
@@ -53,11 +59,12 @@ export default function App() {
       const h = window.location.hash.toLowerCase();
       if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) return "docs";
       if (p === "/features" || h === "#features") return "features";
+      if (p === "/offers" || h === "#offers") return "offers";
       if (p === "/public" || h === "#public") return "public";
     }
     return "landing";
   });
-  const [activeQuartersTab, setActiveQuartersTab] = useState<"timeline" | "synthesis" | "inbox" | "docs">("timeline");
+  const [activeQuartersTab, setActiveQuartersTab] = useState<"timeline" | "synthesis" | "inbox" | "docs" | "offers">("timeline");
 
   const handleNavigateView = (view: ActiveView) => {
     setActiveView(view);
@@ -65,6 +72,7 @@ export default function App() {
       const targetPath = 
         view === "docs" ? "/docs" :
         view === "features" ? "/features" :
+        view === "offers" ? "/offers" :
         view === "public" ? "/public" :
         view === "quarters" ? "/quarters" : "/";
       
@@ -78,6 +86,7 @@ export default function App() {
   const [experiences, setExperiences] = useState<WorkExperience[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [inbox, setInbox] = useState<VisitorMessage[]>([]);
+  const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
 
   // Modals
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
@@ -138,6 +147,7 @@ export default function App() {
     const currentUser = getStoredUser();
     setUser(currentUser);
     setInbox(getStoredInbox());
+    setJobOffers(getStoredJobOffers());
 
     // If local logs is empty but user is logged in (e.g. wiped browser cache), auto restore from cloud
     if (currentUser?.email && storedLogs.length === 0) {
@@ -146,6 +156,7 @@ export default function App() {
           setLogs(getStoredLogs());
           setExperiences(getStoredExperiences());
           setInbox(getStoredInbox());
+          setJobOffers(getStoredJobOffers());
         }
       });
     }
@@ -175,7 +186,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Browser Navigation & History Handling (/docs, /features, /public)
+  // Browser Navigation & History Handling (/docs, /features, /offers, /public)
   useEffect(() => {
     const handlePopState = () => {
       const p = window.location.pathname.toLowerCase();
@@ -184,6 +195,8 @@ export default function App() {
         setActiveView("docs");
       } else if (p === "/features" || h === "#features") {
         setActiveView("features");
+      } else if (p === "/offers" || h === "#offers") {
+        setActiveView("offers");
       } else if (p === "/public" || h === "#public") {
         setActiveView("public");
       } else if (p === "/quarters" || h === "#quarters") {
@@ -475,6 +488,7 @@ export default function App() {
     setLogs(getStoredLogs());
     setExperiences(getStoredExperiences());
     setInbox(getStoredInbox());
+    setJobOffers(getStoredJobOffers());
     const providerLabel = newUser.authProvider === "google" ? "Google" : "Custom Login";
     showToast(`¡Bienvenido, ${newUser.name}! Sesión iniciada con ${providerLabel}. ✨`, "success");
     setActiveView("quarters");
@@ -490,6 +504,7 @@ export default function App() {
     setLogs(INITIAL_LOGS);
     setExperiences(INITIAL_EXPERIENCES);
     setInbox(INITIAL_INBOX);
+    setJobOffers([]);
 
     // 3. Return directly to Landing Page
     setActiveView("landing");
@@ -524,11 +539,31 @@ export default function App() {
     }
   };
 
+  // Job Offer Actions (Phase 2)
+  const handleSaveJobOffer = (updated: JobOffer) => {
+    updateJobOffer(updated);
+    setJobOffers(getStoredJobOffers());
+    showToast(`Oferta para ${updated.company} actualizada ✨`);
+  };
+
+  const handleAddJobOffer = (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => {
+    const created = addJobOffer(offer);
+    setJobOffers(getStoredJobOffers());
+    showToast(`¡Nueva oferta de ${created.company} guardada y analizada con ATS! 🎯`, "success");
+  };
+
+  const handleDeleteJobOffer = (id: string) => {
+    deleteJobOffer(id);
+    setJobOffers(getStoredJobOffers());
+    showToast("Oferta eliminada de la lista.", "info");
+  };
+
   const reloadDataFromStorage = () => {
     setLogs(getStoredLogs());
     setExperiences(getStoredExperiences());
     setUser(getStoredUser());
     setInbox(getStoredInbox());
+    setJobOffers(getStoredJobOffers());
   };
 
   const unreadInboxCount = inbox.filter((m) => !m.read).length;
@@ -666,6 +701,24 @@ export default function App() {
                   user={user}
                 />
               )}
+
+              {activeQuartersTab === "offers" && (
+                <OffersView
+                  offers={jobOffers}
+                  logs={logs}
+                  experiences={experiences}
+                  user={user}
+                  onSaveOffer={handleSaveJobOffer}
+                  onAddOffer={handleAddJobOffer}
+                  onDeleteOffer={handleDeleteJobOffer}
+                  onOpenQuickLog={() => {
+                    setEditingLog(null);
+                    setInitialExperienceIdForLog(undefined);
+                    setIsQuickLogOpen(true);
+                  }}
+                  onOpenCvUpload={() => setIsCvUploadOpen(true)}
+                />
+              )}
             </div>
           )
         )}
@@ -721,6 +774,25 @@ export default function App() {
             onOpenAuth={() => setIsAuthOpen(true)}
             onOpenCvUpload={() => setIsCvUploadOpen(true)}
             user={user}
+          />
+        )}
+
+        {/* VIEW 6: OFFERS & TAILORED CV ENGINE (PHASE 2) */}
+        {activeView === "offers" && (
+          <OffersView
+            offers={jobOffers}
+            logs={logs}
+            experiences={experiences}
+            user={user}
+            onSaveOffer={handleSaveJobOffer}
+            onAddOffer={handleAddJobOffer}
+            onDeleteOffer={handleDeleteJobOffer}
+            onOpenQuickLog={() => {
+              setEditingLog(null);
+              setInitialExperienceIdForLog(undefined);
+              setIsQuickLogOpen(true);
+            }}
+            onOpenCvUpload={() => setIsCvUploadOpen(true)}
           />
         )}
       </main>
@@ -835,6 +907,16 @@ export default function App() {
               className="hover:text-cyan-400 transition-colors"
             >
               Características
+            </button>
+            <span>·</span>
+            <button
+              onClick={() => {
+                if (!user) setIsAuthOpen(true);
+                else handleNavigateView("offers");
+              }}
+              className="hover:text-cyan-400 transition-colors text-indigo-300 font-medium"
+            >
+              Ofertas & CVs (/offers)
             </button>
             <span>·</span>
             <button
