@@ -409,7 +409,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Ejemplo rápido para usuarios de GitHub: <span className="font-mono text-cyan-400">https://github.com/rjara001.png</span>
+                  Ejemplo rápido para usuarios de GitHub: <span className="font-mono text-cyan-400">https://github.com/octocat.png</span>
                 </p>
               </div>
 
@@ -417,18 +417,18 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl flex items-center justify-between">
                 <div>
                   <span className="text-white font-semibold block">Usar avatar público de GitHub</span>
-                  <span className="text-slate-400 text-[11px]">Sincroniza directamente con tu cuenta de GitHub</span>
+                  <span className="text-slate-400 text-[11px]">Sincroniza directamente con un usuario de GitHub</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    const ghUrl = "https://github.com/rjara001.png";
+                    const ghUrl = "https://github.com/octocat.png";
                     setCustomUrl(ghUrl);
                     setSelectedAvatar(ghUrl);
                   }}
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium border border-slate-700"
                 >
-                  Usar GitHub rjara001
+                  Usar GitHub Demo
                 </button>
               </div>
             </form>

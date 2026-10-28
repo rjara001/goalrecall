@@ -154,7 +154,7 @@ function calculateCvAudit(cv: ExtractedCvData): {
       label: "Nombre Completo",
       description: "No se identificó el nombre del titular en el documento.",
       severity: "high",
-      suggestedPrompt: "Ej: Rodrigo Jara",
+      suggestedPrompt: "Ej: Alex Morgan",
     });
   }
 
@@ -1340,8 +1340,8 @@ app.post("/api/cv/extract-achievements", async (req, res) => {
 
 // Explicit endpoint to download the test PDF CV
 app.get("/api/cv/download-sample-pdf", (_req, res) => {
-  const filePath = path.resolve(__dirname, "public", "CV_Rodrigo_Jara_Pruebas.pdf");
-  res.download(filePath, "CV_Rodrigo_Jara_Pruebas.pdf", (err) => {
+  const filePath = path.resolve(__dirname, "public", "demo-cv.pdf");
+  res.download(filePath, "CV_Profesional_Demo.pdf", (err) => {
     if (err) {
       console.error("Error sending sample PDF:", err);
       if (!res.headersSent) {

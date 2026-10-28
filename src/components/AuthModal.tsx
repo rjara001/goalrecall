@@ -199,8 +199,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const googleUser: UserProfile = {
       ...INITIAL_USER,
       id: "google-usr-" + Date.now(),
-      name: "Rodrigo Jara",
-      email: "rjara001@gmail.com",
+      name: "Usuario Google",
+      email: "usuario@ejemplo.com",
       avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
       title: "",
       bio: "",
@@ -553,7 +553,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                       />
                     </svg>
-                    <span>Continuar con Google (rjara001@gmail.com)</span>
+                    <span>Continuar con Google (Acceso Rápido)</span>
                   </button>
 
                   {/* Google Client ID Settings accordion */}
@@ -622,7 +622,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="ej. rjara001@gmail.com o rodrigo"
+                        placeholder="ej. tu.correo@ejemplo.com o usuario"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -700,7 +700,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={signupName}
                         onChange={(e) => setSignupName(e.target.value)}
-                        placeholder="ej. Rodrigo Jara"
+                        placeholder="ej. Alex Morgan"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <User className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -717,7 +717,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
-                        placeholder="ej. rjara001@gmail.com"
+                        placeholder="ej. alex.morgan@ejemplo.com"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />

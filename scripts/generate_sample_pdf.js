@@ -6,8 +6,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const outputPath = path.resolve(__dirname, "../public/CV_Rodrigo_Jara_Pruebas.pdf");
-const duplicatePath = path.resolve(__dirname, "../public/demo-cv.pdf");
+const outputPath = path.resolve(__dirname, "../public/demo-cv.pdf");
 
 const doc = new PDFDocument({
   size: "A4",
@@ -24,14 +23,14 @@ const textColor = "#334155"; // Slate 700
 const subtleColor = "#64748b"; // Slate 500
 
 // Header: Name & Headline
-doc.font("Helvetica-Bold").fontSize(22).fillColor(primaryColor).text("RODRIGO JARA", { characterSpacing: 1 });
+doc.font("Helvetica-Bold").fontSize(22).fillColor(primaryColor).text("ALEX MORGAN", { characterSpacing: 1 });
 doc.moveDown(0.2);
 doc.font("Helvetica-Bold").fontSize(12).fillColor(accentColor).text("Senior Full Stack Developer & Systems Architect");
 doc.moveDown(0.3);
 
 // Contact Info Line
 doc.font("Helvetica").fontSize(9).fillColor(subtleColor)
-  .text("Santiago, Chile · Remote · rjara001@gmail.com · +56 9 8765 4321 · linkedin.com/in/rodrigojara · github.com/rjara", {
+  .text("Santiago, Chile · Remote · alex.morgan@ejemplo.com · +56 9 8765 4321 · linkedin.com/in/alexmorgan · github.com/alexmorgan", {
     lineGap: 2,
   });
 
@@ -222,7 +221,5 @@ doc.font("Helvetica").fontSize(9).fillColor(textColor).text("• Inglés: C1 Pro
 doc.end();
 
 writeStream.on("finish", () => {
-  fs.copyFileSync(outputPath, duplicatePath);
   console.log("PDF generated successfully at:", outputPath);
-  console.log("Duplicate created at:", duplicatePath);
 });

@@ -225,12 +225,12 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
     try {
       setIsLoadingSamplePdf(true);
       setErrorMessage(null);
-      const response = await fetch("/CV_Rodrigo_Jara_Pruebas.pdf");
+      const response = await fetch("/demo-cv.pdf");
       if (!response.ok) {
         throw new Error("No se pudo obtener el PDF de pruebas");
       }
       const blob = await response.blob();
-      const sampleFile = new File([blob], "CV_Rodrigo_Jara_Pruebas.pdf", {
+      const sampleFile = new File([blob], "CV_Profesional_Demo.pdf", {
         type: "application/pdf",
       });
       await processUploadedFile(sampleFile);
@@ -898,11 +898,11 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                               CV de Pruebas Generado (PDF Real)
                             </h5>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-700/50">
-                              CV_Rodrigo_Jara_Pruebas.pdf
+                              CV_Profesional_Demo.pdf
                             </span>
                           </div>
                           <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-                            Contiene tu trayectoria profesional íntegra: 8 empresas (Chambers & Partners, Dunnhumby, Raisin, AndBank, PayPal, Falabella Bank, Falabella Retail, Proyectos Personales), 28 viñetas técnicas reales, tecnologías y educación.
+                            Contiene una trayectoria técnica de muestra: 8 empresas (Chambers & Partners, Dunnhumby, Raisin, AndBank, PayPal, Falabella Bank, Falabella Retail, Proyectos Personales), 28 viñetas técnicas reales, tecnologías y educación.
                           </p>
                           <div className="flex flex-wrap items-center gap-2 pt-1">
                             <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">8 Experiencias</span>
@@ -925,8 +925,8 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                         </button>
 
                         <a
-                          href="/CV_Rodrigo_Jara_Pruebas.pdf"
-                          download="CV_Rodrigo_Jara_Pruebas.pdf"
+                          href="/demo-cv.pdf"
+                          download="CV_Profesional_Demo.pdf"
                           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium border border-slate-700 hover:border-slate-600 transition-all cursor-pointer"
                         >
                           <Download className="w-4 h-4 text-slate-300" />
@@ -976,11 +976,11 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                   ¿Quieres ver cómo funciona de inmediato sin subir un archivo?
                 </div>
                 <button
-                  onClick={() => processTextExtraction(SAMPLE_CV_TEXT, "CV_Rodrigo_Jara_Sample.txt")}
+                  onClick={() => processTextExtraction(SAMPLE_CV_TEXT, "CV_Profesional_Sample.txt")}
                   className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-purple-300 hover:text-white transition-all flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                  Probar con CV de Muestra (Rodrigo Jara)
+                  Probar con CV de Muestra (Senior Engineer)
                 </button>
               </div>
 

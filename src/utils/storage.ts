@@ -120,7 +120,7 @@ export const purgeDummyPresetData = (): void => {
           user.skills = [];
           changed = true;
         }
-        if (user.title === "Senior Full-Stack & Systems Architect" && user.name === "Rodrigo Jara") {
+        if (user.title === "Senior Full-Stack & Systems Architect") {
           user.title = "";
           changed = true;
         }
@@ -408,9 +408,9 @@ export const getStoredCustomAccounts = (): CustomAccount[] => {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
     if (!raw) {
       const seedAccount: CustomAccount = {
-        id: "usr-rodrigo-jara",
-        name: "Rodrigo Jara",
-        email: "rjara001@gmail.com",
+        id: "usr-alex-morgan",
+        name: "Alex Morgan",
+        email: "alex.morgan@ejemplo.com",
         passwordHash: hashPassword("admin123"),
         title: "",
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
