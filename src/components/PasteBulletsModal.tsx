@@ -13,6 +13,8 @@ import {
   ClipboardList
 } from "lucide-react";
 import { LogEntry } from "../types";
+import { useI18n } from "../i18n";
+import { MODALS_LOCALES } from "../i18n/modalsLocales";
 
 interface PasteBulletsModalProps {
   isOpen: boolean;
@@ -27,6 +29,8 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
   onImportLogs,
   onOpenCvModal,
 }) => {
+  const { t, language } = useI18n();
+  const ml = MODALS_LOCALES[language]?.pasteBullets || MODALS_LOCALES.en.pasteBullets;
   const [rawText, setRawText] = useState("");
   const [defaultClient, setDefaultClient] = useState("Cliente General");
   const [defaultProject, setDefaultProject] = useState("Core Platform");
@@ -46,7 +50,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
     const newLogs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[] = lines.map((line) => {
       // Basic smart metric heuristic
       const metricMatch = line.match(/(\d+[\%|\$|k|ms|s|x|min|hr|req]+|reduc|increas|mejor|optimi)[^\,\.\;]*/i);
-      const impactText = metricMatch ? metricMatch[0] : "Impacto técnico relevante en el entregable";
+      const impactText = metricMatch ? metricMatch[0] : ml.defaultImpact;
 
       return {
         date: new Date().toISOString().substring(0, 10),
@@ -57,7 +61,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
         description: line,
         impact: impactText,
         tags: ["#Importado", "#Viñeta"],
-        isPublic: false, // Default strictly to private sandbox
+        isPublic: false, // Default strictly to private vault (Bóveda Privada)
       };
     });
 
@@ -80,19 +84,17 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>Pegar Viñetas en Bruto</span>
-                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60">
-                  Ingesta Rápida
-                </span>
+                <span>{t.modals.pasteBulletsTitle}</span>
               </h3>
               <p className="text-[11px] text-slate-400">
-                Pega viñetas directas de tu bitácora o Jira. Se convertirán en logros protegidos en tu Sandbox.
+                {t.modals.pasteBulletsSubtitle}
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
+            aria-label={t.common.close}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -134,7 +136,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             <div>
               <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Categoría Inicial</span>
+                <span>{ml.initialCategory}</span>
               </label>
               <select
                 value={defaultCategory}
@@ -155,7 +157,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-800/60 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-purple-300">
                 <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>¿Tienes un CV o quieres que la IA detecte empresas, proyectos y métricas Google XYZ automáticamente?</span>
+                <span>{ml.aiCvPrompt}</span>
               </div>
               <button
                 type="button"
@@ -175,10 +177,10 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-slate-300 font-semibold flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Pega las viñetas aquí (1 por línea o con guiones/viñetas):</span>
+                <span>{ml.pasteBulletsLabel}</span>
               </label>
               <span className="text-[11px] font-mono text-cyan-400 font-bold">
-                {lines.length} {lines.length === 1 ? "viñeta detectada" : "viñetas detectadas"}
+                {ml.bulletsDetected(lines.length)}
               </span>
             </div>
 
@@ -198,10 +200,10 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-                  Vista Previa de Extracción ({lines.length})
+                  {ml.previewTitle(lines.length)}
                 </span>
                 <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Se guardarán en Sandbox Privado
+                  <Lock className="w-3 h-3" /> {ml.savedInVault}
                 </span>
               </div>
 
@@ -227,7 +229,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
           <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center gap-2.5 text-[11px] text-slate-400">
             <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>
-              Todos los logros importados entran por defecto en tu <strong>Sandbox Privado</strong>. Podrás editarlos o publicarlos en tu Public Deck cuando quieras.
+              {ml.vaultNote}
             </span>
           </div>
         </div>

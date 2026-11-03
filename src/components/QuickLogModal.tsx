@@ -22,6 +22,8 @@ import {
   FileText
 } from "lucide-react";
 import { LogCategory, LogEntry, PresetTemplate } from "../types";
+import { useI18n } from "../i18n";
+import { VIEW_LOCALES } from "../i18n/viewLocales";
 
 interface QuickLogModalProps {
   isOpen: boolean;
@@ -151,15 +153,17 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   initialExperienceId,
   initialBulletText,
 }) => {
+  const { t, language } = useI18n();
+  const tl = VIEW_LOCALES[language]?.timeline || VIEW_LOCALES.en.timeline;
   // 1. Logro (multilínea): campo resumen, es la viñeta que aparecerá en el CV o que fue cargada
   const [title, setTitle] = useState("");
 
   // Acordeones estructurados con signo +:
-  // 2. ¿Qué se buscaba lograr?
+  // 2. ${tl.accordionWhat}
   const [whatWasSought, setWhatWasSought] = useState("");
-  // 3. ¿Por qué era importante?
+  // 3. ${tl.accordionWhy}
   const [whyImportant, setWhyImportant] = useState("");
-  // 4. ¿Cómo se aplicó la solución?
+  // 4. ${tl.accordionHow}
   const [howApplied, setHowApplied] = useState("");
   // 5. El impacto (fórmula XYZ)
   const [impact, setImpact] = useState("");
@@ -189,7 +193,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [isPublic, setIsPublic] = useState(false); // Default: Sandbox Privado
+  const [isPublic, setIsPublic] = useState(false); // Default: Bóveda Privada (Confidencial)
   const [experiencesList, setExperiencesList] = useState<any[]>([]);
 
   const handleAddCustomCategory = () => {
@@ -314,7 +318,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
           setImpact("");
           setTags(["#FullStack", "#TypeScript"]);
         }
-        setIsPublic(false); // Sandbox by default
+        setIsPublic(false); // Bóveda Privada by default
       }
 
       // Auto focus on title
@@ -490,23 +494,20 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                {initialData ? "Editar Logro Técnico" : "Captura Rápida de Log"}
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-700/40 text-cyan-300">
-                  Fricción Cero
-                </span>
+                {initialData ? t.modals.quickLogEditTitle : t.modals.quickLogTitle}
               </h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Cerrar modal"
+            aria-label={t.common.close}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Subtle Sandbox / Privacy Bar at the top (Sutil, no invasivo) */}
+        {/* Subtle Privacy Bar at the top (Sutil, no invasivo) */}
         <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 min-w-0">
             <div className={`p-1 rounded-md shrink-0 ${isPublic ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-slate-800/80 text-slate-400 border border-slate-700/60"}`}>
@@ -514,15 +515,15 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
             </div>
             <div className="flex items-center gap-1.5 truncate">
               <span className={`text-xs font-semibold ${isPublic ? "text-emerald-300" : "text-slate-200"}`}>
-                {isPublic ? "Visible en Public Deck" : "Sandbox Privado (Confidencial)"}
+                {isPublic ? "Visible en Vitrina Pública" : "Bóveda Privada (Confidencial)"}
               </span>
               <span className="text-[11px] text-slate-400 hidden sm:inline truncate">
-                — {isPublic ? "Visible para reclutadores y exportaciones públicas" : "Solo tú puedes verlo; ideal para notas crudas y confidencialidad"}
+                — {isPublic ? "Visible para reclutadores y exportaciones públicas" : "Solo tú puedes verlo; ideal para métricas internas y notas de trabajo"}
               </span>
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer shrink-0" title={isPublic ? "Cambiar a Sandbox Privado" : "Hacer Visible en Public Deck"}>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0" title={isPublic ? "Cambiar a Bóveda Privada" : "Hacer Visible en Vitrina Pública"}>
             <input
               type="checkbox"
               checked={isPublic}
@@ -560,12 +561,12 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                     {isListening ? (
                       <>
                         <MicOff className="w-3 h-3" />
-                        <span>Detener</span>
+                        <span>{language === "en" ? "Stop" : language === "pt" ? "Parar" : language === "fr" ? "Arrêter" : language === "de" ? "Stopp" : language === "ja" ? "停止" : "Detener"}</span>
                       </>
                     ) : (
                       <>
                         <Mic className="w-3 h-3" />
-                        <span>Dictar</span>
+                        <span>{language === "en" ? "Dictate" : language === "pt" ? "Ditar" : language === "fr" ? "Dicter" : language === "de" ? "Diktieren" : language === "ja" ? "音声入力" : "Dictar"}</span>
                       </>
                     )}
                   </button>
@@ -579,7 +580,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                     className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md font-medium bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition-all"
                   >
                     <Zap className="w-3 h-3 fill-amber-300" />
-                    <span>Usar Plantilla</span>
+                    <span>{language === "en" ? "Use Template" : language === "pt" ? "Usar Modelo" : language === "fr" ? "Utiliser Modèle" : language === "de" ? "Vorlage verwenden" : language === "ja" ? "テンプレートを使用" : "Usar Plantilla"}</span>
                     <ChevronDown className={`w-3 h-3 transition-transform ${isTemplatesOpen ? "rotate-180" : ""}`} />
                   </button>
 
@@ -633,7 +634,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Plus className="w-3.5 h-3.5 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" />
                   <span className="font-semibold underline decoration-indigo-500/40 underline-offset-4 group-hover:decoration-indigo-300 truncate">
-                    {whatWasSought ? `🎯 Qué se buscaba lograr: "${whatWasSought.slice(0, 50)}${whatWasSought.length > 50 ? '...' : ''}"` : "+ ¿Qué se buscaba lograr?"}
+                    {whatWasSought ? `🎯 Qué se buscaba lograr: "${whatWasSought.slice(0, 50)}${whatWasSought.length > 50 ? '...' : ''}"` : "+ ${tl.accordionWhat}"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-indigo-400/80 group-hover:text-indigo-200 shrink-0 ml-2">
@@ -680,7 +681,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Plus className="w-3.5 h-3.5 text-amber-400 shrink-0 group-hover:scale-110 transition-transform" />
                   <span className="font-semibold underline decoration-amber-500/40 underline-offset-4 group-hover:decoration-amber-300 truncate">
-                    {whyImportant ? `💡 Por qué era importante: "${whyImportant.slice(0, 50)}${whyImportant.length > 50 ? '...' : ''}"` : "+ ¿Por qué era importante?"}
+                    {whyImportant ? `💡 Por qué era importante: "${whyImportant.slice(0, 50)}${whyImportant.length > 50 ? '...' : ''}"` : "+ ${tl.accordionWhy}"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-amber-400/80 group-hover:text-amber-200 shrink-0 ml-2">
@@ -727,7 +728,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Plus className="w-3.5 h-3.5 text-cyan-400 shrink-0 group-hover:scale-110 transition-transform" />
                   <span className="font-semibold underline decoration-cyan-500/40 underline-offset-4 group-hover:decoration-cyan-300 truncate">
-                    {howApplied ? `🛠️ Cómo se aplicó: "${howApplied.slice(0, 50)}${howApplied.length > 50 ? '...' : ''}"` : "+ ¿Cómo se aplicó la solución?"}
+                    {howApplied ? `🛠️ Cómo se aplicó: "${howApplied.slice(0, 50)}${howApplied.length > 50 ? '...' : ''}"` : "+ ${tl.accordionHow}"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-cyan-400/80 group-hover:text-cyan-200 shrink-0 ml-2">
@@ -774,7 +775,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Plus className="w-3.5 h-3.5 text-emerald-400 shrink-0 group-hover:scale-110 transition-transform" />
                   <span className="font-semibold underline decoration-emerald-500/40 underline-offset-4 group-hover:decoration-emerald-400 truncate">
-                    {impact ? `⚡ El impacto: "${impact.slice(0, 50)}${impact.length > 50 ? '...' : ''}"` : "+ El impacto (Resultado medible / Fórmula XYZ)"}
+                    {impact ? `⚡ El impacto: "${impact.slice(0, 50)}${impact.length > 50 ? '...' : ''}"` : "+ ${tl.impactXyzLabel}"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-emerald-500/70 group-hover:text-emerald-300 shrink-0 ml-2">
@@ -786,7 +787,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                    El impacto (Resultado medible / Fórmula XYZ) *
+                    ${tl.impactXyzLabel} *
                   </label>
                   <button
                     type="button"
@@ -821,7 +822,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Plus className="w-3.5 h-3.5 text-purple-400 shrink-0 group-hover:scale-110 transition-transform" />
                   <span className="font-semibold underline decoration-purple-500/40 underline-offset-4 group-hover:decoration-purple-300 truncate">
-                    {description ? `📝 Detalle o Descripción: "${description.slice(0, 50)}${description.length > 50 ? '...' : ''}"` : "+ Detalle o Descripción (Espacio amplio para explayarse)"}
+                    {description ? `📝 Detalle o Descripción: "${description.slice(0, 50)}${description.length > 50 ? '...' : ''}"` : "+ ${tl.accordionDesc}"}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono text-purple-400/80 group-hover:text-purple-200 shrink-0 ml-2">
@@ -833,7 +834,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-purple-400" />
-                    Detalle o Descripción (Espacio para explayarse en profundidad)
+                    ${tl.accordionDesc}
                   </label>
                   <button
                     type="button"
@@ -868,7 +869,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center gap-2 overflow-hidden text-xs">
                   <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition-colors shrink-0" />
                   <span className="font-medium underline decoration-slate-600 underline-offset-4 group-hover:decoration-slate-400">
-                    Contexto y Opciones Secundarias
+                    {language === "en" ? "Context & Options" : language === "pt" ? "Contexto e Opções" : language === "fr" ? "Contexte et Options" : language === "de" ? "Kontext & Optionen" : language === "ja" ? "コンテキストと設定" : "Contexto y Opciones Secundarias"}
                   </span>
                   {/* Scannable live preview pills */}
                   <div className="hidden sm:flex items-center gap-1.5 ml-2 truncate">
@@ -892,7 +893,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                   <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                     <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
-                    Contexto y Configuración Secundaria
+                    {language === "en" ? "Context & Settings" : language === "pt" ? "Contexto e Configuração" : language === "fr" ? "Contexte et Paramètres" : language === "de" ? "Kontext & Einstellungen" : language === "ja" ? "コンテキストと設定" : "Contexto y Configuración Secundaria"}
                   </span>
                   <button
                     type="button"
@@ -1133,7 +1134,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 onClick={onClose}
                 className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
               >
-                Cancelar
+                {t.common.cancel}
               </button>
               <button
                 type="submit"
@@ -1141,7 +1142,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
                 className="px-5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               >
                 <Zap className="w-3.5 h-3.5 fill-current" />
-                {initialData ? "Actualizar Log" : "Guardar Log"}
+                {t.modals.saveLogBtn}
               </button>
             </div>
           </div>

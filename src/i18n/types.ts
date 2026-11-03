@@ -10,10 +10,10 @@ export interface LanguageInfo {
 export const SUPPORTED_LANGUAGES: LanguageInfo[] = [
   { code: "es", name: "Español", nativeName: "Español", flag: "🇪🇸" },
   { code: "en", name: "English", nativeName: "English", flag: "🇺🇸" },
-  { code: "pt", name: "Portugués", nativeName: "Português", flag: "🇧🇷" },
-  { code: "fr", name: "Francés", nativeName: "Français", flag: "🇫🇷" },
-  { code: "de", name: "Alemán", nativeName: "Deutsch", flag: "🇩🇪" },
-  { code: "ja", name: "Japonés", nativeName: "日本語", flag: "🇯🇵" },
+  { code: "pt", name: "Português", nativeName: "Português", flag: "🇧🇷" },
+  { code: "fr", name: "Français", nativeName: "Français", flag: "🇫🇷" },
+  { code: "de", name: "Deutsch", nativeName: "Deutsch", flag: "🇩🇪" },
+  { code: "ja", name: "日本語", nativeName: "日本語", flag: "🇯🇵" },
 ];
 
 export interface TranslationSchema {
@@ -36,6 +36,26 @@ export interface TranslationSchema {
     upload: string;
     language: string;
     selectLanguage: string;
+    all: string;
+    yes: string;
+    no: string;
+    confirm: string;
+    optional: string;
+    required: string;
+    error: string;
+    success: string;
+    viewAll: string;
+    clear: string;
+    actions: string;
+    status: string;
+    date: string;
+    company: string;
+    role: string;
+    tags: string;
+    metrics: string;
+    impact: string;
+    technologies: string;
+    notes: string;
   };
   nav: {
     logbook: string;
@@ -54,6 +74,16 @@ export interface TranslationSchema {
     signOut: string;
     changeAvatar: string;
     guest: string;
+    startFree: string;
+    privateBadge: string;
+    publicShowcase: string;
+    privateVaultActive: string;
+    cloudSync: string;
+    importCvDesc: string;
+    settingsDesc: string;
+    systemFeatures: string;
+    userGuide: string;
+    offersAndCv: string;
   };
   landing: {
     badge: string;
@@ -80,6 +110,60 @@ export interface TranslationSchema {
     feature3Desc: string;
     feature4Title: string;
     feature4Desc: string;
+    tryLiveBadge: string;
+    tryLiveTitle: string;
+    tryLiveSubtitle: string;
+    rawDraftLabel: string;
+    rawDraftPlaceholder: string;
+    synthesizeBtn: string;
+    synthesizing: string;
+    formatGoogleXyz: string;
+    metricAccomplished: string;
+    metricMeasured: string;
+    metricByDoing: string;
+    copyAchievement: string;
+    publicDeckPreviewBadge: string;
+    publicDeckPreviewTitle: string;
+    publicDeckPreviewDesc: string;
+    viewPublicDeckBtn: string;
+    firstMateBadge: string;
+    firstMateTitle: string;
+    firstMateDesc: string;
+    comparisonTitle: string;
+    comparisonSubtitle: string;
+    tableFeature: string;
+    tableLinkedIn: string;
+    tableDocs: string;
+    tableGoalRecall: string;
+    comp1Feature: string;
+    comp1LinkedIn: string;
+    comp1Docs: string;
+    comp1GoalRecall: string;
+    comp2Feature: string;
+    comp2LinkedIn: string;
+    comp2Docs: string;
+    comp2GoalRecall: string;
+    comp3Feature: string;
+    comp3LinkedIn: string;
+    comp3Docs: string;
+    comp3GoalRecall: string;
+    comp4Feature: string;
+    comp4LinkedIn: string;
+    comp4Docs: string;
+    comp4GoalRecall: string;
+    faqTitle: string;
+    faqSubtitle: string;
+    faq1Q: string;
+    faq1A: string;
+    faq2Q: string;
+    faq2A: string;
+    faq3Q: string;
+    faq3A: string;
+    faq4Q: string;
+    faq4A: string;
+    ctaBottomTitle: string;
+    ctaBottomSubtitle: string;
+    ctaBottomBtn: string;
   };
   timeline: {
     title: string;
@@ -95,6 +179,29 @@ export interface TranslationSchema {
     quarter: string;
     isPublic: string;
     isPrivate: string;
+    tabByCompany: string;
+    tabAllAchievements: string;
+    newAchievement: string;
+    addCompanyBtn: string;
+    importCvBtn: string;
+    pasteBulletsBtn: string;
+    filterCategory: string;
+    filterCompany: string;
+    filterVisibility: string;
+    publicOnly: string;
+    privateOnly: string;
+    allVisibility: string;
+    deleteLogConfirm: string;
+    duplicateLog: string;
+    makePublic: string;
+    makePrivate: string;
+    extractBullet: string;
+    extractAllBullets: string;
+    bulletsAvailable: string;
+    noExperiencesTitle: string;
+    noExperiencesDesc: string;
+    viewProject: string;
+    rolePeriod: string;
   };
   cv: {
     modalTitle: string;
@@ -141,5 +248,158 @@ export interface TranslationSchema {
     quickDemo: string;
     switchRegister: string;
     switchLogin: string;
+  };
+  publicDeck: {
+    badge: string;
+    title: string;
+    subtitle: string;
+    filterAll: string;
+    verifiedBadge: string;
+    viewPrivateLogWarning: string;
+    recruiterNoteTitle: string;
+    recruiterNoteSubtitle: string;
+    recruiterNamePlaceholder: string;
+    recruiterEmailPlaceholder: string;
+    recruiterCompanyPlaceholder: string;
+    recruiterMessagePlaceholder: string;
+    sendRecruiterNote: string;
+    noteSentSuccess: string;
+    starMethod: string;
+    situation: string;
+    task: string;
+    action: string;
+    result: string;
+    contactDirectly: string;
+    emptyPublicLogsTitle: string;
+    emptyPublicLogsDesc: string;
+  };
+  firstMate: {
+    badge: string;
+    title: string;
+    description: string;
+    greeting: string;
+    placeholder: string;
+    send: string;
+    suggestedQuestions: string;
+    verifiedEvidence: string;
+    resetConversation: string;
+    leaveNotePrompt: string;
+  };
+  offers: {
+    title: string;
+    subtitle: string;
+    newOfferBtn: string;
+    matchScore: string;
+    matchedKeywords: string;
+    missingKeywords: string;
+    generateTailoredCv: string;
+    jobDescription: string;
+    salaryRange: string;
+    companyName: string;
+    positionTitle: string;
+    emptyOffersTitle: string;
+    emptyOffersDesc: string;
+    tailoredBullets: string;
+    exportPdf: string;
+    exportMarkdown: string;
+  };
+  inbox: {
+    title: string;
+    subtitle: string;
+    emptyTitle: string;
+    emptyDesc: string;
+    messageFrom: string;
+    company: string;
+    receivedOn: string;
+    markAsRead: string;
+    markAsUnread: string;
+    deleteMessage: string;
+    replyViaEmail: string;
+  };
+  synthesis: {
+    title: string;
+    subtitle: string;
+    targetRole: string;
+    exportFormat: string;
+    generatedCvTitle: string;
+    copyMarkdown: string;
+    downloadPdf: string;
+  };
+  modals: {
+    quickLogTitle: string;
+    quickLogEditTitle: string;
+    quickLogSubtitle: string;
+    companyField: string;
+    projectField: string;
+    roleField: string;
+    categoryField: string;
+    dateField: string;
+    rawInputLabel: string;
+    rawInputPlaceholder: string;
+    impactLabel: string;
+    impactPlaceholder: string;
+    tagsLabel: string;
+    tagsPlaceholder: string;
+    publicToggleLabel: string;
+    publicToggleDesc: string;
+    saveLogBtn: string;
+    experienceTitle: string;
+    experienceEditTitle: string;
+    companyNameLabel: string;
+    positionLabel: string;
+    periodLabel: string;
+    currentJob: string;
+    locationLabel: string;
+    bulletsLabel: string;
+    bulletsHelp: string;
+    saveExperienceBtn: string;
+    pasteBulletsTitle: string;
+    pasteBulletsSubtitle: string;
+    pasteBulletsPlaceholder: string;
+    processBulletsBtn: string;
+    settingsTitle: string;
+    settingsSubtitle: string;
+    exportJsonBtn: string;
+    importJsonBtn: string;
+    resetDemoBtn: string;
+    purgeDataBtn: string;
+    profileSection: string;
+    avatarModalTitle: string;
+    avatarModalSubtitle: string;
+    avatarUrlPlaceholder: string;
+    saveAvatarBtn: string;
+  };
+  toasts: {
+    logSaved: string;
+    logDeleted: string;
+    logDuplicated: string;
+    logToggledPublic: string;
+    logToggledPrivate: string;
+    experienceSaved: string;
+    experienceDeleted: string;
+    cvImported: string;
+    bulletsImported: string;
+    dataRestored: string;
+    profileUpdated: string;
+    messageSent: string;
+    messageDeleted: string;
+    offerSaved: string;
+    offerDeleted: string;
+    copiedToClipboard: string;
+  };
+  app: {
+    privateSpaceProtected: string;
+    privateSpaceDesc: string;
+    signInToAccess: string;
+    backToHome: string;
+    footerTagline: string;
+    footerPrivacy: string;
+    navHome: string;
+    navFeatures: string;
+    navOffers: string;
+    navDocs: string;
+    navLogbook: string;
+    navShowcase: string;
+    navSettings: string;
   };
 }

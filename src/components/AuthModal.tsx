@@ -27,6 +27,7 @@ import {
   authenticateCustomAccount,
   registerCustomAccount,
 } from "../utils/storage";
+import { useI18n } from "../i18n";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -63,6 +64,141 @@ const AVATAR_PRESETS = [
   { label: "Platform Engineer", url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80" },
 ];
 
+const AUTH_TEXTS: Record<string, {
+  activeSession: string;
+  connectedAs: string;
+  editProfile: string;
+  closeEdit: string;
+  logout: string;
+  editDetails: string;
+  changePhoto: string;
+  jobTitle: string;
+  location: string;
+  bio: string;
+  continueGoogle: string;
+  googleConfig: string;
+  orCustom: string;
+  confirmPass: string;
+  devAvatar: string;
+  noAccount: string;
+  hasAccount: string;
+}> = {
+  es: {
+    activeSession: "Sesión Activa & Perfil",
+    connectedAs: "Conectado como",
+    editProfile: "Editar Perfil",
+    closeEdit: "Cerrar Edición",
+    logout: "Cerrar Sesión",
+    editDetails: "Editar Datos del Perfil",
+    changePhoto: "Cambiar Foto",
+    jobTitle: "Cargo / Especialidad",
+    location: "Ubicación",
+    bio: "Biografía",
+    continueGoogle: "Continuar con Google (Acceso Rápido)",
+    googleConfig: "Configuración Google Client ID",
+    orCustom: "o con tu cuenta custom",
+    confirmPass: "Confirmar Contraseña *",
+    devAvatar: "Avatar de Desarrollador",
+    noAccount: "¿No tienes una cuenta aún?",
+    hasAccount: "¿Ya tienes una cuenta?",
+  },
+  en: {
+    activeSession: "Active Session & Profile",
+    connectedAs: "Logged in as",
+    editProfile: "Edit Profile",
+    closeEdit: "Close Edit",
+    logout: "Log Out",
+    editDetails: "Edit Profile Details",
+    changePhoto: "Change Photo",
+    jobTitle: "Role / Specialty",
+    location: "Location",
+    bio: "Biography",
+    continueGoogle: "Continue with Google (Quick Access)",
+    googleConfig: "Google Client ID Settings",
+    orCustom: "or with your custom account",
+    confirmPass: "Confirm Password *",
+    devAvatar: "Developer Avatar",
+    noAccount: "Don't have an account yet?",
+    hasAccount: "Already have an account?",
+  },
+  pt: {
+    activeSession: "Sessão Ativa & Perfil",
+    connectedAs: "Conectado como",
+    editProfile: "Editar Perfil",
+    closeEdit: "Fechar Edição",
+    logout: "Sair",
+    editDetails: "Editar Dados do Perfil",
+    changePhoto: "Alterar Foto",
+    jobTitle: "Cargo / Especialidade",
+    location: "Localização",
+    bio: "Biografia",
+    continueGoogle: "Continuar com o Google (Acesso Rápido)",
+    googleConfig: "Configuração Google Client ID",
+    orCustom: "ou com a sua conta personalizada",
+    confirmPass: "Confirmar Palavra-passe *",
+    devAvatar: "Avatar de Programador",
+    noAccount: "Ainda não tem conta?",
+    hasAccount: "Já tem uma conta?",
+  },
+  fr: {
+    activeSession: "Session Active & Profil",
+    connectedAs: "Connecté en tant que",
+    editProfile: "Modifier le Profil",
+    closeEdit: "Fermer l'Édition",
+    logout: "Déconnexion",
+    editDetails: "Modifier les Détails du Profil",
+    changePhoto: "Changer la Photo",
+    jobTitle: "Poste / Spécialité",
+    location: "Localisation",
+    bio: "Biographie",
+    continueGoogle: "Continuer avec Google (Accès Rapide)",
+    googleConfig: "Configuration Google Client ID",
+    orCustom: "ou avec votre compte personnalisé",
+    confirmPass: "Confirmer le Mot de Passe *",
+    devAvatar: "Avatar de Développeur",
+    noAccount: "Vous n'avez pas encore de compte ?",
+    hasAccount: "Vous avez déjà un compte ?",
+  },
+  de: {
+    activeSession: "Aktive Sitzung & Profil",
+    connectedAs: "Angemeldet als",
+    editProfile: "Profil Bearbeiten",
+    closeEdit: "Bearbeitung Schließen",
+    logout: "Abmelden",
+    editDetails: "Profildetails Bearbeiten",
+    changePhoto: "Foto Ändern",
+    jobTitle: "Position / Spezialisierung",
+    location: "Standort",
+    bio: "Biografie",
+    continueGoogle: "Mit Google Fortfahren (Schnellzugriff)",
+    googleConfig: "Google Client ID Einstellungen",
+    orCustom: "oder mit Ihrem benutzerdefinierten Konto",
+    confirmPass: "Passwort Bestätigen *",
+    devAvatar: "Entwickler-Avatar",
+    noAccount: "Noch kein Konto?",
+    hasAccount: "Haben Sie bereits ein Konto?",
+  },
+  ja: {
+    activeSession: "アクティブセッション＆プロフィール",
+    connectedAs: "ログイン中:",
+    editProfile: "プロフィール編集",
+    closeEdit: "編集を閉じる",
+    logout: "ログアウト",
+    editDetails: "プロフィール情報の編集",
+    changePhoto: "写真を変更",
+    jobTitle: "役職・専門分野",
+    location: "居住地",
+    bio: "自己紹介",
+    continueGoogle: "Googleで続行 (クイックアクセス)",
+    googleConfig: "Google Client ID設定",
+    orCustom: "またはカスタムアカウントで",
+    confirmPass: "パスワード確認 *",
+    devAvatar: "開発者アバター",
+    noAccount: "アカウントをお持ちでないですか？",
+    hasAccount: "すでにアカウントをお持ちですか？",
+  },
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -72,6 +208,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onUpdateProfile,
   onOpenAvatarModal,
 }) => {
+  const { t, language } = useI18n();
+  const at = AUTH_TEXTS[language] || AUTH_TEXTS.en;
   // Modal tabs: "login" (custom or google) vs "signup" (custom register)
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
@@ -306,12 +444,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">
-                {currentUser ? "Sesión Activa & Perfil" : "Acceso a la Bitácora"}
+                {currentUser ? at.activeSession : t.auth.loginTitle}
               </h3>
               <p className="text-[11px] text-slate-400">
                 {currentUser
-                  ? `Conectado como ${currentUser.name}`
-                  : "Google Login y Custom Login con correo/contraseña"}
+                  ? `${at.connectedAs} ${currentUser.name}`
+                  : t.auth.quickDemo}
               </p>
             </div>
           </div>
@@ -344,7 +482,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <button
                         type="button"
                         onClick={onOpenAvatarModal}
-                        title="Cambiar foto de perfil"
+                        title={at.changePhoto}
                         className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center shadow-md transition-all active:scale-95 group-hover:scale-110"
                       >
                         <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -391,7 +529,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition-colors"
                   >
                     <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>{isEditingProfile ? "Cerrar Edición" : "Editar Perfil"}</span>
+                    <span>{isEditingProfile ? at.closeEdit : at.editProfile}</span>
                   </button>
 
                   <button
@@ -402,7 +540,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 font-semibold rounded-xl transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Cerrar Sesión</span>
+                    <span>{at.logout}</span>
                   </button>
                 </div>
               </div>
@@ -415,7 +553,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <h5 className="font-bold text-white text-xs uppercase tracking-wider text-cyan-400">
-                      Editar Datos del Perfil
+                      {at.editDetails}
                     </h5>
                     {onOpenAvatarModal && (
                       <button
@@ -424,13 +562,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-800/60 text-cyan-300 hover:text-white text-[11px] font-semibold transition-colors"
                       >
                         <Camera className="w-3 h-3 text-cyan-400" />
-                        <span>Cambiar Foto</span>
+                        <span>{at.changePhoto}</span>
                       </button>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Nombre</label>
+                    <label className="block text-slate-300 font-medium mb-1">{t.auth.nameLabel}</label>
                     <input
                       type="text"
                       required
@@ -441,7 +579,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Cargo / Especialidad</label>
+                    <label className="block text-slate-300 font-medium mb-1">{at.jobTitle}</label>
                     <input
                       type="text"
                       required
@@ -452,7 +590,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Ubicación</label>
+                    <label className="block text-slate-300 font-medium mb-1">{at.location}</label>
                     <input
                       type="text"
                       value={editLocation}
@@ -462,7 +600,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1">Biografía</label>
+                    <label className="block text-slate-300 font-medium mb-1">{at.bio}</label>
                     <textarea
                       rows={3}
                       value={editBio}
@@ -477,13 +615,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       onClick={() => setIsEditingProfile(false)}
                       className="px-3 py-1.5 text-slate-400 hover:text-white"
                     >
-                      Cancelar
+                      {t.common.cancel}
                     </button>
                     <button
                       type="submit"
                       className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl shadow-sm"
                     >
-                      Guardar Cambios
+                      {t.common.save}
                     </button>
                   </div>
                 </form>
@@ -504,7 +642,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Iniciar Sesión (Custom / Google)</span>
+                  <span>{t.auth.loginTitle}</span>
                 </button>
                 <button
                   type="button"
@@ -516,7 +654,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>Crear Cuenta Custom</span>
+                  <span>{t.auth.registerTitle}</span>
                 </button>
               </div>
 
@@ -553,7 +691,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                       />
                     </svg>
-                    <span>Continuar con Google (Acceso Rápido)</span>
+                    <span>{at.continueGoogle}</span>
                   </button>
 
                   {/* Google Client ID Settings accordion */}
@@ -565,10 +703,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     >
                       <span className="flex items-center gap-1.5">
                         <Key className="w-3 h-3 text-cyan-400" />
-                        <span>Configuración Google Client ID {googleClientId ? "✓" : ""}</span>
+                        <span>{at.googleConfig} {googleClientId ? "✓" : ""}</span>
                       </span>
                       <span className="text-[10px] font-mono text-cyan-400">
-                        {showConfigClientId ? "Ocultar ▲" : "Configurar ▼"}
+                        {showConfigClientId ? "▲" : "▼"}
                       </span>
                     </button>
 
@@ -578,14 +716,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           type="text"
                           value={tempClientId}
                           onChange={(e) => setTempClientId(e.target.value)}
-                          placeholder="Pega Client ID de Google Cloud..."
+                          placeholder="Client ID..."
                           className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
                         />
                         <button
                           type="submit"
                           className="px-3 py-1 bg-cyan-500 text-slate-950 font-bold rounded-lg text-[11px] hover:bg-cyan-400"
                         >
-                          Guardar Client ID
+                          {t.common.save}
                         </button>
                       </form>
                     )}
@@ -595,7 +733,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="relative flex py-1 items-center">
                     <div className="flex-grow border-t border-slate-800"></div>
                     <span className="flex-shrink mx-3 text-[10px] text-slate-500 uppercase font-mono tracking-wider">
-                      o con tu cuenta custom
+                      {at.orCustom}
                     </span>
                     <div className="flex-grow border-t border-slate-800"></div>
                   </div>
@@ -614,7 +752,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
-                      Correo Electrónico o Usuario *
+                      {t.auth.emailLabel}
                     </label>
                     <div className="relative">
                       <input
@@ -622,7 +760,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="ej. tu.correo@ejemplo.com o usuario"
+                        placeholder="user@example.com"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -632,7 +770,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-slate-300 font-semibold">
-                        Contraseña *
+                        {t.auth.passwordLabel}
                       </label>
                     </div>
                     <div className="relative">
@@ -664,17 +802,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-cyan-500/20 flex items-center justify-center gap-1.5"
                   >
                     <LogIn className="w-4 h-4" />
-                    <span>Entrar a mi Bitácora (Custom Login)</span>
+                    <span>{t.auth.submitLogin}</span>
                   </button>
 
                   <div className="text-center pt-1 text-[11px] text-slate-400">
-                    ¿No tienes una cuenta aún?{" "}
+                    {at.noAccount}{" "}
                     <button
                       type="button"
                       onClick={() => setAuthMode("signup")}
                       className="text-cyan-400 hover:underline font-semibold"
                     >
-                      Crear cuenta custom
+                      {t.auth.switchRegister}
                     </button>
                   </div>
                 </form>
@@ -692,7 +830,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
-                      Nombre Completo *
+                      {t.auth.nameLabel}
                     </label>
                     <div className="relative">
                       <input
@@ -700,7 +838,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={signupName}
                         onChange={(e) => setSignupName(e.target.value)}
-                        placeholder="ej. Alex Morgan"
+                        placeholder="Alex Morgan"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <User className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -709,7 +847,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
-                      Correo Electrónico *
+                      {t.auth.emailLabel}
                     </label>
                     <div className="relative">
                       <input
@@ -717,7 +855,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
-                        placeholder="ej. alex.morgan@ejemplo.com"
+                        placeholder="alex.morgan@example.com"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -726,14 +864,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">
-                      Cargo / Especialidad Técnica
+                      {at.jobTitle}
                     </label>
                     <div className="relative">
                       <input
                         type="text"
                         value={signupTitle}
                         onChange={(e) => setSignupTitle(e.target.value)}
-                        placeholder="ej. Staff Systems Architect"
+                        placeholder="Staff Systems Architect"
                         className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500 placeholder-slate-500"
                       />
                       <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -743,7 +881,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-300 font-semibold mb-1">
-                        Contraseña *
+                        {t.auth.passwordLabel}
                       </label>
                       <div className="relative">
                         <input
@@ -751,7 +889,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           required
                           value={signupPassword}
                           onChange={(e) => setSignupPassword(e.target.value)}
-                          placeholder="Mínimo 4 caracteres"
+                          placeholder="••••••••"
                           className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-10 py-2 text-white focus:outline-none focus:border-cyan-500"
                         />
                         <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -771,7 +909,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                     <div>
                       <label className="block text-slate-300 font-semibold mb-1">
-                        Confirmar Contraseña *
+                        {at.confirmPass}
                       </label>
                       <div className="relative">
                         <input
@@ -779,7 +917,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           required
                           value={signupConfirmPassword}
                           onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                          placeholder="Repite la contraseña"
+                          placeholder="••••••••"
                           className="w-full bg-[#080C14] border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                         />
                         <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -790,7 +928,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {/* Avatar Picker */}
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1.5">
-                      Avatar de Desarrollador
+                      {at.devAvatar}
                     </label>
                     <div className="flex items-center gap-2.5">
                       {AVATAR_PRESETS.map((preset, idx) => {
@@ -829,17 +967,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-cyan-500/20 flex items-center justify-center gap-1.5"
                   >
                     <UserPlus className="w-4 h-4" />
-                    <span>Registrar Cuenta Custom & Iniciar Sesión</span>
+                    <span>{t.auth.submitRegister}</span>
                   </button>
 
                   <div className="text-center pt-1 text-[11px] text-slate-400">
-                    ¿Ya tienes una cuenta?{" "}
+                    {at.hasAccount}{" "}
                     <button
                       type="button"
                       onClick={() => setAuthMode("login")}
                       className="text-cyan-400 hover:underline font-semibold"
                     >
-                      Iniciar Sesión
+                      {t.auth.switchLogin}
                     </button>
                   </div>
                 </form>

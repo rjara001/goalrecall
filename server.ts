@@ -17,8 +17,48 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+// --- Zero-Cost Spark Guardrail: Hybrid Rate Limiter ---
+// Tracks daily AI requests per User UID (primary) and anonymous IP (fallback)
+// Prevents CGNAT blocking while enforcing strict $0 budget limits
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+const aiRateLimitStore = new Map<string, RateLimitEntry>();
+
+function checkAiRateLimit(userId?: string, ip?: string): { allowed: boolean; remaining: number; resetInHours: number; limitType: "uid" | "ip" } {
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  
+  if (aiRateLimitStore.size > 2000) {
+    for (const [k, v] of aiRateLimitStore.entries()) {
+      if (v.resetAt <= now) aiRateLimitStore.delete(k);
+    }
+  }
+
+  const isAuthUser = Boolean(userId && userId !== "usr-guest" && userId.trim().length > 0);
+  const key = isAuthUser && userId ? `uid:${userId.trim()}` : `ip:${ip || "unknown"}`;
+  const maxLimit = isAuthUser ? 5 : 2; // 5 daily AI CV extractions for authenticated users, 2 for guests
+
+  let entry = aiRateLimitStore.get(key);
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + DAY_MS };
+    aiRateLimitStore.set(key, entry);
+  }
+
+  const remaining = Math.max(0, maxLimit - entry.count);
+  const resetInHours = Math.max(1, Math.ceil((entry.resetAt - now) / (60 * 60 * 1000)));
+
+  if (entry.count >= maxLimit) {
+    return { allowed: false, remaining: 0, resetInHours, limitType: isAuthUser ? "uid" : "ip" };
+  }
+
+  entry.count += 1;
+  return { allowed: true, remaining: Math.max(0, remaining - 1), resetInHours, limitType: isAuthUser ? "uid" : "ip" };
+}
 
 // Serve static assets from public/ (including sample PDF CVs)
 app.use(express.static(path.resolve(__dirname, "public")));
@@ -1024,9 +1064,18 @@ app.post("/api/cv/extract-full-cv", async (req, res) => {
       textContent = textContent.substring(0, 15000);
     }
 
-    // If Gemini key is missing OR user explicitly requested local extraction
-    if (!process.env.GEMINI_API_KEY || req.body.forceLocal) {
-      console.warn("Usando extractor estricto verídico local.");
+    // --- Zero-Cost Spark Guardrail: Hybrid Rate Limit Check ---
+    const userUid = req.body?.userId || req.body?.user?.id || req.body?.userKey;
+    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress;
+    const rateCheck = checkAiRateLimit(userUid, clientIp);
+
+    // If Gemini key is missing, user requested local extraction, OR AI quota reached
+    if (!process.env.GEMINI_API_KEY || req.body.forceLocal || !rateCheck.allowed) {
+      if (!rateCheck.allowed) {
+        console.warn(`Límite diario de IA alcanzado para ${rateCheck.limitType}. Activando fallback local a costo $0.00.`);
+      } else {
+        console.warn("Usando extractor estricto verídico local.");
+      }
       const cvData = extractFullCvLocally(textContent || "", fileName || "documento");
       const audit = calculateCvAudit(cvData);
       const achievements = cvToAchievements(cvData, fileName);
@@ -1040,6 +1089,15 @@ app.post("/api/cv/extract-full-cv", async (req, res) => {
         completenessScore: audit.completenessScore,
         engine: "local-strict-parser",
         fileName: fileName || "Documento",
+        quota: {
+          limitReached: !rateCheck.allowed,
+          remaining: rateCheck.remaining,
+          resetInHours: rateCheck.resetInHours,
+          limitType: rateCheck.limitType,
+        },
+        warning: !rateCheck.allowed
+          ? "Has alcanzado la cuota diaria de análisis con IA. Tu CV se extrajo mediante nuestro motor local de alta fidelidad a costo $0.00."
+          : undefined,
       });
     }
 
@@ -1109,9 +1167,10 @@ Devuelve un JSON estrictamente válido que coincida con el schema.`;
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+      model: "gemini-2.5-flash",
       contents: { parts },
       config: {
+        maxOutputTokens: 2048,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -1304,8 +1363,14 @@ Devuelve un JSON estrictamente válido que coincida con el schema.`;
       completedCount: audit.completedCount,
       totalChecks: audit.totalChecks,
       completenessScore: audit.completenessScore,
-      engine: "gemini-3.8-flash",
+      engine: "gemini-2.5-flash",
       fileName: fileName || "Documento",
+      quota: {
+        limitReached: false,
+        remaining: rateCheck.remaining,
+        resetInHours: rateCheck.resetInHours,
+        limitType: rateCheck.limitType,
+      },
     });
   } catch (err: any) {
     console.error("Error en extracción completa con Gemini:", err);
@@ -1368,6 +1433,15 @@ app.post("/api/cloud-sync/save", (req, res) => {
     if (!userKey || !payload) {
       return res.status(400).json({ error: "userKey and payload are required." });
     }
+
+    // Zero-Cost Spark Guardrail: Max 500 KB payload per sync to prevent database bloat
+    const payloadStr = JSON.stringify(payload);
+    if (payloadStr.length > 500 * 1024) {
+      return res.status(413).json({ 
+        error: "El respaldo excede el límite de 500 KB de la capa gratuita. Por favor utiliza enlaces externos para imágenes pesadas." 
+      });
+    }
+
     const filePath = getSyncFilePath(userKey);
     const backupRecord = {
       userKey,
@@ -1375,7 +1449,7 @@ app.post("/api/cloud-sync/save", (req, res) => {
       payload,
     };
     fs.writeFileSync(filePath, JSON.stringify(backupRecord, null, 2), "utf-8");
-    return res.json({ success: true, savedAt: backupRecord.updatedAt });
+    return res.json({ success: true, savedAt: backupRecord.updatedAt, sizeBytes: payloadStr.length });
   } catch (err: any) {
     console.error("Error saving cloud sync backup:", err);
     return res.status(500).json({ error: "Failed to persist cloud backup." });
@@ -1398,6 +1472,121 @@ app.get("/api/cloud-sync/load/:userKey", (req, res) => {
   } catch (err: any) {
     console.error("Error loading cloud sync backup:", err);
     return res.status(500).json({ error: "Failed to load cloud backup." });
+  }
+});
+
+// Products API Routes (Showcase & Gestión Privada)
+app.get("/api/products/public/:userKey", (req, res) => {
+  try {
+    const { userKey } = req.params;
+    if (!userKey) {
+      return res.status(400).json({ error: "userKey is required." });
+    }
+    const filePath = getSyncFilePath(userKey);
+    if (!fs.existsSync(filePath)) {
+      return res.json({ success: true, products: [] });
+    }
+    const content = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(content);
+    const allProducts = Array.isArray(parsed?.payload?.products) ? parsed.payload.products : [];
+    // Strict privacy isolation: only public products
+    const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+    return res.json({ success: true, products: publicProducts });
+  } catch (err: any) {
+    console.error("Error loading public products:", err);
+    return res.status(500).json({ error: "Failed to load public products." });
+  }
+});
+
+app.get("/api/products", (req, res) => {
+  try {
+    const userKey = (req.query.userKey as string) || "usr-guest";
+    const filePath = getSyncFilePath(userKey);
+    if (!fs.existsSync(filePath)) {
+      return res.json({ success: true, products: [] });
+    }
+    const content = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(content);
+    const products = Array.isArray(parsed?.payload?.products) ? parsed.payload.products : [];
+    return res.json({ success: true, products });
+  } catch (err: any) {
+    console.error("Error fetching products:", err);
+    return res.status(500).json({ error: "Failed to fetch products." });
+  }
+});
+
+app.post("/api/products", (req, res) => {
+  try {
+    const userKey = (req.body.userKey as string) || "usr-guest";
+    const productData = req.body.product;
+    if (!productData || !productData.title) {
+      return res.status(400).json({ error: "Product title and data are required." });
+    }
+    const filePath = getSyncFilePath(userKey);
+    let record: any = { userKey, updatedAt: Date.now(), payload: { products: [] } };
+    if (fs.existsSync(filePath)) {
+      record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      if (!record.payload) record.payload = {};
+      if (!Array.isArray(record.payload.products)) record.payload.products = [];
+    }
+    const newProduct = {
+      ...productData,
+      id: productData.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: productData.createdAt || new Date().toISOString(),
+      isPublic: productData.isPublic ?? true,
+    };
+    record.payload.products.unshift(newProduct);
+    record.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
+    return res.json({ success: true, product: newProduct });
+  } catch (err: any) {
+    console.error("Error creating product:", err);
+    return res.status(500).json({ error: "Failed to create product." });
+  }
+});
+
+app.put("/api/products/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const userKey = (req.body.userKey as string) || "usr-guest";
+    const updates = req.body.product || {};
+    const filePath = getSyncFilePath(userKey);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "User backup not found." });
+    }
+    const record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const products: any[] = record.payload?.products || [];
+    const index = products.findIndex((p) => p.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Product not found." });
+    }
+    products[index] = { ...products[index], ...updates, updatedAt: new Date().toISOString() };
+    record.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
+    return res.json({ success: true, product: products[index] });
+  } catch (err: any) {
+    console.error("Error updating product:", err);
+    return res.status(500).json({ error: "Failed to update product." });
+  }
+});
+
+app.delete("/api/products/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const userKey = (req.query.userKey as string) || (req.body?.userKey as string) || "usr-guest";
+    const filePath = getSyncFilePath(userKey);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "User backup not found." });
+    }
+    const record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const products: any[] = record.payload?.products || [];
+    record.payload.products = products.filter((p) => p.id !== id);
+    record.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
+    return res.json({ success: true, deletedId: id });
+  } catch (err: any) {
+    console.error("Error deleting product:", err);
+    return res.status(500).json({ error: "Failed to delete product." });
   }
 });
 

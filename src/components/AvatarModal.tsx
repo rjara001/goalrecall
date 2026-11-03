@@ -12,6 +12,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { compressAndCropAvatar } from "../utils/imageCompressor";
+import { useI18n } from "../i18n";
 
 interface AvatarModalProps {
   isOpen: boolean;
@@ -64,6 +65,120 @@ const PRESET_AVATARS = [
   },
 ];
 
+const AVATAR_TEXTS: Record<string, {
+  tabUpload: string;
+  tabPresets: string;
+  tabUrl: string;
+  currentPreview: string;
+  cropDesc: string;
+  resetBtn: string;
+  dragTitle: string;
+  dragDesc: string;
+  presetsDesc: string;
+  urlLabel: string;
+  loadBtn: string;
+  ghPreset: string;
+  ghPresetBtn: string;
+  processing: string;
+}> = {
+  es: {
+    tabUpload: "Subir Archivo Local",
+    tabPresets: "Avatares Profesionales",
+    tabUrl: "Enlace / URL",
+    currentPreview: "Vista Previa Actual",
+    cropDesc: "Recorte cuadrado automático en alta definición",
+    resetBtn: "Restablecer",
+    dragTitle: "Arrastra tu foto aquí o haz clic para seleccionarla",
+    dragDesc: "Soporta PNG, JPG o WebP. Se recortará automáticamente al centro en formato cuadrado y se optimizará sin perder resolución.",
+    presetsDesc: "Selecciona una foto profesional curada para ingenieros y arquitectos de software:",
+    urlLabel: "URL de Imagen Externa (GitHub, Gravatar, LinkedIn o CDN)",
+    loadBtn: "Cargar",
+    ghPreset: "Usar avatar público de GitHub",
+    ghPresetBtn: "Usar GitHub Demo",
+    processing: "Procesando y optimizando imagen...",
+  },
+  en: {
+    tabUpload: "Upload Local File",
+    tabPresets: "Professional Avatars",
+    tabUrl: "Link / URL",
+    currentPreview: "Current Preview",
+    cropDesc: "Automatic high-definition square crop",
+    resetBtn: "Reset",
+    dragTitle: "Drag your photo here or click to select",
+    dragDesc: "Supports PNG, JPG, or WebP. Auto-centered square crop optimized with zero quality loss.",
+    presetsDesc: "Select a curated professional photo for software engineers and architects:",
+    urlLabel: "External Image URL (GitHub, Gravatar, LinkedIn or CDN)",
+    loadBtn: "Load",
+    ghPreset: "Use public GitHub avatar",
+    ghPresetBtn: "Use GitHub Demo",
+    processing: "Processing and optimizing image...",
+  },
+  pt: {
+    tabUpload: "Carregar Ficheiro Local",
+    tabPresets: "Avatares Profissionais",
+    tabUrl: "Ligação / URL",
+    currentPreview: "Pré-visualização Atual",
+    cropDesc: "Recorte quadrado automático em alta definição",
+    resetBtn: "Repor",
+    dragTitle: "Arraste a sua foto aqui ou clique para selecionar",
+    dragDesc: "Suporta PNG, JPG ou WebP com recorte automático centrado.",
+    presetsDesc: "Selecione uma foto profissional para engenheiros:",
+    urlLabel: "URL de Imagem Externa",
+    loadBtn: "Carregar",
+    ghPreset: "Usar avatar do GitHub",
+    ghPresetBtn: "Usar Demo GitHub",
+    processing: "A processar imagem...",
+  },
+  fr: {
+    tabUpload: "Téléverser Fichier Local",
+    tabPresets: "Avatars Professionnels",
+    tabUrl: "Lien / URL",
+    currentPreview: "Aperçu Actuel",
+    cropDesc: "Recadrage carré automatique en haute définition",
+    resetBtn: "Réinitialiser",
+    dragTitle: "Glissez votre photo ici ou cliquez pour choisir",
+    dragDesc: "Supporte PNG, JPG ou WebP avec recadrage automatique.",
+    presetsDesc: "Sélectionnez une photo professionnelle :",
+    urlLabel: "URL d'Image Externe",
+    loadBtn: "Charger",
+    ghPreset: "Utiliser l'avatar GitHub",
+    ghPresetBtn: "Démo GitHub",
+    processing: "Traitement de l'image...",
+  },
+  de: {
+    tabUpload: "Lokale Datei Hochladen",
+    tabPresets: "Professionelle Avatare",
+    tabUrl: "Link / URL",
+    currentPreview: "Aktuelle Vorschau",
+    cropDesc: "Automatischer quadratischer HD-Zuschnitt",
+    resetBtn: "Zurücksetzen",
+    dragTitle: "Foto hierher ziehen oder zum Auswählen klicken",
+    dragDesc: "Unterstützt PNG, JPG oder WebP mit automatischem Zuschnitt.",
+    presetsDesc: "Wählen Sie ein professionelles Foto für Software-Ingenieure:",
+    urlLabel: "Externe Bild-URL",
+    loadBtn: "Laden",
+    ghPreset: "Öffentlichen GitHub-Avatar verwenden",
+    ghPresetBtn: "GitHub Demo",
+    processing: "Bild wird optimiert...",
+  },
+  ja: {
+    tabUpload: "ローカルファイルをアップロード",
+    tabPresets: "プロフェッショナルアバター",
+    tabUrl: "リンク / URL",
+    currentPreview: "現在のプレビュー",
+    cropDesc: "高解像度自動正方形クロップ",
+    resetBtn: "リセット",
+    dragTitle: "写真をドラッグ＆ドロップ、またはクリックして選択",
+    dragDesc: "PNG、JPG、WebP対応。画質を落とさず自動中央クロップ。",
+    presetsDesc: "エンジニア向けに厳選されたプロフェッショナル写真を選択：",
+    urlLabel: "外部画像URL (GitHub, Gravatar, LinkedIn等)",
+    loadBtn: "読み込む",
+    ghPreset: "GitHubの公開アバターを使用",
+    ghPresetBtn: "GitHubデモを使用",
+    processing: "画像を処理・最適化中...",
+  },
+};
+
 export const AvatarModal: React.FC<AvatarModalProps> = ({
   isOpen,
   onClose,
@@ -71,6 +186,8 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
   userName,
   onSaveAvatar,
 }) => {
+  const { t, language } = useI18n();
+  const avt = AVATAR_TEXTS[language] || AVATAR_TEXTS.en;
   const [activeTab, setActiveTab] = useState<"upload" | "url" | "presets">("upload");
   const [selectedAvatar, setSelectedAvatar] = useState<string>(currentAvatar);
   const [customUrl, setCustomUrl] = useState<string>("");
@@ -161,10 +278,10 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                Personalizar Foto de Perfil
+                {t.modals.avatarModalTitle}
               </h3>
               <p className="text-[11px] text-slate-400">
-                Visible en tu bitácora, vitrina pública (Public Deck) y exportaciones
+                {t.modals.avatarModalSubtitle}
               </p>
             </div>
           </div>
@@ -198,9 +315,9 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               </div>
 
               <div>
-                <h4 className="text-sm font-bold text-white">Vista Previa Actual</h4>
+                <h4 className="text-sm font-bold text-white">{avt.currentPreview}</h4>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Recorte cuadrado automático en alta definición
+                  {avt.cropDesc}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-[10px] text-slate-400 font-mono">Navbar:</span>
@@ -223,10 +340,10 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               type="button"
               onClick={handleResetDefault}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-700/60 text-[11px] font-medium transition-colors shrink-0"
-              title="Restablecer avatar inicial"
+              title="Reset avatar"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restablecer</span>
+              <span>{avt.resetBtn}</span>
             </button>
           </div>
 
@@ -242,7 +359,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               }`}
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>Subir Archivo Local</span>
+              <span>{avt.tabUpload}</span>
             </button>
 
             <button
@@ -255,7 +372,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Avatares Profesionales</span>
+              <span>{avt.tabPresets}</span>
             </button>
 
             <button
@@ -268,7 +385,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               }`}
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>Enlace / URL</span>
+              <span>{avt.tabUrl}</span>
             </button>
           </div>
 
@@ -313,25 +430,25 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                 </div>
 
                 <h4 className="text-sm font-bold text-white mb-1">
-                  Arrastra tu foto aquí o haz clic para seleccionarla
+                  {avt.dragTitle}
                 </h4>
                 <p className="text-slate-400 text-[11px] max-w-sm mx-auto mb-3">
-                  Soporta PNG, JPG o WebP. Se recortará automáticamente al centro en formato cuadrado y se optimizará sin perder resolución.
+                  {avt.dragDesc}
                 </p>
 
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[10px] text-slate-300">
-                  <span>Compresión en Canvas</span>
+                  <span>Canvas 300x300</span>
                   <span>•</span>
-                  <span>Cero Lag</span>
+                  <span>Fast</span>
                   <span>•</span>
-                  <span className="text-cyan-300 font-medium">Hasta 10 MB</span>
+                  <span className="text-cyan-300 font-medium">10 MB</span>
                 </div>
               </div>
 
               {isProcessing && (
                 <div className="flex items-center justify-center gap-2 p-3 bg-cyan-950/40 border border-cyan-800/60 rounded-xl text-cyan-300">
                   <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs font-medium">Procesando y optimizando imagen...</span>
+                  <span className="text-xs font-medium">{avt.processing}</span>
                 </div>
               )}
             </div>
@@ -341,7 +458,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
           {activeTab === "presets" && (
             <div className="space-y-3">
               <p className="text-[11px] text-slate-400">
-                Selecciona una foto profesional curada para ingenieros y arquitectos de software:
+                {avt.presetsDesc}
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -376,7 +493,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                       </div>
                       {isChosen && (
                         <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center shadow">
-                          <Check className="w-3 h-3 stroke-[3]" />
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
                       )}
                     </button>
@@ -391,12 +508,12 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
             <form onSubmit={handleApplyUrl} className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-slate-200">
-                  URL de Imagen Externa (GitHub, Gravatar, LinkedIn o CDN)
+                  {avt.urlLabel}
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="url"
-                    placeholder="https://github.com/tu-usuario.png"
+                    placeholder={t.modals.avatarUrlPlaceholder}
                     value={customUrl}
                     onChange={(e) => setCustomUrl(e.target.value)}
                     className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500"
@@ -405,19 +522,19 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                     type="submit"
                     className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors shrink-0"
                   >
-                    Cargar
+                    {avt.loadBtn}
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Ejemplo rápido para usuarios de GitHub: <span className="font-mono text-cyan-400">https://github.com/octocat.png</span>
+                  GitHub: <span className="font-mono text-cyan-400">https://github.com/octocat.png</span>
                 </p>
               </div>
 
               {/* Quick Preset for Github */}
               <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl flex items-center justify-between">
                 <div>
-                  <span className="text-white font-semibold block">Usar avatar público de GitHub</span>
-                  <span className="text-slate-400 text-[11px]">Sincroniza directamente con un usuario de GitHub</span>
+                  <span className="text-white font-semibold block">{avt.ghPreset}</span>
+                  <span className="text-slate-400 text-[11px]">GitHub CDN</span>
                 </div>
                 <button
                   type="button"
@@ -428,7 +545,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                   }}
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium border border-slate-700"
                 >
-                  Usar GitHub Demo
+                  {avt.ghPresetBtn}
                 </button>
               </div>
             </form>
@@ -442,7 +559,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors"
           >
-            Cancelar
+            {t.common.cancel}
           </button>
 
           <button
@@ -452,7 +569,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50"
           >
             <UserCheck className="w-4 h-4" />
-            <span>Guardar Foto</span>
+            <span>{t.modals.saveAvatarBtn}</span>
           </button>
         </div>
       </div>

@@ -6,7 +6,8 @@ import {
   ExtractedCvData, 
   WorkExperience, 
   AiUsageRecord,
-  JobOffer
+  JobOffer,
+  Product
 } from "../types";
 
 const STORAGE_KEYS = {
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   EXPERIENCES: "captains_experiences_v1",
   AI_USAGE: "goal_recall_ai_usage_v1",
   JOB_OFFERS: "goal_recall_job_offers_v1",
+  PRODUCTS: "goal_recall_products_v1",
 };
 
 export const INITIAL_EXPERIENCES: WorkExperience[] = [];
@@ -358,7 +360,7 @@ export const addLog = (
     ...entry,
     experienceId: expId,
     id: "log-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
-    isPublic: entry.isPublic ?? false, // Defaults to Sandbox Privado
+    isPublic: entry.isPublic ?? false, // Defaults to Bóveda Privada (Confidencial)
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -1071,9 +1073,138 @@ export const deleteJobOffer = (id: string): void => {
   saveJobOffers(current.filter((o) => o.id !== id));
 };
 
-// --- Cloud Sync Multi-Device & Cache-Wipe Protection ---
+// --- Products & Showcase Storage Utilities ---
 
+export const INITIAL_PRODUCTS: Product[] = [
+  {
+    id: "prod-myfeedin",
+    userId: "usr-guest",
+    title: "Myfeedin",
+    tagline: "Widget Multi-Tenant de Feedback",
+    description: "Sistema de captura de feedback e integración por correo en tiempo real para aplicaciones SaaS. Widget embebible con carga asíncrona ligera.",
+    imageUrl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+    liveUrl: "https://myfeedin.com",
+    repoUrl: "https://github.com/alexmorgan/myfeedin-core",
+    techStack: ["React", "Web Components", "Firebase", "Resend", "Tailwind CSS"],
+    isPublic: true,
+    createdAt: "2026-03-15T12:00:00.000Z",
+    badge: "SaaS / Propio",
+    relatedAchievementIds: [],
+  },
+  {
+    id: "prod-sentinel",
+    userId: "usr-guest",
+    title: "CloudTrace Sentinel",
+    tagline: "Motor de Observabilidad & Detección de Anomalías p99",
+    description: "Pipeline distribuido para ingestión de telemetría en tiempo real y alertas tempranas de degradación con Redis Cluster y OpenTelemetry.",
+    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80",
+    liveUrl: "https://sentinel.cloudtrace.io",
+    repoUrl: "https://github.com/alexmorgan/cloudtrace-sentinel",
+    techStack: ["Go", "Redis Cluster", "OpenTelemetry", "Prometheus", "Docker"],
+    isPublic: true,
+    createdAt: "2026-01-20T10:30:00.000Z",
+    badge: "Open Source / Infra",
+    relatedAchievementIds: [],
+  },
+];
+
+export const getStoredProducts = (): Product[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+      return INITIAL_PRODUCTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : INITIAL_PRODUCTS;
+  } catch (e) {
+    console.error("Error reading stored products:", e);
+    return INITIAL_PRODUCTS;
+  }
+};
+
+export const saveProducts = (products: Product[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    triggerCloudSync();
+  } catch (e) {
+    console.error("Error saving products:", e);
+  }
+};
+
+export const addProduct = (product: Omit<Product, "id" | "createdAt">): Product => {
+  const current = getStoredProducts();
+  const newProduct: Product = {
+    ...product,
+    id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    createdAt: new Date().toISOString(),
+    isPublic: product.isPublic ?? true,
+  };
+  saveProducts([newProduct, ...current]);
+  return newProduct;
+};
+
+export const updateProduct = (updated: Product): void => {
+  const current = getStoredProducts();
+  const next = current.map((p) => (p.id === updated.id ? { ...updated, updatedAt: new Date().toISOString() } : p));
+  saveProducts(next);
+};
+
+export const deleteProduct = (id: string): void => {
+  const current = getStoredProducts();
+  saveProducts(current.filter((p) => p.id !== id));
+};
+
+export const toggleProductPublic = (id: string): Product | null => {
+  const current = getStoredProducts();
+  const index = current.findIndex((p) => p.id === id);
+  if (index !== -1) {
+    current[index] = {
+      ...current[index],
+      isPublic: !current[index].isPublic,
+      updatedAt: new Date().toISOString(),
+    };
+    saveProducts(current);
+    return current[index];
+  }
+  return null;
+};
+
+// --- Cloud Sync Multi-Device & Cache-Wipe Protection ---
+// Zero-Cost Spark Guardrail: Dirty Checking with Hash Diff prevents unnecessary Firestore writes
+
+function computePayloadHash(obj: any): string {
+  const str = JSON.stringify(obj);
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 33) ^ str.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16) + "_" + str.length;
+}
+
+let lastSyncedHash: string | null = null;
 let syncTimeout: any = null;
+
+export const hasUnsavedCloudChanges = (): boolean => {
+  try {
+    const user = getStoredUser();
+    const userKey = user?.email?.trim() || (user?.isCustom ? user?.id : "");
+    if (!userKey || userKey === "usr-guest") return false;
+
+    const dataSnapshot = {
+      logs: getStoredLogs(),
+      experiences: getStoredExperiences(),
+      inbox: getStoredInbox(),
+      jobOffers: getStoredJobOffers(),
+      products: getStoredProducts(),
+      user,
+    };
+    const currentHash = computePayloadHash(dataSnapshot);
+    return lastSyncedHash !== null && currentHash !== lastSyncedHash;
+  } catch {
+    return false;
+  }
+};
 
 export const triggerCloudSync = (immediate = false): void => {
   if (typeof window === "undefined") return;
@@ -1084,21 +1215,36 @@ export const triggerCloudSync = (immediate = false): void => {
       const userKey = user?.email?.trim() || (user?.isCustom ? user?.id : "");
       if (!userKey || userKey === "usr-guest") return;
 
-      const payload = {
-        version: "captains_log_v1",
-        exportedAt: new Date().toISOString(),
-        user,
+      const dataSnapshot = {
         logs: getStoredLogs(),
         experiences: getStoredExperiences(),
         inbox: getStoredInbox(),
         jobOffers: getStoredJobOffers(),
+        products: getStoredProducts(),
+        user,
       };
 
-      await fetch("/api/cloud-sync/save", {
+      const currentHash = computePayloadHash(dataSnapshot);
+      // Dirty checking: Skip network call if payload didn't change (Preserves 20,000/day Firestore quota)
+      if (lastSyncedHash === currentHash) {
+        return;
+      }
+
+      const payload = {
+        version: "captains_log_v1",
+        exportedAt: new Date().toISOString(),
+        ...dataSnapshot,
+      };
+
+      const res = await fetch("/api/cloud-sync/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userKey, payload }),
       });
+
+      if (res.ok) {
+        lastSyncedHash = currentHash;
+      }
     } catch (err) {
       console.warn("Background cloud sync notice:", err);
     }
@@ -1108,7 +1254,7 @@ export const triggerCloudSync = (immediate = false): void => {
     performSync();
   } else {
     if (syncTimeout) clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(performSync, 1200);
+    syncTimeout = setTimeout(performSync, 1500);
   }
 };
 
@@ -1138,6 +1284,9 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
       }
       if (Array.isArray(payload.jobOffers)) {
         localStorage.setItem(STORAGE_KEYS.JOB_OFFERS, JSON.stringify(payload.jobOffers));
+      }
+      if (Array.isArray(payload.products)) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(payload.products));
       }
       return true;
     }

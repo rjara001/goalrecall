@@ -34,6 +34,11 @@ import {
 } from "lucide-react";
 import { UserProfile } from "../types";
 import { useI18n } from "../i18n";
+import { 
+  DEMO_PRESETS_BY_LANG, 
+  FIRST_MATE_SAMPLES_BY_LANG, 
+  LANDING_SECTIONS 
+} from "../i18n/landingLocales";
 
 interface LandingPageProps {
   onOpenAuth: () => void;
@@ -48,7 +53,7 @@ interface LandingPageProps {
 
 interface DemoPreset {
   id: string;
-  category: "Tech 💻" | "Growth 📈" | "Negocio 💼";
+  category: string;
   label: string;
   rawInput: string;
   xyzAccomplished: string;
@@ -58,7 +63,7 @@ interface DemoPreset {
   score: number;
 }
 
-const DEMO_PRESETS: DemoPreset[] = [
+const DEMO_PRESETS_ES: DemoPreset[] = [
   {
     id: "tech-redis",
     category: "Tech 💻",
@@ -94,6 +99,42 @@ const DEMO_PRESETS: DemoPreset[] = [
   },
 ];
 
+const DEMO_PRESETS_EN: DemoPreset[] = [
+  {
+    id: "tech-redis",
+    category: "Tech 💻",
+    label: "Backend & Concurrency",
+    rawInput: "Fixed Redis connection bottleneck for checkout payment transactions during black friday",
+    xyzAccomplished: "Accomplished 92% checkout latency drop during Black Friday peak traffic",
+    xyzMeasured: "as measured by p99 telemetry reduction from 3.2s to 240ms",
+    xyzByDoing: "by re-architecting Redis connection pooling with an asynchronous saga pipeline.",
+    metricBadge: "p99 Latency: 3.2s → 240ms (-92%)",
+    score: 98,
+  },
+  {
+    id: "growth-onboarding",
+    category: "Growth 📈",
+    label: "Growth & Acquisition",
+    rawInput: "Optimized the onboarding funnel reducing CAC and doubled qualified signups",
+    xyzAccomplished: "Accomplished 60% CAC reduction ($45 → $18 USD) and 2.1x increase in user activations",
+    xyzMeasured: "as measured by Mixpanel funnel dropoff analytics across Q3",
+    xyzByDoing: "by redesigning frictionless 2-step onboarding and executing automated behavioral triggers.",
+    metricBadge: "CAC: $45 → $18 USD (-60%) · Leads: 2.1x",
+    score: 95,
+  },
+  {
+    id: "sales-enterprise",
+    category: "Business 💼",
+    label: "Sales & Enterprise",
+    rawInput: "Closed 3 enterprise contracts reducing sales cycle and added $420k ARR",
+    xyzAccomplished: "Accomplished $420,000 USD in net new ARR and shortened deal closure time by 61%",
+    xyzMeasured: "as measured by average sales cycle shortening from 90 to 35 days",
+    xyzByDoing: "by deploying customized technical proofs-of-concept and structured C-level business cases.",
+    metricBadge: "ARR: +$420k USD · Cycle: 90d → 35d",
+    score: 96,
+  },
+];
+
 interface ChatSample {
   question: string;
   answer: string;
@@ -101,7 +142,7 @@ interface ChatSample {
   linkText: string;
 }
 
-const FIRST_MATE_SAMPLES: ChatSample[] = [
+const FIRST_MATE_SAMPLES_ES: ChatSample[] = [
   {
     question: "¿Tiene experiencia optimizando latencia en microservicios de pago?",
     answer: "Sí. En su último hito en ClientX migró la pasarela de pagos a una saga asíncrona sobre Redis, reduciendo la latencia p99 de 3.2s a 240ms (-92%) durante picos de Black Friday sin ninguna transacción duplicada.",
@@ -122,6 +163,27 @@ const FIRST_MATE_SAMPLES: ChatSample[] = [
   },
 ];
 
+const FIRST_MATE_SAMPLES_EN: ChatSample[] = [
+  {
+    question: "Do they have experience optimizing latency in payment microservices?",
+    answer: "Yes. In their latest milestone at ClientX, they migrated the payment gateway to an asynchronous saga pipeline over Redis, cutting p99 latency from 3.2s to 240ms (-92%) during Black Friday traffic spikes without a single duplicate transaction.",
+    badge: "Verified p99 Metric (-92%)",
+    linkText: "ClientX · Checkout Revamp",
+  },
+  {
+    question: "How did they impact retention or infrastructure cost metrics?",
+    answer: "They slashed cloud infrastructure expenses by 38% by consolidating microfrontends with Module Federation and shrinking the initial bundle from 1.8MB to 420kB, lifting the Core Web Vitals score to 96/100.",
+    badge: "Cloud Cost: -38% Monthly",
+    linkText: "Fintech Core · Web Modernization",
+  },
+  {
+    question: "What security and compliance frameworks do they master?",
+    answer: "They led the remediation of P0 vulnerabilities in JWT handling and secrets storage, successfully certifying the SOC2 Tipo II audit with zero findings.",
+    badge: "SOC2 Type II: 0 Findings",
+    linkText: "Internal Security · Auth Pipeline",
+  },
+];
+
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   onEnterQuarters,
@@ -132,15 +194,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   user,
   logsCount = 0,
 }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const demoPresets = DEMO_PRESETS_BY_LANG[language] || DEMO_PRESETS_BY_LANG.en;
+  const firstMateSamples = FIRST_MATE_SAMPLES_BY_LANG[language] || FIRST_MATE_SAMPLES_BY_LANG.en;
+  const ls = LANDING_SECTIONS[language] || LANDING_SECTIONS.en;
+
   // Live Playground State (REQ-02)
   const [selectedPresetId, setSelectedPresetId] = useState<string>("tech-redis");
-  const [customInput, setCustomInput] = useState<string>(DEMO_PRESETS[0].rawInput);
+  const [customInput, setCustomInput] = useState<string>(demoPresets[0].rawInput);
   const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
   // Active preset reference
-  const activePreset = DEMO_PRESETS.find((p) => p.id === selectedPresetId) || DEMO_PRESETS[0];
+  const activePreset = demoPresets.find((p) => p.id === selectedPresetId) || demoPresets[0];
 
   const handleSelectPreset = (preset: DemoPreset) => {
     setSelectedPresetId(preset.id);
@@ -164,7 +230,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   // First Mate Interactive Chat State (REQ-04)
   const [activeChatIndex, setActiveChatIndex] = useState<number>(0);
-  const activeChat = FIRST_MATE_SAMPLES[activeChatIndex];
+  const activeChat = firstMateSamples[activeChatIndex] || firstMateSamples[0];
 
   return (
     <div className="space-y-24 max-w-7xl mx-auto pb-24 text-slate-100">
@@ -183,13 +249,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <div>
               <p className="font-bold text-white text-sm flex items-center gap-2">
-                <span>Hola, {user.name}</span>
+                <span>{ls.userBanner.hello}, {user.name}</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60">
-                  Sesión Activa
+                  {ls.userBanner.activeSession}
                 </span>
               </p>
               <p className="text-xs text-slate-300">
-                Tienes <strong className="text-cyan-300 font-mono">{logsCount} logros</strong> respaldados en tu bitácora privada.
+                {ls.userBanner.backupSummary(logsCount)}
               </p>
             </div>
           </div>
@@ -288,7 +354,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="flex flex-wrap items-center gap-5 pt-2 text-xs text-slate-400 font-mono">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Cloud Sync Privado (Multi-dispositivo)</span>
+                <span>{language === "en" ? "Private Cloud Sync (Multi-Device)" : language === "pt" ? "Cloud Sync Privado (Multi-dispositivo)" : language === "fr" ? "Cloud Sync Privé (Multi-appareils)" : language === "de" ? "Privater Cloud Sync (Multi-Device)" : language === "ja" ? "プライベートCloud Sync（複数端末）" : "Cloud Sync Privado (Multi-dispositivo)"}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-cyan-400" />
@@ -307,25 +373,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               
               {/* Live Badge & Header */}
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-mono font-bold text-white tracking-wider">
-                    SIMULADOR INTERACTIVO · FÓRMULA GOOGLE XYZ
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded font-bold">
-                  PLAYGROUND EN VIVO
-                </span>
-              </div>
+                 <div className="flex items-center gap-2">
+                   <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-xs font-mono font-bold text-white tracking-wider">
+                     {t.landing.tryLiveBadge}
+                   </span>
+                 </div>
+                 <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded font-bold uppercase">
+                   {t.landing.tryLiveBadge}
+                 </span>
+               </div>
 
               {/* Preset Selector Buttons */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-mono text-slate-400 flex items-center justify-between">
-                  <span>1. Selecciona un ejemplo o escribe tu nota rápida:</span>
-                  <span className="text-cyan-400 text-[10px]">Multi-disciplina activa</span>
+                  <span>{t.landing.tryLiveSubtitle}</span>
+                  <span className="text-cyan-400 text-[10px]">{t.common.status}: Pro</span>
                 </label>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {DEMO_PRESETS.map((preset) => (
+                  {demoPresets.map((preset) => (
                     <button
                       key={preset.id}
                       onClick={() => handleSelectPreset(preset)}
@@ -349,7 +415,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     type="text"
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
-                    placeholder="Escribe tu logro rápido de 15 segundos..."
+                    placeholder={t.landing.rawDraftPlaceholder}
                     className="w-full bg-[#070A12] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono pr-28"
                   />
                   <button
@@ -357,7 +423,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-sm active:scale-95"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Sintetizar</span>
+                    <span>{isSynthesizing ? t.landing.synthesizing : t.landing.synthesizeBtn.split(" ")[0]}</span>
                   </button>
                 </div>
               </div>
@@ -371,7 +437,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-mono text-[11px] font-bold text-cyan-400 flex items-center gap-1.5">
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    RESULTADO SINTETIZADO (GOOGLE XYZ):
+                    {t.landing.formatGoogleXyz}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded font-bold">
@@ -380,17 +446,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <button
                       onClick={handleCopyBullet}
                       className="flex items-center gap-1 text-[11px] font-mono text-cyan-400 hover:text-white px-2 py-0.5 bg-slate-900 border border-slate-700 rounded transition-colors"
-                      title="Copiar bullet sintetizado"
+                      title={t.common.copy}
                     >
                       {copied ? (
                         <>
                           <Check className="w-3 h-3 text-emerald-400" />
-                          <span className="text-emerald-400">¡Copiado!</span>
+                          <span className="text-emerald-400">{t.common.copied}</span>
                         </>
                       ) : (
                         <>
                           <Copy className="w-3 h-3" />
-                          <span>Copiar</span>
+                          <span>{t.common.copy}</span>
                         </>
                       )}
                     </button>
@@ -405,15 +471,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {/* Formula Breakdown Tags */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[10px] font-mono">
                   <div className="p-2 rounded bg-slate-900/80 border border-slate-800">
-                    <span className="text-cyan-400 font-bold block">[X] Accomplished:</span>
+                    <span className="text-cyan-400 font-bold block">{t.landing.metricAccomplished}:</span>
                     <span className="text-slate-300 line-clamp-1">{activePreset.xyzAccomplished}</span>
                   </div>
                   <div className="p-2 rounded bg-slate-900/80 border border-slate-800">
-                    <span className="text-emerald-400 font-bold block">[Y] Measured By:</span>
+                    <span className="text-emerald-400 font-bold block">{t.landing.metricMeasured}:</span>
                     <span className="text-slate-300 line-clamp-1">{activePreset.xyzMeasured}</span>
                   </div>
                   <div className="p-2 rounded bg-slate-900/80 border border-slate-800">
-                    <span className="text-purple-400 font-bold block">[Z] By Doing:</span>
+                    <span className="text-purple-400 font-bold block">{t.landing.metricByDoing}:</span>
                     <span className="text-slate-300 line-clamp-1">{activePreset.xyzByDoing}</span>
                   </div>
                 </div>
@@ -422,7 +488,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="p-2 bg-slate-950/80 border border-emerald-900/50 rounded-lg flex items-center justify-between text-[11px] text-emerald-300 font-mono">
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Métrica de Impacto Verificada:</span>
+                    <span>{t.common.metrics}:</span>
                   </div>
                   <span className="font-bold">{activePreset.metricBadge}</span>
                 </div>
@@ -437,7 +503,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   onClick={onOpenQuickLog || onEnterQuarters}
                   className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1"
                 >
-                  <span>Abrir Captura Real</span>
+                  <span>{ls.userBanner.openCapture}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -451,13 +517,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="space-y-6 pt-6 border-t border-slate-800/80">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
-            El Problema Real
+            {ls.painPoint.badge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            ¿Por qué la mayoría no tiene su Brag Document al día?
+            {ls.painPoint.title}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Los entornos corporativos y la rutina diaria hacen que registrar tus logros sea una pesadilla burocrática.
+            {ls.painPoint.subtitle}
           </p>
         </div>
 
@@ -468,10 +534,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <Laptop className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white">
-              1. Notas Dispersas y Pérdida de Datos
+              {ls.painPoint.card1Title}
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Anotar victorias en chats con uno mismo, blocs de notas o documentos sueltos termina en información perdida u olvidada. Goal Recall centraliza tu bitácora profesional con <strong>Cloud Sync seguro</strong> y respaldo automático multi-dispositivo.
+              {ls.painPoint.card1Desc}
             </p>
           </div>
 
@@ -480,10 +546,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <Clock className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white">
-              2. Amnesia de Fin de Año
+              {ls.painPoint.card2Title}
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              En noviembre, cuando llega la autoevaluación o buscas un nuevo puesto, nadie recuerda el bug P0 de concurrencia que resolviste un domingo de marzo ni la optimización de base de datos que redujo costos.
+              {ls.painPoint.card2Desc}
             </p>
           </div>
 
@@ -492,10 +558,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <FileText className="w-5 h-5" />
             </div>
             <h3 className="text-base font-bold text-white">
-              3. Difícil de Traducir a CV
+              {ls.painPoint.card3Title}
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Tener notas desordenadas no sirve si no están redactadas en métricas cuantitativas: los reclutadores y comités de ascenso buscan <strong>resultados medibles</strong>, no solo listas de herramientas.
+              {ls.painPoint.card3Desc}
             </p>
           </div>
 
@@ -506,13 +572,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="features" className="space-y-6 pt-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-            Arquitectura de Solución
+            {ls.bentoGrid.badge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Todo lo que necesitas para tu progreso profesional
+            {ls.bentoGrid.title}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Diseñado meticulosamente para eliminar la fricción entre tu trabajo diario y tu portafolio público.
+            {ls.bentoGrid.subtitle}
           </p>
         </div>
 
@@ -526,53 +592,53 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <Terminal className="w-5 h-5" />
               </div>
               <h3 className="text-xl font-bold text-white">
-                01. Captura Instantánea con Atajo Global (⌘K) & Dictado por Voz
+                {ls.bentoGrid.card1Title}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Pulsa <kbd className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-xs text-cyan-300 border border-slate-700">⌘K</kbd> desde cualquier lugar. Dicta tus notas usando la <strong>Web Speech API nativa</strong> directamente desde tu micrófono sin salir de tu flujo mental.
+                {ls.bentoGrid.card1Desc}
               </p>
               <ul className="space-y-2 text-xs text-slate-400 pt-2">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <span>Autocompletado reactivo de clientes, empresas y roles anteriores</span>
+                  <span>{ls.bentoGrid.card1Bullet1}</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <span>Categorías multi-disciplina (Tech, Marketing, Producto, Ventas) o crea las tuyas al vuelo</span>
+                  <span>{ls.bentoGrid.card1Bullet2}</span>
                 </li>
               </ul>
             </div>
             <div className="pt-4 flex items-center justify-between text-xs font-mono">
-              <span className="text-cyan-400 font-bold">Tiempo de registro: &lt; 30 segundos</span>
+              <span className="text-cyan-400 font-bold">{ls.bentoGrid.card1Time}</span>
               <button
                 onClick={onOpenQuickLog || onEnterQuarters}
                 className="text-cyan-400 hover:text-white flex items-center gap-1 font-sans font-semibold"
               >
-                <span>Probar ahora (⌘K)</span>
+                <span>{ls.bentoGrid.card1Action}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Card 2: Sandbox Privado (5 Cols) */}
+          {/* Card 2: Bóveda Privada (5 Cols) */}
           <div className="md:col-span-5 p-6 sm:p-8 bg-slate-900/70 border border-slate-800 rounded-3xl space-y-4 flex flex-col justify-between hover:border-slate-700 transition-colors">
             <div className="space-y-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
                 <Lock className="w-5 h-5" />
               </div>
               <h3 className="text-xl font-bold text-white">
-                02. Sandbox Privado & Cero Fugas de IP
+                {ls.bentoGrid.card2Title}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Por defecto, toda nota nace privada y protegida en tu cuenta. Escribe libremente sobre incidencias críticas y detalles técnicos bajo NDA corporativo sin miedo a filtraciones.
+                {ls.bentoGrid.card2Desc}
               </p>
               <p className="text-xs text-slate-400">
-                Publicas a tu vitrina únicamente lo que tú decidas con el toggle manual <span className="text-emerald-400 font-mono">[ Publicar ]</span>.
+                {ls.bentoGrid.card2ToggleNote}
               </p>
             </div>
             <div className="pt-2 text-xs font-mono text-emerald-400 flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4" />
-              <span>Aislamiento 100% garantizado en navegador</span>
+              <span>{ls.bentoGrid.card2Isolation}</span>
             </div>
           </div>
 
@@ -583,13 +649,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <Sparkles className="w-5 h-5" />
               </div>
               <h3 className="text-xl font-bold text-white">
-                03. Motor de Síntesis Google XYZ & Fichas STAR
+                {ls.bentoGrid.card3Title}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Transforma cualquier registro técnico en un bullet de CV estructurado según el estándar de Google: <em>"Accomplished [X] as measured by [Y] by doing [Z]"</em>.
+                {ls.bentoGrid.card3Desc1}
               </p>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Genera fichas para entrevistas conductuales organizadas en <strong>Situación, Tarea, Acción y Resultado</strong> con un clic.
+                {ls.bentoGrid.card3Desc2}
               </p>
             </div>
             <div className="pt-2 flex items-center gap-3">
@@ -597,7 +663,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={onEnterQuarters}
                 className="text-xs text-purple-300 hover:text-purple-200 font-bold flex items-center gap-1"
               >
-                <span>Probar sintetizador de CV</span>
+                <span>{ls.bentoGrid.card3Action}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -610,21 +676,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <Bot className="w-5 h-5" />
               </div>
               <h3 className="text-xl font-bold text-white">
-                04. Public Deck & Agente de IA "First Mate"
+                {ls.bentoGrid.card4Title}
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Tu vitrina pública ejecutiva donde reclutadores y clientes exploran tus logros verificados.
+                {ls.bentoGrid.card4Desc1}
               </p>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                El agente de chat <strong>First Mate</strong> responde preguntas de reclutadores fundamentándose <em>únicamente en los logros que hayas hecho públicos</em> y enlaza tarjetas de citas como prueba real.
+                {ls.bentoGrid.card4Desc2}
               </p>
             </div>
             <div className="pt-2 flex items-center gap-3">
               <button
                 onClick={onEnterPublicDeck}
-                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/40 hover:border-emerald-700 transition-all"
               >
-                <span>Explorar Public Deck en vivo</span>
+                <span>{ls.bentoGrid.card4Action}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -639,13 +705,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div>
                   <h4 className="text-base font-bold text-white flex items-center gap-2">
-                    <span>Catálogo Exhaustivo de Características & Micro-Simuladores</span>
+                    <span>{ls.catalogBanner.title}</span>
                     <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded-full border border-purple-800/60 font-semibold">
-                      12 Módulos
+                      {ls.catalogBanner.badge}
                     </span>
                   </h4>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    Descubre el constructor de fórmula Google XYZ, desglose STAR, ingesta de CV, Cloud Sync y comparativa técnica frente a Notion y Word.
+                    {ls.catalogBanner.subtitle}
                   </p>
                 </div>
               </div>
@@ -655,7 +721,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={onOpenFeatures}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-900/40 transition-all hover:scale-105 active:scale-95 shrink-0"
               >
-                <span>Explorar Catálogo de Características</span>
+                <span>{ls.catalogBanner.button}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -668,13 +734,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="space-y-6 pt-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
-            Diferencial Exclusivo
+            {ls.firstMate.badge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Un Asistente de IA que responde por ti ante reclutadores
+            {ls.firstMate.title}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Reclutadores y clientes pueden interrogar a First Mate sobre tu experiencia real. Prueba las preguntas interactivas a continuación:
+            {ls.firstMate.subtitle}
           </p>
         </div>
 
@@ -688,11 +754,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
               <div>
                 <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                  <span>First Mate · Career AI Agent</span>
+                  <span>{ls.firstMate.assistantTitle}</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Responde basándose exclusivamente en los logros verificados de la vitrina pública.
+                  {ls.firstMate.statusOnline}
                 </p>
               </div>
             </div>
@@ -702,7 +768,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               className="px-3.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono text-xs rounded-lg transition-colors flex items-center gap-1.5 self-start sm:self-auto"
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Ver Vitrina Pública Real</span>
+              <span>{ls.firstMate.viewPublicDeckBtn}</span>
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
@@ -710,10 +776,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Interactive Question Prompts */}
           <div className="space-y-2">
             <span className="text-[11px] font-mono text-slate-400 block">
-              Haz clic en una pregunta para simular la respuesta del agente:
+              {ls.firstMate.promptLabel}
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {FIRST_MATE_SAMPLES.map((sample, idx) => (
+              {firstMateSamples.map((sample, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveChatIndex(idx)}
@@ -776,41 +842,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="workflow" className="space-y-8 pt-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-            Flujo de Trabajo
+            {ls.workflow.badge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Cómo encaja en tu rutina diaria
+            {ls.workflow.title}
           </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3 hover:border-slate-700 transition-colors">
             <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded">
-              PASO 01
+              {ls.workflow.step1Badge}
             </span>
-            <h4 className="text-base font-bold text-white">Loggea en Caliente</h4>
+            <h4 className="text-base font-bold text-white">{ls.workflow.step1Title}</h4>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Terminas un sprint, despliegas un parche canario o reduces consumo de CPU. Abres la app con <strong>⌘K</strong> y capturas la métrica en 30 segundos.
+              {ls.workflow.step1Desc}
             </p>
           </div>
 
           <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3 hover:border-slate-700 transition-colors">
             <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950 px-2.5 py-1 rounded">
-              PASO 02
+              {ls.workflow.step2Badge}
             </span>
-            <h4 className="text-base font-bold text-white">Selecciona qué Compartir</h4>
+            <h4 className="text-base font-bold text-white">{ls.workflow.step2Title}</h4>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Tus detalles privados se quedan en tu Sandbox confidencial. Pulsa "Publicar" únicamente en las victorias que deseas exponer en tu vitrina pública.
+              {ls.workflow.step2Desc}
             </p>
           </div>
 
           <div className="p-6 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-3 hover:border-slate-700 transition-colors">
             <span className="text-xs font-mono font-bold text-purple-400 bg-purple-950 px-2.5 py-1 rounded">
-              PASO 03
+              {ls.workflow.step3Badge}
             </span>
-            <h4 className="text-base font-bold text-white">Genera Oportunidades</h4>
+            <h4 className="text-base font-bold text-white">{ls.workflow.step3Title}</h4>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Copia bullets Google XYZ para tu CV, exporta fichas STAR para entrevistas y comparte el enlace de tu Public Deck con reclutadores.
+              {ls.workflow.step3Desc}
             </p>
           </div>
         </div>
@@ -823,14 +889,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Respaldo Continuo & Privacidad por Diseño (Cero Pérdida de Datos)
+                {ls.cloudSync.badge}
               </span>
               <h3 className="text-xl sm:text-2xl font-bold text-white">
-                Arquitectura Cloud Sync: Tus logros siempre respaldados en la nube con sincronización multi-dispositivo
+                {ls.cloudSync.title}
               </h3>
             </div>
             <span className="text-xs font-mono text-cyan-300 bg-cyan-950 px-3 py-1.5 rounded-lg border border-cyan-800/60 self-start sm:self-auto font-bold">
-              CLOUD-SYNC-24/7
+              {ls.cloudSync.tag}
             </span>
           </div>
 
@@ -840,30 +906,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2 text-cyan-400 font-bold text-xs font-mono">
                 <Cloud className="w-4 h-4" />
-                <span>Sincronización en la Nube</span>
+                <span>{ls.cloudSync.card1Title}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Tus notas, logros y configuraciones se respaldan automáticamente en tu cuenta. Si limpias la caché o formateas tu equipo, tus datos siguen intactos.
+                {ls.cloudSync.card1Desc}
               </p>
             </div>
 
             <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-xs font-mono">
                 <Lock className="w-4 h-4" />
-                <span>Privacidad Estricta por Cuenta</span>
+                <span>{ls.cloudSync.card2Title}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Tus borradores, notas sucias y salarios están aislados bajo tu propia sesión. Cero fugas ni exposición a terceros o telemetría indebida.
+                {ls.cloudSync.card2Desc}
               </p>
             </div>
 
             <div className="p-4 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs font-mono">
                 <Eye className="w-4 h-4" />
-                <span>Control Manual de Vitrina</span>
+                <span>{ls.cloudSync.card3Title}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Únicamente las tarjetas que marques explícitamente como <strong className="text-white">Públicas</strong> se sincronizan para reclutadores y First Mate.
+                {ls.cloudSync.card3Desc}
               </p>
             </div>
 
@@ -875,13 +941,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="comparison" className="space-y-6 pt-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-            Comparativa Detallada
+            {t.landing.comparisonTitle}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Goal Recall frente a herramientas tradicionales
+            {t.landing.comparisonTitle}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Por qué Notion, hojas de cálculo o editores de texto no resuelven la visibilidad del impacto profesional.
+            {t.landing.comparisonSubtitle}
           </p>
         </div>
 
@@ -889,54 +955,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <table className="w-full text-xs text-left border-collapse border border-slate-800 rounded-2xl overflow-hidden">
             <thead className="bg-slate-900 text-slate-300 font-mono text-[11px] border-b border-slate-800">
               <tr>
-                <th className="p-4 font-bold">Capacidad Estratégica</th>
-                <th className="p-4 text-slate-400">Notion / Google Docs</th>
-                <th className="p-4 text-slate-400">Hojas de Cálculo</th>
-                <th className="p-4 text-cyan-300 bg-cyan-950/60 font-bold">Goal Recall</th>
+                <th className="p-4 font-bold">{t.landing.tableFeature}</th>
+                <th className="p-4 text-slate-400">{t.landing.tableLinkedIn}</th>
+                <th className="p-4 text-slate-400">{t.landing.tableDocs}</th>
+                <th className="p-4 text-cyan-300 bg-cyan-950/60 font-bold">{t.landing.tableGoalRecall}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80 bg-slate-950/40 font-sans">
               <tr>
-                <td className="p-4 font-semibold text-white">Captura en 30s con Atajo Global (⌘K) y Voz</td>
-                <td className="p-4 text-slate-500">Lento (buscar página)</td>
-                <td className="p-4 text-slate-500">Tedioso</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Sí (Atajo ⌘K + Voz nativa)</td>
+                <td className="p-4 font-semibold text-white">{t.landing.comp1Feature}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp1LinkedIn}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp1Docs}</td>
+                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">{t.landing.comp1GoalRecall}</td>
               </tr>
               <tr>
-                <td className="p-4 font-semibold text-white">Sincronización Multi-dispositivo y Protección Anti-pérdida</td>
-                <td className="p-4 text-slate-500">Depende de cuenta</td>
-                <td className="p-4 text-slate-500">Manual / Desordenado</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Sí (Cloud Sync 24/7 + Export JSON)</td>
+                <td className="p-4 font-semibold text-white">{t.landing.comp2Feature}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp2LinkedIn}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp2Docs}</td>
+                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">{t.landing.comp2GoalRecall}</td>
               </tr>
               <tr>
-                <td className="p-4 font-semibold text-white">Generador Automático de Bullets Google XYZ</td>
-                <td className="p-4 text-slate-500">Manual / Desestructurado</td>
-                <td className="p-4 text-slate-500">No disponible</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Automático en 1 Clic</td>
+                <td className="p-4 font-semibold text-white">{t.landing.comp3Feature}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp3LinkedIn}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp3Docs}</td>
+                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">{t.landing.comp3GoalRecall}</td>
               </tr>
               <tr>
-                <td className="p-4 font-semibold text-white">Fichas STAR para Entrevistas Conductuales</td>
-                <td className="p-4 text-slate-500">Redacción manual</td>
-                <td className="p-4 text-slate-500">No</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Generación Automática STAR</td>
-              </tr>
-              <tr>
-                <td className="p-4 font-semibold text-white">Agente de IA Seguro para Reclutadores</td>
-                <td className="p-4 text-slate-500">No disponible</td>
-                <td className="p-4 text-slate-500">No</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">First Mate Integrado</td>
-              </tr>
-              <tr>
-                <td className="p-4 font-semibold text-white">Aislamiento Sandbox Privado vs Vitrina Pública</td>
-                <td className="p-4 text-slate-500">Riesgo de fuga involuntaria</td>
-                <td className="p-4 text-slate-500">Todo o nada</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Control Granular por Log</td>
-              </tr>
-              <tr>
-                <td className="p-4 font-semibold text-white">Respaldo Portable y Soberanía de Datos</td>
-                <td className="p-4 text-slate-500">Exportación compleja</td>
-                <td className="p-4 text-slate-500">Formato plano</td>
-                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">Exportación / Importación JSON</td>
+                <td className="p-4 font-semibold text-white">{t.landing.comp4Feature}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp4LinkedIn}</td>
+                <td className="p-4 text-slate-500">{t.landing.comp4Docs}</td>
+                <td className="p-4 text-emerald-400 font-bold bg-cyan-950/20">{t.landing.comp4GoalRecall}</td>
               </tr>
             </tbody>
           </table>
@@ -947,13 +995,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="testimonials" className="space-y-6 pt-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-            Testimonios Verificados
+            {ls.testimonials.badge}
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Validado por ingenieros, Tech Leads y especialistas
+            {ls.testimonials.title}
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Resultados profesionales tangibles demostrados en evaluaciones salariales y procesos de selección.
+            {ls.testimonials.subtitle}
           </p>
         </div>
 
@@ -964,10 +1012,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="space-y-3">
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-mono text-[11px] font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>+18% Aumento Salarial Aprobado</span>
+                <span>{ls.testimonials.t1Badge}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed italic">
-                "En mi evaluación de ascenso a Staff Engineer en una fintech líder, usé el exportador STAR de Goal Recall. Pude justificar una reducción del 92% en latencia y mi aumento salarial con evidencia exacta fechada mes a mes."
+                "{ls.testimonials.t1Quote}"
               </p>
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -976,12 +1024,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   DS
                 </div>
                 <div>
-                  <p className="font-bold text-white text-xs">Diego Santana</p>
-                  <p className="text-[10px] text-slate-400 font-mono">Staff Systems Architect @ Fintech</p>
+                  <p className="font-bold text-white text-xs">{ls.testimonials.t1Author}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{ls.testimonials.t1Role}</p>
                 </div>
               </div>
               <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                <Linkedin className="w-3 h-3" /> Verificado
+                <Linkedin className="w-3 h-3" /> {ls.testimonials.verified}
               </span>
             </div>
           </div>
@@ -991,10 +1039,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="space-y-3">
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 font-mono text-[11px] font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Privacidad & Respaldo Multi-dispositivo</span>
+                <span>{ls.testimonials.t2Badge}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed italic">
-                "Trabajo en consultoría para banca y fintechs. Tener mi bitácora con captura rápida por voz y respaldo continuo en la nube me salvó de olvidar meses de trabajo, manteniendo mis notas privadas 100% protegidas y accesibles desde cualquier equipo."
+                "{ls.testimonials.t2Quote}"
               </p>
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -1003,12 +1051,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   CM
                 </div>
                 <div>
-                  <p className="font-bold text-white text-xs">Carla Méndez</p>
-                  <p className="text-[10px] text-slate-400 font-mono">Senior Cloud & DevOps Consultant</p>
+                  <p className="font-bold text-white text-xs">{ls.testimonials.t2Author}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{ls.testimonials.t2Role}</p>
                 </div>
               </div>
               <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                <Linkedin className="w-3 h-3" /> Verificado
+                <Linkedin className="w-3 h-3" /> {ls.testimonials.verified}
               </span>
             </div>
           </div>
@@ -1018,10 +1066,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="space-y-3">
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/60 text-purple-300 font-mono text-[11px] font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Oferta Aceptada en Startup Serie B</span>
+                <span>{ls.testimonials.t1Badge}</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed italic">
-                "Compartí mi enlace de Public Deck con dos recruiters en LinkedIn. Ambos me felicitaron por la interactividad de First Mate respondiendo sobre mi experiencia real con microfrontends y caching."
+                "{ls.testimonials.t1Quote}"
               </p>
             </div>
             <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
@@ -1030,12 +1078,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   AN
                 </div>
                 <div>
-                  <p className="font-bold text-white text-xs">Álvaro Navarro</p>
-                  <p className="text-[10px] text-slate-400 font-mono">Lead Frontend & Product Engineer</p>
+                  <p className="font-bold text-white text-xs">{ls.testimonials.t1Author}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{ls.testimonials.t1Role}</p>
                 </div>
               </div>
               <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                <Linkedin className="w-3 h-3" /> Verificado
+                <Linkedin className="w-3 h-3" /> {ls.testimonials.verified}
               </span>
             </div>
           </div>
@@ -1047,10 +1095,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="p-8 sm:p-12 bg-gradient-to-br from-cyan-950/50 via-slate-900 to-emerald-950/50 border border-cyan-800/40 rounded-3xl text-center space-y-6 relative overflow-hidden shadow-2xl">
         <div className="max-w-2xl mx-auto space-y-3 relative z-10">
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Toma el mando de tu trayectoria hoy mismo.
+            {t.landing.heroTitlePrefix} {t.landing.heroTitleHighlight}
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Nunca más permitas que tus horas de esfuerzo profesional queden olvidadas o sepultadas bajo el ajetreo diario.
+            {t.landing.heroDescription}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-4">
@@ -1059,13 +1107,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 active:scale-95"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Probar en Sandbox (⌘K)</span>
+              <span>{ls.cta.tryPrivateVault}</span>
             </button>
             <button
               onClick={onOpenAuth}
               className="w-full sm:w-auto px-7 py-3.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-semibold text-sm rounded-xl transition-all"
             >
-              <span>Conectar con Google</span>
+              <span>{ls.cta.connectGoogle}</span>
             </button>
           </div>
         </div>
@@ -1078,32 +1126,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Column 1: Producto */}
           <div className="space-y-3">
             <p className="font-bold text-white font-mono text-[11px] tracking-wider uppercase">
-              Producto
+              {ls.footer.col1Title}
             </p>
             <ul className="space-y-2">
               <li>
                 <button onClick={onOpenQuickLog || onEnterQuarters} className="hover:text-cyan-300 transition-colors">
-                  Bitácora Privada (⌘K)
+                  {ls.footer.col1Item1}
                 </button>
               </li>
               <li>
                 <button onClick={onEnterQuarters} className="hover:text-cyan-300 transition-colors">
-                  Sintetizador Google XYZ
+                  {ls.footer.col1Item2}
                 </button>
               </li>
               <li>
                 <button onClick={onEnterQuarters} className="hover:text-cyan-300 transition-colors">
-                  Fichas STAR para Entrevistas
+                  {ls.footer.col1Item3}
                 </button>
               </li>
               <li>
                 <button onClick={onEnterPublicDeck} className="hover:text-cyan-300 transition-colors">
-                  Vitrina Pública (Public Deck)
+                  {ls.footer.col1Item4}
                 </button>
               </li>
               <li>
                 <button onClick={onEnterPublicDeck} className="hover:text-cyan-300 transition-colors">
-                  Agente First Mate AI
+                  {ls.footer.col1Item5}
                 </button>
               </li>
             </ul>
@@ -1112,23 +1160,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Column 2: Seguridad & Privacidad */}
           <div className="space-y-3">
             <p className="font-bold text-white font-mono text-[11px] tracking-wider uppercase">
-              Privacidad & Seguridad
+              {ls.footer.col2Title}
             </p>
             <ul className="space-y-2">
               <li>
-                <span className="text-slate-300">Sincronización en la Nube</span>
+                <span className="text-slate-300">{ls.footer.col2Item1}</span>
               </li>
               <li>
-                <span className="text-slate-300">Respaldo Continuo Multi-dispositivo</span>
+                <span className="text-slate-300">{ls.footer.col2Item2}</span>
               </li>
               <li>
-                <span className="text-slate-300">Sandbox Aislado por Defecto</span>
+                <span className="text-slate-300">{ls.footer.col2Item3}</span>
               </li>
               <li>
-                <span className="text-slate-300">Exportación en JSON Portable</span>
+                <span className="text-slate-300">{ls.footer.col2Item4}</span>
               </li>
               <li>
-                <span className="text-slate-300">Compatibilidad con NDAs</span>
+                <span className="text-slate-300">{ls.footer.col2Item5}</span>
               </li>
             </ul>
           </div>
@@ -1136,27 +1184,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Column 3: Metodologías & Recursos */}
           <div className="space-y-3">
             <p className="font-bold text-white font-mono text-[11px] tracking-wider uppercase">
-              Metodologías
+              {ls.footer.col3Title}
             </p>
             <ul className="space-y-2">
               <li>
                 <button onClick={onOpenDocs} className="hover:text-cyan-300 transition-colors">
-                  Guía de Brag Documents
+                  {ls.footer.col3Item1}
                 </button>
               </li>
               <li>
                 <button onClick={onOpenDocs} className="hover:text-cyan-300 transition-colors">
-                  Fórmula Google XYZ
+                  {ls.footer.col3Item2}
                 </button>
               </li>
               <li>
                 <button onClick={onOpenDocs} className="hover:text-cyan-300 transition-colors">
-                  Método STAR para Entrevistas
+                  {ls.footer.col3Item3}
                 </button>
               </li>
               <li>
                 <button onClick={onOpenDocs} className="hover:text-cyan-300 transition-colors">
-                  Importador de CV (PDF/DOCX)
+                  {ls.footer.col3Item4}
                 </button>
               </li>
             </ul>
@@ -1165,21 +1213,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Column 4: Ecosistema & Estándares */}
           <div className="space-y-3">
             <p className="font-bold text-white font-mono text-[11px] tracking-wider uppercase">
-              Estándares
+              {ls.footer.col4Title}
             </p>
             <div className="space-y-2">
               <p className="text-[11px] text-slate-400">
-                Construido con React, Tailwind CSS, TypeScript y Web Speech API.
+                {ls.footer.col4Desc}
               </p>
               <div className="flex flex-wrap gap-1.5 pt-1">
                 <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-cyan-400">
-                  Cloud Sync
+                  {ls.footer.tag1}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-emerald-400">
-                  Multi-dispositivo
+                  {ls.footer.tag2}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-purple-400">
-                  Zero-Tracking
+                  {ls.footer.tag3}
                 </span>
               </div>
             </div>
@@ -1189,11 +1237,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Bottom copyright line */}
         <div className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} Goal Recall. Todos los derechos reservados. Tus datos permanecen en tu control.</p>
+          <p>© {new Date().getFullYear()} {ls.footer.copyright}</p>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Sistemas Operativos & Privados
+              {ls.footer.status}
             </span>
           </div>
         </div>

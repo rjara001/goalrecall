@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan arquitectónico adaptado para GoalRecall: Motor de foto de perfil personalizada (Avatar Engine con compresión cliente y sincronización en la nube) y página dedicada e interactiva de características de GoalRecall (Features Showcase con micro-simuladores, comparativa y desglose técnico).",
-  "updatedAt":  "2026-10-27T22:33:26.718494833Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Plan de despliegue y delimitación de responsabilidades para GoalRecall en Firebase Hosting con dominio propio y garantía de Costo Cero ($0.00 USD) en el plan Spark. Divide de forma granular y sin ambigüedades qué tareas ejecuta la IA en el código y qué pasos exactos realiza el usuario en Firebase Console y Namecheap/GoDaddy.",
+  "updatedAt": "2026-11-03T11:07:27.932397733Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

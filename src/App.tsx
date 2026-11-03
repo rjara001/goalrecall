@@ -14,6 +14,7 @@ import { ExperienceModal } from "./components/ExperienceModal";
 import { FeaturesView } from "./components/FeaturesView";
 import { AvatarModal } from "./components/AvatarModal";
 import { OffersView } from "./components/OffersView";
+import { ProductModal } from "./components/ProductModal";
 import { 
   getStoredLogs, 
   saveLogs, 
@@ -38,6 +39,12 @@ import {
   addJobOffer,
   updateJobOffer,
   deleteJobOffer,
+  getStoredProducts,
+  saveProducts,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  toggleProductPublic,
   clearSessionData,
   resetToDemoData,
   purgeDummyPresetData,
@@ -47,12 +54,14 @@ import {
   INITIAL_INBOX,
   INITIAL_USER
 } from "./utils/storage";
-import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer } from "./types";
+import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer, Product } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
+import { useI18n } from "./i18n";
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
 
 export default function App() {
+  const { t } = useI18n();
   const [activeView, setActiveView] = useState<ActiveView>(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.toLowerCase();
@@ -87,13 +96,16 @@ export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [inbox, setInbox] = useState<VisitorMessage[]>([]);
   const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
   // Modals
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [isCvUploadOpen, setIsCvUploadOpen] = useState(false);
   const [isPasteBulletsOpen, setIsPasteBulletsOpen] = useState(false);
   const [isExperienceModalOpen, setIsExperienceModalOpen] = useState(false);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingExperience, setEditingExperience] = useState<WorkExperience | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [initialExperienceIdForLog, setInitialExperienceIdForLog] = useState<string | undefined>(undefined);
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -148,6 +160,7 @@ export default function App() {
     setUser(currentUser);
     setInbox(getStoredInbox());
     setJobOffers(getStoredJobOffers());
+    setProducts(getStoredProducts());
 
     // If local logs is empty but user is logged in (e.g. wiped browser cache), auto restore from cloud
     if (currentUser?.email && storedLogs.length === 0) {
@@ -157,6 +170,7 @@ export default function App() {
           setExperiences(getStoredExperiences());
           setInbox(getStoredInbox());
           setJobOffers(getStoredJobOffers());
+          setProducts(getStoredProducts());
         }
       });
     }
@@ -220,14 +234,14 @@ export default function App() {
       updateLog(updated);
       setLogs(getStoredLogs());
       setEditingLog(null);
-      showToast("Log actualizado correctamente.");
+      showToast(t.toasts.logSaved);
     } else {
       const created = addLog(entryData);
       setLogs(getStoredLogs());
       if (created.isPublic) {
-        showToast("Log creado y publicado en Public Deck ✨");
+        showToast(t.toasts.logToggledPublic);
       } else {
-        showToast("Log guardado en Sandbox Privado (Confidencial) 🔒");
+        showToast(t.toasts.logToggledPrivate);
       }
     }
   };
@@ -237,9 +251,9 @@ export default function App() {
     if (updated) {
       setLogs(getStoredLogs());
       if (updated.isPublic) {
-        showToast("Log publicado en Public Deck y visible para First Mate ✨");
+        showToast(t.toasts.logToggledPublic);
       } else {
-        showToast("Log devuelto a Sandbox Privado (Confidencial) 🔒");
+        showToast(t.toasts.logToggledPrivate);
       }
     }
   };
@@ -247,7 +261,7 @@ export default function App() {
   const handleDeleteLog = (id: string) => {
     deleteLog(id);
     setLogs(getStoredLogs());
-    showToast("Log eliminado de la bitácora.", "info");
+    showToast(t.toasts.logDeleted, "info");
   };
 
   const handleDuplicateLog = (entry: LogEntry) => {
@@ -256,21 +270,21 @@ export default function App() {
       client: entry.client,
       project: entry.project,
       category: entry.category,
-      title: `${entry.title} (Copia)`,
+      title: `${entry.title} (${t.common.copy})`,
       description: entry.description,
       impact: entry.impact,
       tags: entry.tags,
-      isPublic: false, // Clone as private sandbox
+      isPublic: false, // Clone as private vault
     });
     setLogs(getStoredLogs());
-    showToast("Log duplicado en Sandbox Privado.", "info");
+    showToast(t.toasts.logDuplicated, "info");
   };
 
   const handleImportBatchLogs = (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
     batch.forEach((entry) => addLog(entry));
     setLogs(getStoredLogs());
     setExperiences(getStoredExperiences());
-    showToast(`¡Se importaron ${batch.length} logros a tu Sandbox Privado! 🔒`, "success");
+    showToast(`${t.toasts.bulletsImported} (${batch.length})`, "success");
   };
 
   // Experience (Company / Project Container) Actions
@@ -340,12 +354,12 @@ export default function App() {
           originalBullet: bulletText,
           impact: "",
           tags: expData.technologies && expData.technologies.length > 0 ? expData.technologies : [],
-          isPublic: false, // Default to Sandbox Privado 🔒
+          isPublic: false, // Default to Bóveda Privada (Confidencial) 🔒
         });
       });
-      showToast(`¡Empresa guardada y se crearon ${newLogBulletsToCreate.length} logros en tu bitácora privada! 🔒✨`, "success");
+      showToast(`${t.toasts.experienceSaved} (${newLogBulletsToCreate.length}) 🔒✨`, "success");
     } else {
-      showToast(`Empresa "${expData.company}" guardada correctamente.`);
+      showToast(`${t.toasts.experienceSaved}: ${expData.company}`);
     }
 
     setExperiences(getStoredExperiences());
@@ -358,7 +372,7 @@ export default function App() {
     deleteExperience(id);
     setExperiences(getStoredExperiences());
     setLogs(getStoredLogs()); // Logs re-linked to personal projects
-    showToast("Empresa eliminada. Sus logros fueron transferidos a Proyectos Personales.", "info");
+    showToast(t.toasts.experienceDeleted, "info");
   };
 
   const handleOpenAddLogToExperience = (experienceId: string) => {
@@ -419,7 +433,7 @@ export default function App() {
 
     addLog(newLog);
     setLogs(getStoredLogs());
-    showToast(`¡Viñeta extraída como logro en ${company}! ✨`, "success");
+    showToast(`${company}: ${t.toasts.logSaved} ✨`, "success");
   };
 
   const handleExtractAllBulletsForExperience = (experienceId: string) => {
@@ -441,7 +455,7 @@ export default function App() {
 
     const unextracted = bullets.filter((b) => !existingBullets.has(b.trim()));
     if (unextracted.length === 0) {
-      showToast("Todas las viñetas de esta experiencia ya están en tu Bitácora.", "info");
+      showToast(`${t.toasts.bulletsImported} (${exp.company})`, "info");
       return;
     }
 
@@ -449,14 +463,14 @@ export default function App() {
       handleExtractBulletToLog(exp.id, exp.company, exp.role, b, exp.technologies);
     });
 
-    showToast(`¡Se extrajeron ${unextracted.length} logros a la Bitácora para ${exp.company}! 🚀`, "success");
+    showToast(`${t.toasts.bulletsImported} (${unextracted.length} - ${exp.company}) 🚀`, "success");
   };
 
   // Inbox Actions
   const handleSendVisitorMessage = (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => {
     addVisitorMessage(msg);
     setInbox(getStoredInbox());
-    showToast("¡Recado recibido y guardado en tu Inbox privado!", "success");
+    showToast(t.toasts.messageSent, "success");
   };
 
   const handleMarkMessageRead = (id: string) => {
@@ -467,7 +481,7 @@ export default function App() {
   const handleDeleteMessage = (id: string) => {
     deleteMessage(id);
     setInbox(getStoredInbox());
-    showToast("Mensaje eliminado del inbox.", "info");
+    showToast(t.toasts.messageDeleted, "info");
   };
 
   // User Actions
@@ -481,7 +495,7 @@ export default function App() {
     if (currentLogs.length === 0 && newUser.email) {
       const restored = await restoreFromCloudIfEmpty(newUser.email);
       if (restored) {
-        showToast("¡Datos restaurados automáticamente desde la nube! ☁️", "success");
+        showToast(t.toasts.dataRestored, "success");
       }
     }
 
@@ -489,8 +503,8 @@ export default function App() {
     setExperiences(getStoredExperiences());
     setInbox(getStoredInbox());
     setJobOffers(getStoredJobOffers());
-    const providerLabel = newUser.authProvider === "google" ? "Google" : "Custom Login";
-    showToast(`¡Bienvenido, ${newUser.name}! Sesión iniciada con ${providerLabel}. ✨`, "success");
+    const providerLabel = newUser.authProvider === "google" ? "Google" : "Email";
+    showToast(`${newUser.name} · ${providerLabel} ✨`, "success");
     setActiveView("quarters");
   };
 
@@ -522,20 +536,20 @@ export default function App() {
     setInitialExperienceIdForLog(undefined);
 
     // 5. User feedback
-    showToast("Sesión cerrada exitosamente. Retornando a la página de inicio.", "info");
+    showToast(`${t.nav.signOut} · ${t.common.success}`, "info");
   };
 
   const handleUpdateProfile = (updated: UserProfile) => {
     saveUser(updated);
     setUser(updated);
-    showToast("Perfil de usuario actualizado correctamente.", "success");
+    showToast(t.toasts.profileUpdated, "success");
   };
 
   const handleUpdateAvatar = (newAvatarUrl: string) => {
     const updated = updateUserAvatar(newAvatarUrl);
     if (updated) {
       setUser(updated);
-      showToast("¡Foto de perfil actualizada y sincronizada en la nube!", "success");
+      showToast(t.toasts.profileUpdated, "success");
     }
   };
 
@@ -543,19 +557,49 @@ export default function App() {
   const handleSaveJobOffer = (updated: JobOffer) => {
     updateJobOffer(updated);
     setJobOffers(getStoredJobOffers());
-    showToast(`Oferta para ${updated.company} actualizada ✨`);
+    showToast(`${updated.company}: ${t.toasts.offerSaved} ✨`);
   };
 
   const handleAddJobOffer = (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => {
     const created = addJobOffer(offer);
     setJobOffers(getStoredJobOffers());
-    showToast(`¡Nueva oferta de ${created.company} guardada y analizada con ATS! 🎯`, "success");
+    showToast(`${created.company}: ${t.toasts.offerSaved} 🎯`, "success");
   };
 
   const handleDeleteJobOffer = (id: string) => {
     deleteJobOffer(id);
     setJobOffers(getStoredJobOffers());
-    showToast("Oferta eliminada de la lista.", "info");
+    showToast(t.toasts.offerDeleted, "info");
+  };
+
+  // Product Actions (Showcase & Personal Projects)
+  const handleSaveProduct = (productData: any) => {
+    if (editingProduct) {
+      updateProduct(productData);
+      setProducts(getStoredProducts());
+      showToast("Producto actualizado exitosamente.", "success");
+    } else {
+      addProduct(productData);
+      setProducts(getStoredProducts());
+      showToast("Producto agregado al showcase.", "success");
+    }
+  };
+
+  const handleDeleteProduct = (id: string) => {
+    deleteProduct(id);
+    setProducts(getStoredProducts());
+    showToast("Producto eliminado del showcase.", "info");
+  };
+
+  const handleToggleProductPublic = (id: string) => {
+    const updated = toggleProductPublic(id);
+    if (updated) {
+      setProducts(getStoredProducts());
+      showToast(
+        updated.isPublic ? "Producto visible en la Vitrina Pública." : "Producto movido a Bóveda Privada.",
+        "info"
+      );
+    }
   };
 
   const reloadDataFromStorage = () => {
@@ -564,6 +608,7 @@ export default function App() {
     setUser(getStoredUser());
     setInbox(getStoredInbox());
     setJobOffers(getStoredJobOffers());
+    setProducts(getStoredProducts());
   };
 
   const unreadInboxCount = inbox.filter((m) => !m.read).length;
@@ -629,9 +674,9 @@ export default function App() {
                 <Lock className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white">Espacio Privado Protegido</h3>
+                <h3 className="text-xl font-bold text-white">{t.app.privateSpaceProtected}</h3>
                 <p className="text-slate-400 text-sm">
-                  Inicia sesión para acceder a tu Bitácora privada, gestionar logros por empresa y sintetizar versiones de tu trayectoria.
+                  {t.app.privateSpaceDesc}
                 </p>
               </div>
               <div className="flex justify-center gap-3">
@@ -639,13 +684,13 @@ export default function App() {
                   onClick={() => setIsAuthOpen(true)}
                   className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm"
                 >
-                  Iniciar Sesión
+                  {t.app.signInToAccess}
                 </button>
                 <button
                   onClick={() => handleNavigateView("landing")}
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
                 >
-                  Volver al Inicio
+                  {t.app.backToHome}
                 </button>
               </div>
             </div>
@@ -655,6 +700,7 @@ export default function App() {
                 <TimelineView
                   logs={logs}
                   experiences={experiences}
+                  products={products}
                   onTogglePublic={handleTogglePublic}
                   onEditLog={(log) => {
                     setEditingLog(log);
@@ -675,6 +721,16 @@ export default function App() {
                   onAddLogToExperience={handleOpenAddLogToExperience}
                   onExtractBulletToLog={handleExtractBulletToLog}
                   onExtractAllBulletsForExperience={handleExtractAllBulletsForExperience}
+                  onOpenNewProduct={() => {
+                    setEditingProduct(null);
+                    setIsProductModalOpen(true);
+                  }}
+                  onEditProduct={(p) => {
+                    setEditingProduct(p);
+                    setIsProductModalOpen(true);
+                  }}
+                  onDeleteProduct={handleDeleteProduct}
+                  onToggleProductPublic={handleToggleProductPublic}
                 />
               )}
 
@@ -727,8 +783,23 @@ export default function App() {
         {activeView === "public" && (
           <PublicDeck
             logs={logs}
+            products={products}
             userProfile={user || INITIAL_USER}
             onSendVisitorMessage={handleSendVisitorMessage}
+            onBackToLanding={() => handleNavigateView("landing")}
+            onOpenAuth={() => setIsAuthOpen(true)}
+            isVisitorPreview={!user}
+            isOwner={Boolean(user && !user.isDemoUser)}
+            onOpenNewProduct={() => {
+              setEditingProduct(null);
+              setIsProductModalOpen(true);
+            }}
+            onEditProduct={(p) => {
+              setEditingProduct(p);
+              setIsProductModalOpen(true);
+            }}
+            onDeleteProduct={handleDeleteProduct}
+            onToggleProductPublic={handleToggleProductPublic}
           />
         )}
 
@@ -872,6 +943,18 @@ export default function App() {
         onSaveAvatar={handleUpdateAvatar}
       />
 
+      {/* Product Modal (Showcase & Personal Projects) */}
+      <ProductModal
+        isOpen={isProductModalOpen}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setEditingProduct(null);
+        }}
+        onSave={handleSaveProduct}
+        product={editingProduct}
+        availableLogs={logs}
+      />
+
       {/* Toast Feedback Banner */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl animate-in slide-in-from-bottom-4 duration-200">
@@ -887,10 +970,10 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-left">
             <p className="font-mono text-xs text-slate-300 font-bold">
-              GOAL RECALL · Bitácora Profesional con Cloud Sync y Vitrina Pública Ejecutiva
+              {t.app.footerTagline}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Privacidad garantizada: sincronización segura en la nube con respaldo continuo y aislamiento por cuenta.
+              {t.app.footerPrivacy}
             </p>
           </div>
 
@@ -899,14 +982,14 @@ export default function App() {
               onClick={() => handleNavigateView("landing")}
               className="hover:text-cyan-400 transition-colors"
             >
-              Inicio
+              {t.app.navHome}
             </button>
             <span>·</span>
             <button
               onClick={() => handleNavigateView("features")}
               className="hover:text-cyan-400 transition-colors"
             >
-              Características
+              {t.app.navFeatures}
             </button>
             <span>·</span>
             <button
@@ -916,14 +999,14 @@ export default function App() {
               }}
               className="hover:text-cyan-400 transition-colors text-indigo-300 font-medium"
             >
-              Ofertas & CVs (/offers)
+              {t.app.navOffers}
             </button>
             <span>·</span>
             <button
               onClick={() => handleNavigateView("docs")}
               className="hover:text-cyan-400 transition-colors font-medium text-cyan-300"
             >
-              Guía & Documentación (/docs)
+              {t.app.navDocs}
             </button>
             <span>·</span>
             <button
@@ -937,21 +1020,21 @@ export default function App() {
               }}
               className="hover:text-cyan-400 transition-colors"
             >
-              Mi Bitácora
+              {t.app.navLogbook}
             </button>
             <span>·</span>
             <button
               onClick={() => handleNavigateView("public")}
               className="hover:text-cyan-400 transition-colors"
             >
-              Vitrina Pública
+              {t.app.navShowcase}
             </button>
             <span>·</span>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="hover:text-cyan-400 transition-colors"
             >
-              Redes & Respaldo
+              {t.app.navSettings}
             </button>
           </div>
         </div>

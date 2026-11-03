@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { 
   Search, 
   Eye, 
@@ -24,13 +24,19 @@ import {
   Award,
   Target,
   HelpCircle,
-  FileText
+  FileText,
+  Rocket,
+  ChevronDown
 } from "lucide-react";
-import { LogCategory, LogEntry, WorkExperience } from "../types";
+import { LogCategory, LogEntry, WorkExperience, Product } from "../types";
+import { ProductCard } from "./ProductCard";
+import { useI18n } from "../i18n";
+import { VIEW_LOCALES } from "../i18n/viewLocales";
 
 interface TimelineViewProps {
   logs: LogEntry[];
   experiences: WorkExperience[];
+  products?: Product[];
   onTogglePublic: (id: string) => void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
@@ -50,6 +56,10 @@ interface TimelineViewProps {
     technologies?: string[]
   ) => void;
   onExtractAllBulletsForExperience?: (experienceId: string) => void;
+  onOpenNewProduct?: () => void;
+  onEditProduct?: (product: Product) => void;
+  onDeleteProduct?: (id: string) => void;
+  onToggleProductPublic?: (id: string) => void;
 }
 
 const DEFAULT_PRESET_CATEGORIES: LogCategory[] = [
@@ -82,9 +92,16 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onAddLogToExperience,
   onExtractBulletToLog,
   onExtractAllBulletsForExperience,
+  products = [],
+  onOpenNewProduct,
+  onEditProduct,
+  onDeleteProduct,
+  onToggleProductPublic,
 }) => {
-  // Main view mode: 'by_experience' (Empresa / Experiencia) | 'achievements' (Logros)
-  const [viewMode, setViewMode] = useState<"by_experience" | "achievements">("by_experience");
+  const { t, language } = useI18n();
+  const tl = VIEW_LOCALES[language]?.timeline || VIEW_LOCALES.en.timeline;
+  // Main view mode: 'by_experience' (Empresa / Experiencia) | 'achievements' (Logros) | 'products' (Showcase)
+  const [viewMode, setViewMode] = useState<"by_experience" | "achievements" | "products">("by_experience");
   
   // Filters for the Logros tab
   const [search, setSearch] = useState("");
@@ -94,6 +111,22 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const [selectedVisibility, setSelectedVisibility] = useState<"all" | "public_only" | "private_only">("all");
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setIsCreateMenuOpen(false);
+      }
+    };
+    if (isCreateMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isCreateMenuOpen]);
 
   const toggleField = (key: string) => {
     setExpandedFields((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -206,37 +239,37 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         <div className="p-3.5 bg-slate-900/60 border border-cyan-900/40 rounded-xl relative overflow-hidden">
           <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
             <Building className="w-3.5 h-3.5 text-cyan-400" />
-            Empresas / Experiencia
+            {t.common.company} / {t.timeline.rolePeriod}
           </p>
           <p className="text-2xl font-bold text-cyan-300 font-mono tabular-nums mt-1">{experiences.length}</p>
-          <span className="text-[10px] text-slate-500 font-mono">{totalBulletsCount} viñetas de CV</span>
+          <span className="text-[10px] text-slate-500 font-mono">{totalBulletsCount} {t.timeline.bulletsAvailable}</span>
         </div>
 
         <div className="p-3.5 bg-slate-900/60 border border-purple-900/40 rounded-xl">
           <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-purple-400" />
-            Logros Extraídos
+            {t.timeline.tabAllAchievements}
           </p>
           <p className="text-2xl font-bold text-purple-300 font-mono tabular-nums mt-1">{logs.length}</p>
-          <span className="text-[10px] text-slate-500 font-mono">En tu Bitácora</span>
+          <span className="text-[10px] text-slate-500 font-mono">{t.nav.logbook}</span>
         </div>
 
         <div className="p-3.5 bg-slate-900/60 border border-slate-800 rounded-xl">
           <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
             <Lock className="w-3.5 h-3.5 text-slate-400" />
-            Sandbox Privado
+            {t.nav.privateVaultActive}
           </p>
           <p className="text-2xl font-bold text-slate-300 font-mono tabular-nums mt-1">{totalPrivateCount}</p>
-          <span className="text-[10px] text-slate-500 font-mono">Confidenciales</span>
+          <span className="text-[10px] text-slate-500 font-mono">{t.timeline.isPrivate}</span>
         </div>
 
         <div className="p-3.5 bg-slate-900/60 border border-emerald-950/60 rounded-xl">
           <p className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
             <Eye className="w-3.5 h-3.5 text-emerald-400" />
-            Public Deck
+            {t.nav.publicShowcase}
           </p>
           <p className="text-2xl font-bold text-emerald-400 font-mono tabular-nums mt-1">{totalPublicCount}</p>
-          <span className="text-[10px] text-emerald-500/70 font-mono">Visibles al reclutador</span>
+          <span className="text-[10px] text-emerald-500/70 font-mono">{t.timeline.isPublic}</span>
         </div>
       </div>
 
@@ -255,7 +288,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             }`}
           >
             <Building className="w-4 h-4" />
-            <span>Empresa / Experiencia</span>
+            <span>{t.timeline.tabByCompany}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
               viewMode === "by_experience" ? "bg-slate-950/40 text-slate-900 font-bold" : "bg-slate-800 text-slate-400"
             }`}>
@@ -273,11 +306,29 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             }`}
           >
             <Zap className="w-4 h-4" />
-            <span>Logros</span>
+            <span>{t.timeline.tabAllAchievements}</span>
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
               viewMode === "achievements" ? "bg-slate-950/40 text-slate-900 font-bold" : "bg-slate-800 text-slate-400"
             }`}>
               {logs.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode("products")}
+            className={`px-4 py-2 rounded-md text-xs font-semibold flex items-center gap-2 transition-all ${
+              viewMode === "products"
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 shadow-md shadow-emerald-500/25 font-bold"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Rocket className="w-4 h-4" />
+            <span>Productos & Showcase</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+              viewMode === "products" ? "bg-slate-950/40 text-slate-900 font-bold" : "bg-slate-800 text-slate-400"
+            }`}>
+              {products.length}
             </span>
           </button>
         </div>
@@ -287,30 +338,101 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           <button
             type="button"
             onClick={onOpenCvUpload}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-purple-900/80 to-indigo-900/80 hover:from-purple-800 hover:to-indigo-800 border border-purple-500/60 hover:border-purple-400 text-purple-100 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-sm shadow-purple-950/30 whitespace-nowrap active:scale-95"
-            title="Importar desde CV (PDF o DOCX)"
+            className="px-3.5 py-2 bg-gradient-to-r from-purple-900/80 to-indigo-900/80 hover:from-purple-800 hover:to-indigo-800 border border-purple-500/60 hover:border-purple-400 text-purple-100 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm shadow-purple-950/30 whitespace-nowrap active:scale-95"
+            title={t.cv.modalTitle}
           >
             <FileUp className="w-3.5 h-3.5 text-purple-300" />
-            <span>Importar CV</span>
+            <span>{t.timeline.importCvBtn}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onAddExperience}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-cyan-800/60 hover:border-cyan-500 text-cyan-300 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+ Nueva Empresa / Experiencia</span>
-          </button>
+          {/* Grouped Creation Dropdown (DDL) */}
+          <div className="relative" ref={createMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)}
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Crear / Registrar</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isCreateMenuOpen ? "rotate-180" : ""}`} />
+            </button>
 
-          <button
-            type="button"
-            onClick={onOpenQuickLog}
-            className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
-          >
-            <Zap className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+ Registrar Logro</span>
-          </button>
+            {isCreateMenuOpen && (
+              <div className="absolute right-0 mt-2 w-72 bg-[#0B101D] border border-slate-700/80 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-3.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold border-b border-slate-800/80">
+                  ¿Qué deseas registrar?
+                </div>
+
+                {/* Option 1: + Nuevo Producto */}
+                {onOpenNewProduct && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateMenuOpen(false);
+                      onOpenNewProduct();
+                    }}
+                    className="w-full px-3.5 py-2.5 text-left flex items-start gap-3 hover:bg-slate-800/70 transition-colors group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800/60 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5 group-hover:border-emerald-500">
+                      <Rocket className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                        + Nuevo Producto
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        SaaS, librería, app o proyecto en showcase
+                      </p>
+                    </div>
+                  </button>
+                )}
+
+                {/* Option 2: Añadir Empresa */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMenuOpen(false);
+                    onAddExperience();
+                  }}
+                  className="w-full px-3.5 py-2.5 text-left flex items-start gap-3 hover:bg-slate-800/70 transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center text-slate-300 shrink-0 mt-0.5 group-hover:border-slate-500">
+                    <Building className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
+                      {t.timeline.addCompanyBtn}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Empresa, rol o periodo laboral
+                    </p>
+                  </div>
+                </button>
+
+                {/* Option 3: Nuevo Logro */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMenuOpen(false);
+                    onOpenQuickLog();
+                  }}
+                  className="w-full px-3.5 py-2.5 text-left flex items-start gap-3 hover:bg-slate-800/70 transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-800/60 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5 group-hover:border-cyan-500">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors">
+                      {t.timeline.newAchievement}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Viñeta Google XYZ con impacto medible
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -329,11 +451,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   Experiencia Laboral ({experiences.length})
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-mono">
-                  {totalBulletsCount} viñetas reales
+                  {tl.bulletsRealCount(totalBulletsCount)}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Estructura extraída de tu CV. Cada empresa contiene sus viñetas reales y tecnologías; desde aquí puedes extraer logros a tu Bitácora.
+                {tl.structureFromCvDesc}
               </p>
             </div>
 
@@ -344,7 +466,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Pegar Viñetas</span>
+                <span>{tl.pasteBulletsBtn}</span>
               </button>
               <button
                 type="button"
@@ -376,7 +498,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-950/40 flex items-center gap-2 transition-all active:scale-95"
                 >
                   <FileUp className="w-4 h-4 text-purple-200" />
-                  <span>Importar desde CV (PDF)</span>
+                  <span>{tl.importCvPdfBtn}</span>
                 </button>
                 <button
                   type="button"
@@ -384,7 +506,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all"
                 >
                   <Sparkles className="w-4 h-4 text-cyan-400" />
-                  <span>Pegar Viñetas</span>
+                  <span>{tl.pasteBulletsBtn}</span>
                 </button>
                 <button
                   type="button"
@@ -392,7 +514,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="px-4 py-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>+ Añadir Empresa Manualmente</span>
+                  <span>{tl.addCompanyManualBtn}</span>
                 </button>
               </div>
             </div>
@@ -477,10 +599,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             type="button"
                             onClick={() => onExtractAllBulletsForExperience(exp.id)}
                             className="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 border border-cyan-500/50 text-cyan-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
-                            title="Extraer todas las viñetas pendientes a la bitácora de logros"
+                            title={tl.extractAllBulletsBtn(unextractedBullets.length)}
                           >
                             <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                            <span>Extraer todos los logros ({unextractedBullets.length})</span>
+                            <span>{tl.extractAllBulletsBtn(unextractedBullets.length)}</span>
                           </button>
                         )}
 
@@ -488,17 +610,17 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           type="button"
                           onClick={() => onAddLogToExperience(exp.id)}
                           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1 transition-colors"
-                          title="Registrar nuevo logro manual en esta empresa"
+                          title={tl.manualLogBtn}
                         >
                           <Plus className="w-3.5 h-3.5 text-cyan-400" />
-                          <span className="hidden sm:inline">Logro manual</span>
+                          <span className="hidden sm:inline">{tl.manualLogBtn}</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => onEditExperience(exp)}
                           className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg transition-colors"
-                          title="Editar empresa"
+                          title={tl.editCompanyTooltip}
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -507,12 +629,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm(`¿Eliminar la empresa "${exp.company}"?`)) {
+                              if (confirm(tl.deleteCompanyConfirm(exp.company))) {
                                 onDeleteExperience(exp.id);
                               }
                             }}
                             className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800/60 rounded-lg transition-colors"
-                            title="Eliminar empresa"
+                            title={tl.deleteCompanyTooltip}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -562,10 +684,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                         }
                                       }}
                                       className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-800/80 hover:border-cyan-500 px-2.5 py-1 rounded-md transition-all shadow-sm active:scale-95"
-                                      title="Extraer esta viñeta como logro cuantificable en tu Bitácora"
+                                      title={tl.extractToLogBtn}
                                     >
                                       <Zap className="w-3 h-3 text-cyan-400" />
-                                      <span>Extraer como logro</span>
+                                      <span>{tl.extractToLogBtn}</span>
                                     </button>
                                   )}
                                 </div>
@@ -575,14 +697,14 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         </div>
                       ) : (
                         <div className="p-4 bg-slate-950/40 border border-dashed border-slate-800 rounded-xl text-xs text-slate-400 flex items-center justify-between">
-                          <span>No hay viñetas registradas para esta experiencia.</span>
+                          <span>{tl.noBulletsForExperience}</span>
                           <button
                             type="button"
                             onClick={() => onEditExperience(exp)}
                             className="text-cyan-400 hover:underline flex items-center gap-1 font-semibold"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            Añadir viñetas
+                            {tl.addBulletsAction}
                           </button>
                         </div>
                       )}
@@ -608,9 +730,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     <div className="pt-3 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="text-slate-400 flex items-center gap-1.5">
                         <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                        <strong className="text-slate-200">{expLogs.length}</strong> logros vinculados en Bitácora
+                        <strong className="text-slate-200">{expLogs.length}</strong> {tl.linkedLogsCount(expLogs.length).replace(/^\d+\s*/, "")}
                         <span className="text-slate-500 font-mono">
-                          ({expLogs.filter((l) => l.isPublic).length} públicos · {expLogs.filter((l) => !l.isPublic).length} privados)
+                          {tl.logsRatio(expLogs.filter((l) => l.isPublic).length, expLogs.filter((l) => !l.isPublic).length)}
                         </span>
                       </span>
 
@@ -623,7 +745,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           }}
                           className="text-cyan-400 hover:text-cyan-300 text-xs font-semibold flex items-center gap-1 group/link"
                         >
-                          <span>Ver logros de {exp.company} en tab Logros</span>
+                          <span>{tl.viewCompanyLogsTab(exp.company)}</span>
                           <ArrowRight className="w-3.5 h-3.5 group-hover/link:translate-x-0.5 transition-transform" />
                         </button>
                       )}
@@ -652,7 +774,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Buscar por logro, tecnología, métrica, empresa o impacto..."
+                  placeholder={tl.searchPlaceholder}
                   className="w-full bg-[#080C14] border border-slate-700/80 rounded-lg pl-9 pr-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
                 {search && (
@@ -672,7 +794,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   onChange={(e) => setSelectedClient(e.target.value)}
                   className="bg-[#080C14] border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
                 >
-                  <option value="all">Todas las Empresas</option>
+                  <option value="all">{tl.allCompanies}</option>
                   {experiences.map((exp) => (
                     <option key={exp.id} value={exp.company}>{exp.company}</option>
                   ))}
@@ -688,8 +810,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="bg-[#080C14] border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
                 >
                   <option value="all">Toda Visibilidad</option>
-                  <option value="private_only">Solo Sandbox (Privado)</option>
-                  <option value="public_only">Solo Public Deck (Público)</option>
+                  <option value="private_only">{tl.vaultPrivateOnly}</option>
+                  <option value="public_only">{tl.publicShowcaseOnly}</option>
                 </select>
 
                 {/* Date Range */}
@@ -699,9 +821,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="bg-[#080C14] border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
                 >
                   <option value="all">Cualquier fecha</option>
-                  <option value="7d">Últimos 7 días</option>
-                  <option value="30d">Últimos 30 días</option>
-                  <option value="90d">Últimos 90 días</option>
+                  <option value="7d">{tl.time7d}</option>
+                  <option value="30d">{tl.time30d}</option>
+                  <option value="90d">{tl.time90d}</option>
                 </select>
               </div>
             </div>
@@ -760,9 +882,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 <Zap className="w-6 h-6" />
               </div>
               <div className="max-w-md mx-auto space-y-1">
-                <h3 className="text-lg font-bold text-white">Aún no tienes logros en tu Bitácora</h3>
+                <h3 className="text-lg font-bold text-white">{tl.emptyLogsTitle}</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Todo en tu bitácora cuelga de la experiencia. Dirígete a la pestaña <strong>Empresa / Experiencia</strong> para extraer viñetas directamente o registra un logro manualmente.
+                  {tl.emptyLogsDesc}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -772,7 +894,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-cyan-950/40 flex items-center gap-2 transition-all active:scale-95"
                 >
                   <Building className="w-4 h-4" />
-                  <span>Ir a Empresa / Experiencia</span>
+                  <span>{tl.goToExperienceTabBtn}</span>
                 </button>
                 <button
                   type="button"
@@ -780,13 +902,13 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all"
                 >
                   <Plus className="w-4 h-4 text-cyan-400" />
-                  <span>+ Registrar Logro Manual</span>
+                  <span>{tl.logManualBtn}</span>
                 </button>
               </div>
             </div>
           ) : filteredLogs.length === 0 ? (
             <div className="p-10 border border-slate-800/80 rounded-2xl text-center bg-slate-900/40">
-              <p className="text-sm font-semibold text-slate-300">No se encontraron logros con los filtros seleccionados.</p>
+              <p className="text-sm font-semibold text-slate-300">{tl.noLogsFiltered}</p>
               <button
                 onClick={() => {
                   setSearch("");
@@ -830,7 +952,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                               {exp.role} @ {exp.company}
                             </h3>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-                              {expLogs.length} {expLogs.length === 1 ? "logro" : "logros"}
+                              {tl.logsCountBadge(expLogs.length)}
                             </span>
                           </div>
                           <p className="text-xs font-mono text-slate-400 mt-0.5">
@@ -846,7 +968,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           className="px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-semibold rounded-md flex items-center gap-1 transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>+ Logro</span>
+                          <span>{tl.addLogQuickBtn}</span>
                         </button>
                       </div>
                     </div>
@@ -880,7 +1002,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 ) : (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-400 bg-slate-800/80 border border-slate-700/60 px-2 py-0.5 rounded">
                                     <Lock className="w-3 h-3" />
-                                    Sandbox
+                                    Bóveda Privada
                                   </span>
                                 )}
                               </div>
@@ -889,7 +1011,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             {/* Logro (Multilínea) - Campo resumen principal / Viñeta del CV */}
                             <div className="mb-3">
                               <span className="text-[10px] font-mono text-cyan-400 font-semibold tracking-wider uppercase block mb-1">
-                                Logro (Viñeta CV)
+                                {tl.achievementCvBulletLabel}
                               </span>
                               <h4 className="text-sm font-semibold text-white leading-relaxed whitespace-pre-wrap group-hover:text-cyan-100 transition-colors">
                                 {log.title}
@@ -903,7 +1025,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                                 <div className="flex-1 min-w-0">
                                   <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
-                                    El impacto (Fórmula XYZ)
+                                    {tl.impactXyzLabel}
                                   </span>
                                   <p className="text-xs text-emerald-200 font-mono font-medium leading-relaxed whitespace-pre-wrap">
                                     {log.impact}
@@ -911,7 +1033,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 </div>
                               </div>
 
-                              {/* 2. ¿Qué se buscaba lograr? */}
+                              {/* 2. {tl.accordionWhat} */}
                               {log.whatWasSought && (
                                 <div className="border border-indigo-950/70 rounded-lg overflow-hidden bg-slate-950/50">
                                   <button
@@ -935,7 +1057,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 </div>
                               )}
 
-                              {/* 3. ¿Por qué era importante? */}
+                              {/* 3. {tl.accordionWhy} */}
                               {log.whyImportant && (
                                 <div className="border border-amber-950/70 rounded-lg overflow-hidden bg-slate-950/50">
                                   <button
@@ -959,7 +1081,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 </div>
                               )}
 
-                              {/* 4. ¿Cómo se aplicó la solución? */}
+                              {/* 4. {tl.accordionHow} */}
                               {log.howApplied && (
                                 <div className="border border-cyan-950/70 rounded-lg overflow-hidden bg-slate-950/50">
                                   <button
@@ -983,7 +1105,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 </div>
                               )}
 
-                              {/* 7. Detalle o Descripción (espacio amplio para explayarse) */}
+                              {/* 7. {tl.accordionDesc} (espacio amplio para explayarse) */}
                               {log.description && (
                                 <div className="border border-purple-950/70 rounded-lg overflow-hidden bg-slate-950/50">
                                   <button
@@ -1012,7 +1134,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             {log.originalBullet && log.originalBullet !== log.title && (
                               <div className="text-[11px] text-slate-400 italic bg-slate-950/50 p-2 rounded border border-slate-800/80 mb-2 flex items-start gap-1.5">
                                 <Sparkles className="w-3 h-3 text-purple-400 shrink-0 mt-0.5" />
-                                <span className="line-clamp-2">Viñeta origen CV: "{log.originalBullet}"</span>
+                                <span className="line-clamp-2">{tl.originalBulletLabel} "{log.originalBullet}"</span>
                               </div>
                             )}
 
@@ -1044,7 +1166,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 {log.isPublic ? (
                                   <>
                                     <EyeOff className="w-3 h-3 text-emerald-400" />
-                                    <span>Público · Despublicar</span>
+                                    <span>{tl.unpublishBtn}</span>
                                   </>
                                 ) : (
                                   <>
@@ -1064,14 +1186,14 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 </button>
                                 <button
                                   onClick={() => onEditLog(log)}
-                                  title="Editar logro"
+                                  title={tl.editLogTooltip}
                                   className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => onDeleteLog(log.id)}
-                                  title="Eliminar logro"
+                                  title={tl.deleteLogTooltip}
                                   className="p-1.5 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1091,10 +1213,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
                       <TagIcon className="w-4 h-4" />
-                      <span>Logros sin contenedor asignado ({experienceGroups.unassigned.length})</span>
+                      <span>{tl.unassignedContainerTitle(experienceGroups.unassigned.length)}</span>
                     </div>
                     <span className="text-xs text-amber-400/80">
-                      Asígnalos a una de tus empresas para mantener todo ordenado
+                      {tl.unassignedContainerDesc}
                     </span>
                   </div>
 
@@ -1115,7 +1237,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             onClick={() => onEditLog(log)}
                             className="px-2.5 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800 rounded-md hover:bg-cyan-900/50"
                           >
-                            Asignar Empresa
+                            {tl.assignCompanyBtn}
                           </button>
                         </div>
                       </div>
@@ -1123,6 +1245,75 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: PRODUCTOS & SHOWCASE (GESTIÓN PRIVADA Y RELACIÓN CON LOGROS XYZ)   */}
+      {/* ========================================================================= */}
+      {viewMode === "products" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Rocket className="w-5 h-5 text-emerald-400" />
+                <span>Gestión de Productos & Showcase ({products.length})</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Registra tus aplicaciones, librerías y SaaS, define su stack tecnológico y vincúlalas con tus logros de arquitectura (Metodología Google XYZ).
+              </p>
+            </div>
+
+            {onOpenNewProduct && (
+              <button
+                type="button"
+                onClick={onOpenNewProduct}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all self-start sm:self-auto"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nuevo Producto</span>
+              </button>
+            )}
+          </div>
+
+          {products.length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 space-y-3">
+              <Rocket className="w-9 h-9 text-slate-600 mx-auto" />
+              <p className="text-sm font-semibold text-slate-300">
+                Aún no has registrado productos en tu bitácora
+              </p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Muestra tus proyectos personales, SaaS, widgets y MVPs con sus capturas de pantalla, repositorios y viñetas de logros técnicos.
+              </p>
+              {onOpenNewProduct && (
+                <button
+                  type="button"
+                  onClick={onOpenNewProduct}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Crear Primer Producto</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {products.map((prod) => {
+                const relatedLogs = logs.filter((l) => prod.relatedAchievementIds?.includes(l.id));
+                return (
+                  <ProductCard
+                    key={prod.id}
+                    product={prod}
+                    relatedLogs={relatedLogs}
+                    isOwner={true}
+                    onEdit={onEditProduct}
+                    onDelete={onDeleteProduct}
+                    onTogglePublic={onToggleProductPublic}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

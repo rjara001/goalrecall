@@ -64,7 +64,7 @@ export interface LogEntry {
   description?: string;   // 7. Detalle o Descripción: espacio amplio para explayarse en todo lo que se hizo
   
   tags: string[];
-  isPublic: boolean; // Default false (Sandbox). If true, appears in Public Deck & First Mate
+  isPublic: boolean; // Default false (Bóveda Privada / Confidencial). If true, appears in Public Deck & First Mate
   createdAt: number;
   updatedAt: number;
 }
@@ -335,6 +335,23 @@ export interface JobOffer {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Product {
+  id: string;
+  userId: string;
+  title: string;                 // Ej: "Myfeedin"
+  tagline: string;               // Ej: "Widget Multi-Tenant de Feedback"
+  description: string;           // Explicación técnica/funcional breve
+  imageUrl: string;              // Screenshot del producto / preview
+  liveUrl?: string;              // URL de producción (ej: https://myfeedin.com)
+  repoUrl?: string;              // Repositorio (ej: GitHub)
+  techStack: string[];           // Array de tecnologías ['React', 'Firebase', 'Resend']
+  isPublic: boolean;             // Visibilidad en la Vitrina Pública
+  createdAt: string;             // ISO date string
+  updatedAt?: string;            // ISO date string
+  badge?: string;                // Ej: "SaaS / Propio", "Open Source", "MVP"
+  relatedAchievementIds?: string[]; // IDs de Logros XYZ asociados
 }
 
 

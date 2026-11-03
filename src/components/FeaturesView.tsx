@@ -33,6 +33,8 @@ import {
   Target as TargetIcon
 } from "lucide-react";
 import { UserProfile } from "../types";
+import { useI18n } from "../i18n";
+import { FEATURES_LOCALES } from "../i18n/featuresLocales";
 
 interface FeaturesViewProps {
   onBackToLanding: () => void;
@@ -51,6 +53,21 @@ type FeatureCategory =
   | "cloud" 
   | "roadmap";
 
+const FEATURE_ICONS: Record<string, React.ElementType> = {
+  "f-capture": Clock,
+  "f-hierarchy": Layers,
+  "f-avatar": UserCheck,
+  "f-xyz": Sparkles,
+  "f-star": BrainCircuit,
+  "f-cv-extractor": FileText,
+  "f-export": FolderGit2,
+  "f-public-deck": Eye,
+  "f-first-mate": TargetIcon,
+  "f-cloud-sync": Database,
+  "f-backup-json": ShieldCheck,
+  "f-roadmap-etapa2": TrendingUp,
+};
+
 export const FeaturesView: React.FC<FeaturesViewProps> = ({
   onBackToLanding,
   onGoToQuarters,
@@ -58,6 +75,9 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
   onOpenAuth,
   user,
 }) => {
+  const { t, language } = useI18n();
+  const fl = FEATURES_LOCALES[language] || FEATURES_LOCALES.en;
+
   const [selectedCategory, setSelectedCategory] = useState<FeatureCategory>("all");
   const [activeSimulatorTab, setActiveSimulatorTab] = useState<"xyz" | "star" | "cv" | "cloud">("xyz");
 
@@ -83,222 +103,15 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
     setTimeout(() => setCopiedXyz(false), 2500);
   };
 
-  const categories = [
-    { id: "all", label: "Todas las Características", count: 12 },
-    { id: "capture", label: "Captura & Bitácora", count: 3 },
-    { id: "ai", label: "Motor de IA (XYZ & STAR)", count: 2 },
-    { id: "cv", label: "CV & Experiencias", count: 2 },
-    { id: "public", label: "Vitrina & Entrevista", count: 2 },
-    { id: "cloud", label: "Cloud Sync & Privacidad", count: 2 },
-    { id: "roadmap", label: "Roadmap Etapa 2", count: 1 },
-  ];
+  const categories = fl.categories.map((cat) => ({
+    ...cat,
+    count: cat.id === "all" ? fl.features.length : fl.features.filter((f) => f.category === cat.id).length,
+  }));
 
-  const features = [
-    {
-      id: "f-capture",
-      category: "capture",
-      title: "Captura en 40 Segundos con Acordeones Independientes (+)",
-      badge: "Núcleo Técnico",
-      badgeColor: "bg-cyan-950/80 text-cyan-300 border-cyan-800/60",
-      icon: Clock,
-      short: "Registra logros técnicos en caliente sin fricción ni burocracia.",
-      description:
-        "Diseñado con disciplina 80/20: solo el título/logro y el impacto son requeridos inicialmente. Tres acordeones independientes con signo (+) permiten profundizar en ¿Qué se buscaba?, ¿Por qué era importante? y ¿Cómo se aplicó la solución? cuando tú decidas.",
-      metric: "40 seg vs 15 min en plantillas de Notion",
-      techHighlights: [
-        "Atajo global de teclado ⌘K / Ctrl+K",
-        "Modo Sandbox Privado por defecto",
-        "Categorías para Ingeniería, Marketing y Negocios",
-      ],
-    },
-    {
-      id: "f-hierarchy",
-      category: "capture",
-      title: "Jerarquía Estricta: Empresa/Experiencia ➔ Logros",
-      badge: "Arquitectura",
-      badgeColor: "bg-blue-950/80 text-blue-300 border-blue-800/60",
-      icon: Layers,
-      short: "Cada logro queda estrictamente asociado a su empresa y período correspondiente.",
-      description:
-        "A diferencia de listas planas o notas desordenadas, GoalRecall organiza tus hitos bajo la estructura de tu trayectoria profesional real. Permite vincular logros con las viñetas originales de tu CV para trazabilidad absoluta ante reclutadores técnicos.",
-      metric: "100% libre de logros huérfanos o descontextualizados",
-      techHighlights: [
-        "Vínculo bidireccional experienceId ➔ logId",
-        "Contenedor nativo para Proyectos Personales / R&D",
-        "Auto-healing y sincronización automática de viñetas",
-      ],
-    },
-    {
-      id: "f-avatar",
-      category: "capture",
-      title: "Avatar Engine & Personalización de Perfil",
-      badge: "Identidad",
-      badgeColor: "bg-indigo-950/80 text-indigo-300 border-indigo-800/60",
-      icon: UserCheck,
-      short: "Personaliza tu imagen profesional con compresión en Canvas y cero sobrecarga.",
-      description:
-        "Sube tu foto de perfil desde tu disco, introduce una URL directa (como https://github.com/tu-usuario.png) o elige avatares profesionales curados. Una rutina client-side de Canvas la recorta al centro y la comprime en WebP bajo 60KB, persistiendo en tu cuenta y en Cloud Sync.",
-      metric: "Compresión instantánea < 60 KB sin pérdida perceptible",
-      techHighlights: [
-        "Recorte cuadrado automático (center-crop)",
-        "Persistencia en CustomAccount & Cloud Sync",
-        "Renderizado optimizado en Navbar, Bitácora y Vitrina",
-      ],
-    },
-    {
-      id: "f-ai-xyz",
-      category: "ai",
-      title: "Síntesis de Fórmula Google XYZ",
-      badge: "IA Cuantificada",
-      badgeColor: "bg-purple-950/80 text-purple-300 border-purple-800/60",
-      icon: Sparkles,
-      short: "Transforma notas desordenadas en viñetas de alto impacto para CVs de FAANG.",
-      description:
-        "Aplica la reconocida fórmula de contratación de Google: 'Logró [X], medido por [Y], haciendo [Z]'. El motor analiza tu descripción técnica y extrae las métricas numéricas, porcentajes y decisiones arquitectónicas para generar viñetas directas al grano.",
-      metric: "x3 veces mayor tasa de respuesta en filtros ATS",
-      techHighlights: [
-        "Modelo oficial Google Gemini",
-        "Control de cuota (3 llamadas/mes gratis) y rate limit",
-        "Copiar al portapapeles con 1 clic",
-      ],
-    },
-    {
-      id: "f-ai-star",
-      category: "ai",
-      title: "Historias Conductuales STAR para Entrevistas",
-      badge: "Entrevistas",
-      badgeColor: "bg-purple-950/80 text-purple-300 border-purple-800/60",
-      icon: BrainCircuit,
-      short: "Estructura tus mejores anécdotas en Situación, Tarea, Acción y Resultado.",
-      description:
-        "Las entrevistas de ingeniería en empresas de primer nivel evalúan competencias mediante el formato STAR. GoalRecall toma tu logro y te genera la narrativa completa para responder con seguridad a preguntas del tipo: 'Cuéntame de una ocasión en que resolviste un incidente crítico bajo presión'.",
-      metric: "Historias listas para rondas con Hiring Managers",
-      techHighlights: [
-        "Desglose en 4 bloques independientes",
-        "Enfoque en métricas verificables y trade-offs técnicos",
-        "Modo de consulta en caliente durante entrevistas",
-      ],
-    },
-    {
-      id: "f-cv-parser",
-      category: "cv",
-      title: "Extracción Automática de CV (PDF / DOCX / Texto)",
-      badge: "Ingesta Inteligente",
-      badgeColor: "bg-emerald-950/80 text-emerald-300 border-emerald-800/60",
-      icon: FileText,
-      short: "Carga tu currículum y obtén tu trayectoria entera sin alucinaciones.",
-      description:
-        "Soporta PDFs nativos, documentos Word (.docx) o texto plano. Extrae automáticamente nombres de empresa, cargos, períodos temporales, tecnologías y viñetas originales. Incluye un botón de prueba con CV real para verificar el funcionamiento en 1 clic.",
-      metric: "Carga 8 empresas y 28 viñetas en menos de 2 segundos",
-      techHighlights: [
-        "Parser dual cliente y servidor",
-        "Filtro anti-alucinaciones estricto",
-        "Generador de CV de prueba en PDF descargable",
-      ],
-    },
-    {
-      id: "f-cv-to-bullets",
-      category: "cv",
-      title: "Conversión de Viñetas de CV a Logros XYZ",
-      badge: "Workflows",
-      badgeColor: "bg-emerald-950/80 text-emerald-300 border-emerald-800/60",
-      icon: Zap,
-      short: "Convierte cada punto de tu CV actual en un logro estructurado y medible.",
-      description:
-        "Dentro de cada empresa en el Timeline, cada viñeta original importada cuenta con una acción de 'Convertir a Logro'. Se abre el QuickLog precargando el texto, la empresa y la fecha para que solo debas añadir el impacto o generar la fórmula Google XYZ.",
-      metric: "Digitaliza años de carrera en minutos",
-      techHighlights: [
-        "Vínculo originalBullet para trazabilidad",
-        "No duplica datos innecesariamente",
-        "Pre-poblado inteligente de empresa y tags",
-      ],
-    },
-    {
-      id: "f-public-deck",
-      category: "public",
-      title: "Vitrina Pública Ejecutiva (Public Deck)",
-      badge: "Visibilidad",
-      badgeColor: "bg-amber-950/80 text-amber-300 border-amber-800/60",
-      icon: Eye,
-      short: "Comparte tu portafolio de logros verificado con reclutadores y líderes de equipo.",
-      description:
-        "Un portal profesional y pulido que expone exclusivamente los logros que tú marcaste como públicos (manteniendo tus notas privadas en Sandbox). Muestra tu disponibilidad laboral, tus redes profesionales (LinkedIn, GitHub, LeetCode, etc.) y un formulario de contacto directo.",
-      metric: "URL compartible con previsualización limpia",
-      techHighlights: [
-        "Separación estricta Sandbox Privado vs Vitrina Pública",
-        "Toggle instantáneo de visibilidad por logro",
-        "Responsive y optimizado para visualización móvil",
-      ],
-    },
-    {
-      id: "f-inbox",
-      category: "public",
-      title: "Bandeja de Contacto & Oportunidades (Inbox)",
-      badge: "Reclutamiento",
-      badgeColor: "bg-amber-950/80 text-amber-300 border-amber-800/60",
-      icon: Inbox,
-      short: "Recibe propuestas de reclutadores directamente en tu bitácora.",
-      description:
-        "Los visitantes y reclutadores que consulten tu Vitrina Pública pueden enviarte un mensaje directo con su nombre, correo y propuesta. La bandeja de entrada cuenta con indicador de mensajes no leídos, fecha y opción de marcar como leído o eliminar.",
-      metric: "Canal directo sin intermediarios ni comisiones",
-      techHighlights: [
-        "Notificador visual con badge de no leídos en Navbar",
-        "Persistencia local y respaldo en Cloud Sync",
-        "Formulario anti-spam con validación básica",
-      ],
-    },
-    {
-      id: "f-cloud-sync",
-      category: "cloud",
-      title: "Cloud Sync Continuo & Respaldos en el Servidor",
-      badge: "Sincronización",
-      badgeColor: "bg-teal-950/80 text-teal-300 border-teal-800/60",
-      icon: Database,
-      short: "Tus datos respaldados continuamente con endpoints dedicados en la nube.",
-      description:
-        "GoalRecall sincroniza automáticamente tus cambios con el servidor (`/api/cloud-sync/*`) utilizando debounce de 1 segundo para no saturar la red. Si cambias de navegador o limpias la caché, tus datos se recuperan automáticamente mediante restore inteligente.",
-      metric: "Latencia de sync < 200 ms con tolerancia a desconexiones",
-      techHighlights: [
-        "Endpoints `/api/cloud-sync/push` y `/api/cloud-sync/pull`",
-        "Debounce no invasivo en segundo plano",
-        "Recuperación transparente en primer inicio",
-      ],
-    },
-    {
-      id: "f-backup-json",
-      category: "cloud",
-      title: "Copia de Seguridad en JSON con Cero Vendor Lock-In",
-      badge: "Portabilidad",
-      badgeColor: "bg-teal-950/80 text-teal-300 border-teal-800/60",
-      icon: FolderGit2,
-      short: "Exporta e importa tu base de datos completa en formato abierto en 1 clic.",
-      description:
-        "Tus logros te pertenecen. En cualquier momento puedes descargar un archivo JSON con toda tu trayectoria, empresas, viñetas, notas privadas y mensajes del inbox. Puedes restaurar este archivo en cualquier otra instancia sin depender de ningún proveedor.",
-      metric: "100% soberanía de datos y portabilidad garantizada",
-      techHighlights: [
-        "Esquema JSON abierto y documentado",
-        "Validación de estructura al importar",
-        "Restaura cientos de registros en menos de 100 ms",
-      ],
-    },
-    {
-      id: "f-roadmap-etapa2",
-      category: "roadmap",
-      title: "Roadmap Etapa 2: Motor de Ofertas, CV Enfocado & ATS",
-      badge: "Próximamente",
-      badgeColor: "bg-rose-950/80 text-rose-300 border-rose-800/60",
-      icon: TargetIcon,
-      short: "Automatización inteligente de postulaciones basadas estrictamente en la oferta.",
-      description:
-        "Diseñado en la FASE 2: Ficha de Oferta con condiciones del candidato (salario aspirado, modalidad, extras), generador de CV enfocado con previsualización previa, preparador de entrevistas como derivada 80/20 y extensión para auto-rellenado en Greenhouse, Lever y Workday.",
-      metric: "Postulaciones hiper-personalizadas en minutos",
-      techHighlights: [
-        "Arquitectura documentada en docs/plans/01-mvp-consolidation-and-future-roadmap.md",
-        "Pipeline de estados: Postulado ➔ Entrevista ➔ Oferta",
-        "Repositorio centralizado de Preguntas & Respuestas",
-      ],
-    },
-  ];
+  const features = fl.features.map((feat) => ({
+    ...feat,
+    icon: FEATURE_ICONS[feat.id] || Zap,
+  }));
 
   const filteredFeatures = features.filter((feat) => {
     if (selectedCategory === "all") return true;
@@ -317,7 +130,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all text-xs font-semibold"
             >
               <ArrowLeft className="w-4 h-4 text-cyan-400" />
-              <span>Volver al Inicio</span>
+              <span>{t.app.backToHome}</span>
             </button>
             <span className="text-slate-700 hidden sm:inline">|</span>
             <div className="flex items-center gap-2">
@@ -326,7 +139,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 <span>GOAL RECALL</span>
               </span>
               <span className="text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded-full">
-                Catálogo de Características
+                {t.features.badge}
               </span>
             </div>
           </div>
@@ -337,7 +150,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
             >
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Probar Sandbox</span>
+              <span className="hidden sm:inline">{t.app.navLogbook}</span>
             </button>
 
             {user ? (
@@ -346,14 +159,14 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-cyan-300 transition-all"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Ir a Mi Bitácora</span>
+                <span>{t.app.navLogbook}</span>
               </button>
             ) : (
               <button
                 onClick={onOpenAuth}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold hover:bg-cyan-400 transition-colors"
               >
-                <span>Acceder</span>
+                <span>{t.auth.loginTitle}</span>
               </button>
             )}
           </div>
@@ -367,32 +180,32 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
         <div className="max-w-5xl mx-auto relative z-10 text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 text-xs font-medium">
             <Award className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Vault Profesional de Logros & Motor de Carrera para Ingenieros</span>
+            <span>{t.features.badge}</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight max-w-4xl mx-auto">
-            Todas las Características de{" "}
+            {t.features.title}{" "}
             <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-400 bg-clip-text text-transparent">
               GoalRecall
             </span>
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Nunca más olvides lo que construiste. Una suite completa de captura en 40 segundos, síntesis ejecutiva con la fórmula Google XYZ, ingesta inteligente de CVs sin alucinaciones, vitrina pública para reclutadores y sincronización continua en la nube.
+            {t.features.subtitle}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-xs">
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Cero Vendor Lock-In
+              <Check className="w-3.5 h-3.5 text-emerald-400" /> {fl.pills.noLockIn}
             </span>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Fórmula Google XYZ
+              <Check className="w-3.5 h-3.5 text-emerald-400" /> {fl.pills.googleXyz}
             </span>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Ingesta de CV Real
+              <Check className="w-3.5 h-3.5 text-emerald-400" /> {fl.pills.cvIngest}
             </span>
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-              <Check className="w-3.5 h-3.5 text-emerald-400" /> Cloud Sync Continuo
+              <Check className="w-3.5 h-3.5 text-emerald-400" /> {fl.pills.cloudSync}
             </span>
           </div>
         </div>
@@ -405,10 +218,10 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
             <div>
               <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold uppercase tracking-wider mb-1">
                 <Terminal className="w-4 h-4" />
-                <span>Playground Interactivo en Vivo</span>
+                <span>{fl.simulators.kicker}</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                Experimenta los Motores de GoalRecall en Acción
+                {fl.simulators.heading}
               </h2>
             </div>
             
@@ -423,7 +236,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Fórmula Google XYZ</span>
+                <span>{fl.simulators.tabXyz}</span>
               </button>
 
               <button
@@ -435,7 +248,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 }`}
               >
                 <BrainCircuit className="w-3.5 h-3.5" />
-                <span>Narrativa STAR</span>
+                <span>{fl.simulators.tabStar}</span>
               </button>
 
               <button
@@ -447,7 +260,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Parser de CV</span>
+                <span>{fl.simulators.tabCv}</span>
               </button>
 
               <button
@@ -473,10 +286,10 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono font-bold">
                       XYZ
                     </span>
-                    <span>Constructor Interactivo de Viñetas Google XYZ</span>
+                    <span>{fl.simulators.xyzLabel}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    "Logró [X] medido a través de [Y] mediante la ejecución de [Z]"
+                    {fl.simulators.xyzDesc}
                   </p>
                 </div>
                 <span className="text-[10px] font-mono text-purple-300 bg-purple-950/70 border border-purple-800/60 px-2 py-0.5 rounded-full self-start sm:self-auto">
@@ -490,7 +303,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span className="w-4 h-4 rounded-full bg-purple-900 text-purple-200 flex items-center justify-center text-[10px]">
                       X
                     </span>
-                    <span>¿Qué lograste? (El Resultado)</span>
+                    <span>{language === "en" ? "What did you achieve? (Result)" : language === "pt" ? "O que você alcançou? (Resultado)" : language === "fr" ? "Qu avez-vous accompli ? (Résultat)" : language === "de" ? "Was haben Sie erreicht? (Ergebnis)" : language === "ja" ? "何を達成しましたか？（結果）" : "¿Qué lograste? (El Resultado)"}</span>
                   </label>
                   <textarea
                     rows={3}
@@ -505,7 +318,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span className="w-4 h-4 rounded-full bg-cyan-900 text-cyan-200 flex items-center justify-center text-[10px]">
                       Y
                     </span>
-                    <span>¿Cómo se midió? (La Métrica)</span>
+                    <span>{language === "en" ? "How was it measured? (Metric)" : language === "pt" ? "Como foi medido? (Métrica)" : language === "fr" ? "Comment a-t-il été mesuré ? (Métrique)" : language === "de" ? "Wie wurde es gemessen? (Metrik)" : language === "ja" ? "どのように測定されましたか？（指標）" : "¿Cómo se midió? (La Métrica)"}</span>
                   </label>
                   <textarea
                     rows={3}
@@ -520,7 +333,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span className="w-4 h-4 rounded-full bg-emerald-900 text-emerald-200 flex items-center justify-center text-[10px]">
                       Z
                     </span>
-                    <span>¿Cómo lo hiciste? (La Acción Técnica)</span>
+                    <span>{language === "en" ? "How did you do it? (Action)" : language === "pt" ? "Como você fez? (Ação Técnica)" : language === "fr" ? "Comment l avez-vous fait ? (Action)" : language === "de" ? "Wie haben Sie es umgesetzt? (Aktion)" : language === "ja" ? "どのように実行しましたか？（技術的施策）" : "¿Cómo lo hiciste? (La Acción Técnica)"}</span>
                   </label>
                   <textarea
                     rows={3}
@@ -576,10 +389,10 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span className="w-6 h-6 rounded bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-mono font-bold">
                       STAR
                     </span>
-                    <span>Desglose de Historias Conductuales para Entrevistas</span>
+                    <span>{fl.simulators.starLabel}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Prepara respuestas sólidas para rondas de System Design y Behavioral
+                    {fl.simulators.starDesc}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -609,11 +422,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                   }`}
                 >
                   <div className="font-bold text-indigo-300 mb-1 flex items-center justify-between">
-                    <span>1. Situación (Situation)</span>
+                    <span>{fl.simulators.starS}</span>
                     <span className="font-mono text-[10px] bg-indigo-900/80 px-1.5 py-0.5 rounded">S</span>
                   </div>
                   <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Durante el Black Friday, la pasarela de pagos experimentaba cuellos de botella en la base de datos transaccional con picos de 4,000 req/s.
+                    {fl.simulators.starSDesc}
                   </p>
                 </div>
 
@@ -626,11 +439,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                   }`}
                 >
                   <div className="font-bold text-indigo-300 mb-1 flex items-center justify-between">
-                    <span>2. Tarea (Task)</span>
+                    <span>{fl.simulators.starT}</span>
                     <span className="font-mono text-[10px] bg-indigo-900/80 px-1.5 py-0.5 rounded">T</span>
                   </div>
                   <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Debíamos garantizar cero compras duplicadas y una tasa de error inferior al 0.05% sin degradar el tiempo de respuesta del checkout.
+                    {fl.simulators.starTDesc}
                   </p>
                 </div>
 
@@ -643,11 +456,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                   }`}
                 >
                   <div className="font-bold text-indigo-300 mb-1 flex items-center justify-between">
-                    <span>3. Acción (Action)</span>
+                    <span>{fl.simulators.starA}</span>
                     <span className="font-mono text-[10px] bg-indigo-900/80 px-1.5 py-0.5 rounded">A</span>
                   </div>
                   <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Diseñé un patrón de idempotencia distribuida con Redis Cluster y cola asíncrona en BullMQ, aislando la confirmación de la liquidación bancaria.
+                    {fl.simulators.starADesc}
                   </p>
                 </div>
 
@@ -660,11 +473,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                   }`}
                 >
                   <div className="font-bold text-emerald-400 mb-1 flex items-center justify-between">
-                    <span>4. Resultado (Result)</span>
+                    <span>{fl.simulators.starR}</span>
                     <span className="font-mono text-[10px] bg-emerald-950 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-800/40">R</span>
                   </div>
                   <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Tasa de éxito del 99.98% durante 72 horas continuas, procesando $4.2M USD sin incidentes de doble cobro y con latencia reducida en 180ms.
+                    {fl.simulators.starRDesc}
                   </p>
                 </div>
               </div>
@@ -784,7 +597,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Layers className="w-5 h-5 text-cyan-400" />
-              <span>Desglose Completo de Módulos</span>
+              <span>{t.features.allFeatures}</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Filtra por área funcional para explorar en detalle cada capacidad del sistema
@@ -878,10 +691,10 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               Análisis Comparativo
             </span>
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              ¿Por qué GoalRecall supera a las alternativas genéricas?
+              {t.landing.comparisonTitle}
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
-              Notion se abandona por falta de estructura; los CVs en Word no tienen métricas; LinkedIn es público e invasivo.
+              {t.landing.comparisonSubtitle}
             </p>
           </div>
 
@@ -890,51 +703,49 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-900 border-b border-slate-800 text-slate-300">
-                    <th className="p-4 font-bold">Capacidad / Dimensión</th>
-                    <th className="p-4 font-bold text-cyan-300 bg-cyan-950/40 border-x border-cyan-800/40">
-                      GoalRecall
-                    </th>
+                    <th className="p-4 font-bold">{t.landing.tableFeature}</th>
+                    <th className="p-4 font-bold text-cyan-300 bg-cyan-950/40 border-x border-cyan-800/40">{t.landing.tableGoalRecall}</th>
                     <th className="p-4 font-bold text-slate-400">Notion / Obsidian</th>
-                    <th className="p-4 font-bold text-slate-400">Currículum Word/PDF</th>
-                    <th className="p-4 font-bold text-slate-400">Perfil LinkedIn</th>
+                    <th className="p-4 font-bold text-slate-400">{t.landing.tableDocs}</th>
+                    <th className="p-4 font-bold text-slate-400">{t.landing.tableLinkedIn}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80 text-slate-300">
                   <tr>
-                    <td className="p-4 font-semibold text-white">Tiempo de captura</td>
+                    <td className="p-4 font-semibold text-white">{t.landing.comp1Feature}</td>
                     <td className="p-4 font-bold text-cyan-300 bg-cyan-950/20 border-x border-cyan-800/40">
-                      ⚡ 40 segundos (Fricción cero)
+                      {t.landing.comp1GoalRecall}
                     </td>
                     <td className="p-4 text-slate-400">10-15 min (Página en blanco)</td>
-                    <td className="p-4 text-slate-400">Meses (Solo al cambiar empleo)</td>
-                    <td className="p-4 text-slate-400">Lento e intimidante</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp1Docs}</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp1LinkedIn}</td>
                   </tr>
                   <tr>
-                    <td className="p-4 font-semibold text-white">Síntesis Google XYZ & STAR</td>
+                    <td className="p-4 font-semibold text-white">{t.landing.comp2Feature}</td>
                     <td className="p-4 font-bold text-emerald-400 bg-cyan-950/20 border-x border-cyan-800/40">
-                      ✅ Motor IA Nativo con Gemini
+                      {t.landing.comp2GoalRecall}
                     </td>
                     <td className="p-4 text-slate-400">❌ Manual / Prompting propio</td>
-                    <td className="p-4 text-slate-400">❌ Inexistente</td>
-                    <td className="p-4 text-slate-400">❌ Texto genérico plano</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp2Docs}</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp2LinkedIn}</td>
                   </tr>
                   <tr>
-                    <td className="p-4 font-semibold text-white">Extracción de CV sin alucinación</td>
+                    <td className="p-4 font-semibold text-white">{t.landing.comp3Feature}</td>
                     <td className="p-4 font-bold text-emerald-400 bg-cyan-950/20 border-x border-cyan-800/40">
-                      ✅ Carga directa en 2 seg
+                      {t.landing.comp3GoalRecall}
                     </td>
                     <td className="p-4 text-slate-400">❌ Copiar y pegar a mano</td>
-                    <td className="p-4 text-slate-400">N/A (Es el documento)</td>
-                    <td className="p-4 text-slate-400">❌ Importador rígido</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp3Docs}</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp3LinkedIn}</td>
                   </tr>
                   <tr>
-                    <td className="p-4 font-semibold text-white">Privacidad & Sandbox Privado</td>
+                    <td className="p-4 font-semibold text-white">{t.landing.comp4Feature}</td>
                     <td className="p-4 font-bold text-emerald-400 bg-cyan-950/20 border-x border-cyan-800/40">
-                      ✅ Privado por defecto
+                      {t.landing.comp4GoalRecall}
                     </td>
                     <td className="p-4 text-slate-400">⚠️ Privado pero sin vitrina</td>
-                    <td className="p-4 text-slate-400">✅ Privado</td>
-                    <td className="p-4 text-slate-400">❌ 100% público (Alertas al jefe)</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp4Docs}</td>
+                    <td className="p-4 text-slate-400">{t.landing.comp4LinkedIn}</td>
                   </tr>
                   <tr>
                     <td className="p-4 font-semibold text-white">Vitrina para Reclutadores (Public Deck)</td>
@@ -969,11 +780,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Comienza a proteger tu valor técnico hoy mismo
+            {fl.footer.readyTitle}
           </h2>
 
           <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
-            No esperes al próximo ciclo de evaluación o al momento de buscar empleo para recordar lo que hiciste. Tu bitácora personal está a un clic de distancia.
+            {fl.footer.readySubtitle}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -982,7 +793,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 text-xs font-bold shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Probar Sandbox Inmediato (Sin Registro)</span>
+              <span>{fl.footer.startNow}</span>
             </button>
 
             {user ? (
@@ -991,7 +802,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
               >
                 <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                <span>Entrar a Mi Bitácora</span>
+                <span>{t.app.navLogbook}</span>
               </button>
             ) : (
               <button
@@ -1008,16 +819,16 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
       {/* Footer */}
       <footer className="py-6 px-4 sm:px-8 border-t border-slate-800/80 text-center text-slate-500 text-xs">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© {new Date().getFullYear()} GoalRecall — Bitácora Técnica Personal. Diseñado con disciplina 80/20.</p>
+          <p>© {new Date().getFullYear()} GoalRecall — {t.landing.badge}.</p>
           <div className="flex items-center gap-4 text-slate-400">
             <button onClick={onBackToLanding} className="hover:text-white transition-colors">
-              Inicio
+              {t.app.navHome}
             </button>
             <button onClick={() => setSelectedCategory("all")} className="hover:text-white transition-colors">
-              Características
+              {t.app.navFeatures}
             </button>
             <button onClick={onOpenQuickLog} className="hover:text-white transition-colors">
-              Captura Rápida
+              {t.nav.newLog}
             </button>
           </div>
         </div>

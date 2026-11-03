@@ -20,6 +20,8 @@ import {
   ChevronRight
 } from "lucide-react";
 import { WorkExperience, LogEntry, LogCategory } from "../types";
+import { useI18n } from "../i18n";
+import { MODALS_LOCALES } from "../i18n/modalsLocales";
 
 interface ExperienceModalProps {
   isOpen: boolean;
@@ -85,6 +87,8 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   initialData,
   existingLogs = [],
 }) => {
+  const { t, language } = useI18n();
+  const ml = MODALS_LOCALES[language]?.experienceModal || MODALS_LOCALES.en.experienceModal;
   // Step control: "form" | "confirm_autocreate"
   const [modalStep, setModalStep] = useState<"form" | "confirm_autocreate">("form");
 
@@ -276,20 +280,16 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">
                 {modalStep === "confirm_autocreate"
-                  ? "Autocreación de Logros"
+                  ? t.timeline.extractAllBullets
                   : initialData
-                  ? "Editar Experiencia"
-                  : "Nueva Experiencia"}
+                  ? t.modals.experienceEditTitle
+                  : t.modals.experienceTitle}
               </h2>
-              <p className="text-xs text-slate-400">
-                {modalStep === "confirm_autocreate"
-                  ? "Confirmación de registros automáticos en tu bitácora personal"
-                  : "Enfocado en Misión y Logros. Metadatos opcionales en acordeones (+)."}
-              </p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label={t.common.close}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -304,15 +304,15 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/50 via-slate-900 to-slate-900 border border-cyan-500/40 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm">
                 <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 animate-pulse" />
-                <span>Se registrarán automáticamente los siguientes logros</span>
+                <span>{ml.bulletsToCreateHeader}</span>
               </div>
               <p className="text-slate-300 text-xs leading-relaxed">
-                Detectamos <strong>{pendingBullets.length} viñetas</strong> en tu experiencia. Para ahorrarte trabajo, se autocrearán en tu <strong>Sandbox Privado (Confidencial) 🔒</strong> vinculados a <span className="text-cyan-300 font-semibold">{company || "esta experiencia"}</span>.
+                {ml.bulletsToCreateDesc(pendingBullets.length, company || "esta experiencia")}
               </p>
               <div className="flex items-start gap-2 pt-1 text-[11px] text-slate-400">
                 <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
                 <span>
-                  💡 <em>Podrás completarlos y enriquecerlos luego con sus acordeones (+ ¿Qué se buscaba?, + Impacto, + Solución) para darle máxima consistencia a tu perfil profesional.</em>
+                  💡 <em>{ml.bulletsTip}</em>
                 </span>
               </div>
             </div>
@@ -320,7 +320,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             {/* List Header & Toggle All */}
             <div className="flex items-center justify-between px-1 pt-1">
               <span className="font-bold text-slate-200 text-xs uppercase tracking-wider">
-                Viñetas seleccionadas para autocrear ({selectedCount} de {pendingBullets.length})
+                {ml.selectedCountLabel(selectedCount, pendingBullets.length)}
               </span>
               <button
                 type="button"
@@ -365,7 +365,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                           {cat}
                         </span>
                         <span className="text-[10px] text-slate-500">
-                          Sandbox Privado 🔒
+                          Bóveda Privada 🔒
                         </span>
                       </div>
                     </div>
@@ -417,14 +417,14 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-bold text-cyan-300 text-xs">
                   <Compass className="w-4 h-4 text-cyan-400" />
-                  <span>Misión & Contexto General del Rol</span>
+                  <span>{ml.missionHeader}</span>
                 </label>
                 <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-full">
                   Principal
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Describe qué hacía el equipo, el problema que resolvías y el alcance de tu responsabilidad.
+                {ml.missionDesc}
               </p>
               <textarea
                 rows={3}
@@ -440,7 +440,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-bold text-slate-200 text-xs">
                   <ListPlus className="w-4 h-4 text-emerald-400" />
-                  <span>Viñetas & Logros del CV (una por línea)</span>
+                  <span>{ml.cvBulletsHeader}</span>
                 </label>
                 <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-emerald-400" />
@@ -448,7 +448,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Escribe o pega las viñetas de tu CV. Cada línea se convertirá automáticamente en un logro editable en tu bitácora.
+                {ml.cvBulletsDesc}
               </p>
               <textarea
                 rows={4}
@@ -475,7 +475,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                       {company || role ? (
                         `🏢 ${company || 'Empresa'} · ${role || 'Rol Profesional'}`
                       ) : (
-                        "+ Empresa / Organización & Rol Profesional (Opcional)"
+                        `+ ${ml.optionalCompanyHeader} (Opcional)`
                       )}
                     </span>
                   </div>
@@ -488,7 +488,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                       <Building className="w-3.5 h-3.5 text-cyan-400" />
-                      Empresa / Organización & Rol Profesional
+                      {ml.optionalCompanyHeader}
                     </span>
                     <button
                       type="button"
@@ -560,7 +560,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               )}
             </div>
 
-            {/* 4. ACORDEÓN OPCIONAL 2: Fechas & Período (Inicio, Fin, Actualidad) (+) */}
+            {/* 4. ACORDEÓN OPCIONAL 2: {ml.datesHeader} (Inicio, Fin, Actualidad) (+) */}
             <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/40">
               {!isDatesOpen ? (
                 <button
@@ -576,7 +576,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                       {startDate || endDate || isCurrent ? (
                         `📅 Fechas: ${startDate || '—'} a ${isCurrent ? 'Actualidad' : (endDate || '—')}`
                       ) : (
-                        "+ Fechas & Período (Inicio / Fin / Actualidad) (Opcional)"
+                        `+ ${ml.datesHeader} (Opcional)`
                       )}
                     </span>
                   </div>
@@ -667,7 +667,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                       {location || technologies.length > 0 ? (
                         `🏷️ ${location || 'Ubicación'} · ${technologies.length} tags/herramientas`
                       ) : (
-                        "+ Ubicación, Herramientas & Canales (Opcional)"
+                        `+ ${ml.toolsHeader} (Opcional)`
                       )}
                     </span>
                   </div>
@@ -680,7 +680,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                      Ubicación, Herramientas & Canales Clave
+                      {ml.toolsHeader}
                     </span>
                     <button
                       type="button"

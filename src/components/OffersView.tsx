@@ -27,6 +27,8 @@ import {
   AlertCircle
 } from "lucide-react";
 import { JobOffer, JobOfferStatus, LogEntry, WorkExperience, UserProfile } from "../types";
+import { useI18n } from "../i18n";
+import { VIEW_LOCALES } from "../i18n/viewLocales";
 
 interface OffersViewProps {
   offers: JobOffer[];
@@ -51,6 +53,8 @@ export const OffersView: React.FC<OffersViewProps> = ({
   onOpenQuickLog,
   onOpenCvUpload,
 }) => {
+  const { t, language } = useI18n();
+  const ol = VIEW_LOCALES[language]?.offers || VIEW_LOCALES.en.offers;
   const [selectedOfferId, setSelectedOfferId] = useState<string>(
     offers.length > 0 ? offers[0].id : ""
   );
@@ -234,13 +238,13 @@ export const OffersView: React.FC<OffersViewProps> = ({
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-800/60 text-indigo-300 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Fase 2: Motor de Ofertas, CV Enfocado & ATS Match</span>
+              <span>{t.offers.title}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Tus Postulaciones basadas en la Oferta
+              {t.offers.title}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Carga cualquier vacante laboral, define tus condiciones de compensación y deja que GoalRecall cruce tus logros con los requisitos del ATS para generar un CV enfocado y preparar tu entrevista técnica.
+              {t.offers.subtitle}
             </p>
           </div>
 
@@ -250,7 +254,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-900/30 flex items-center gap-2 transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Cargar Nueva Oferta</span>
+              <span>{t.offers.newOfferBtn}</span>
             </button>
           </div>
         </div>
@@ -265,11 +269,11 @@ export const OffersView: React.FC<OffersViewProps> = ({
           {/* Status Pills */}
           <div className="flex items-center gap-1.5 p-1 bg-slate-900/80 border border-slate-800 rounded-xl overflow-x-auto text-[11px] font-medium">
             {[
-              { id: "all", label: "Todas" },
-              { id: "saved", label: "Guardadas" },
-              { id: "applied", label: "Postuladas" },
-              { id: "interviewing", label: "Entrevistas" },
-              { id: "offered", label: "Ofertas" },
+              { id: "all", label: ol.tabAll },
+              { id: "saved", label: ol.tabSaved },
+              { id: "applied", label: ol.tabApplied },
+              { id: "interviewing", label: ol.tabInterviewing },
+              { id: "offered", label: ol.tabOffered },
             ].map((f) => (
               <button
                 key={f.id}
@@ -290,12 +294,12 @@ export const OffersView: React.FC<OffersViewProps> = ({
             {filteredOffers.length === 0 ? (
               <div className="p-8 text-center bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-3">
                 <Briefcase className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-xs text-slate-400">No hay ofertas en este estado.</p>
+                <p className="text-xs text-slate-400">{ol.noOffersInState}</p>
                 <button
                   onClick={() => setIsNewOfferModalOpen(true)}
                   className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
                 >
-                  + Cargar una oferta ahora
+                  {ol.loadOfferNowBtn}
                 </button>
               </div>
             ) : (
@@ -311,12 +315,12 @@ export const OffersView: React.FC<OffersViewProps> = ({
                 };
 
                 const statusLabels = {
-                  saved: "Guardada",
-                  applied: "Postulado",
-                  interviewing: "En Entrevistas",
-                  offered: "Oferta Recibida",
-                  rejected: "Descartada",
-                  accepted: "Aceptada",
+                  saved: ol.statusSaved,
+                  applied: ol.statusApplied,
+                  interviewing: ol.statusInterviewing,
+                  offered: ol.statusOffered,
+                  rejected: ol.statusRejected,
+                  accepted: ol.statusAccepted,
                 };
 
                 return (
@@ -414,7 +418,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                 {/* Candidate Conditions Summary Bar */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-2xl text-xs">
                   <div>
-                    <span className="text-slate-500 block text-[10px] font-mono uppercase">Compensación Pretendida:</span>
+                    <span className="text-slate-500 block text-[10px] font-mono uppercase">{ol.targetCompensationLabel}</span>
                     <span className="font-bold text-emerald-400 font-mono text-sm">
                       {currentOffer.salaryExpectation?.min
                         ? `$${currentOffer.salaryExpectation.min.toLocaleString()} - $${currentOffer.salaryExpectation.max?.toLocaleString()} ${currentOffer.salaryExpectation.currency}/${currentOffer.salaryExpectation.period}`
@@ -437,7 +441,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
 
                 {/* Pipeline Status Selector */}
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-xs text-slate-400 font-mono">Estado de postulación:</span>
+                  <span className="text-xs text-slate-400 font-mono">{ol.statusLabel}</span>
                   {(["saved", "applied", "interviewing", "offered", "rejected"] as JobOfferStatus[]).map((st) => (
                     <button
                       key={st}
@@ -450,8 +454,8 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     >
                       {st === "saved" && "Guardada"}
                       {st === "applied" && "Postulado"}
-                      {st === "interviewing" && "En Entrevistas"}
-                      {st === "offered" && "Oferta"}
+                      {st === "interviewing" && ol.statusInterviewing}
+                      {st === "offered" && ol.statusOffered}
                       {st === "rejected" && "Descartada"}
                     </button>
                   ))}
@@ -469,7 +473,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   }`}
                 >
                   <Target className="w-3.5 h-3.5" />
-                  <span>Análisis ATS & Afinidades</span>
+                  <span>{ol.tabAtsAnalysis}</span>
                   {currentOffer.atsAnalysis?.score && (
                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900/60 text-white font-mono">
                       {currentOffer.atsAnalysis.score}%
@@ -498,7 +502,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Preparador de Entrevistas</span>
+                  <span>{ol.tabInterviewPrep}</span>
                 </button>
               </div>
 
@@ -508,13 +512,13 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   <div className="p-5 bg-slate-950/80 border border-cyan-900/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wide">
-                        Diagnóstico ATS Match
+                        {ol.atsMatchDiagnostic}
                       </span>
                       <h3 className="text-lg font-bold text-white">
                         Afinidad con los Requisitos de {currentOffer.company}
                       </h3>
                       <p className="text-xs text-slate-300">
-                        Evaluación algorítmica de palabras clave detectadas en tu base de datos de logros frente al texto de la vacante.
+                        {ol.atsDiagnosticDesc}
                       </p>
                     </div>
 
@@ -533,7 +537,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
                       <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase font-mono">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Términos Cumplidos en tu Bóveda</span>
+                        <span>{ol.matchedKeywordsTitle}</span>
                       </h4>
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {currentOffer.atsAnalysis.matchedKeywords.map((kw, i) => (
@@ -567,7 +571,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2 text-xs">
                     <h4 className="font-bold text-white flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Recomendaciones Estratégicas para esta Oferta:</span>
+                      <span>{ol.recommendationsTitle}</span>
                     </h4>
                     <ul className="space-y-1.5 text-slate-300 pl-4 list-disc">
                       {currentOffer.atsAnalysis.recommendations.map((rec, i) => (
@@ -578,7 +582,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
 
                   {/* Original Job Description Accordion */}
                   <div className="p-4 bg-slate-950/50 border border-slate-800/80 rounded-xl space-y-2">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase font-mono">Texto Original de la Vacante</h4>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase font-mono">{ol.originalVacancyHeader}</h4>
                     <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto pr-2">
                       {currentOffer.description}
                     </p>
@@ -593,7 +597,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     <div>
                       <h3 className="text-sm font-bold text-white">Previsualizador de CV Enfocado para {currentOffer.company}</h3>
                       <p className="text-xs text-purple-300">
-                        Selecciona qué logros de tu Bóveda (SSOT) deseas incluir en esta postulación.
+                        {ol.selectBulletsToInclude}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -602,7 +606,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
                       >
                         {copiedCvText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedCvText ? "Copiado" : "Copiar Texto"}</span>
+                        <span>{copiedCvText ? ol.copiedCvText : ol.copyCvText}</span>
                       </button>
                       <button
                         onClick={() => window.print()}
@@ -617,12 +621,12 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   {/* Achievement Selector from SSOT */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                      Logros Disponibles en tu Bitácora (Marca los que quieras incluir):
+                      {ol.availableAchievementsTitle}
                     </h4>
                     
                     {logs.length === 0 ? (
                       <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
-                        <span>Aún no tienes logros en tu Bitácora.</span>
+                        <span>{ol.emptyAchievementsInLogbook}</span>
                         <button
                           onClick={onOpenQuickLog}
                           className="text-cyan-400 hover:text-cyan-300 font-bold"
@@ -733,7 +737,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   <div className="p-5 bg-emerald-950/30 border border-emerald-800/40 rounded-2xl space-y-3">
                     <h3 className="text-sm font-bold text-emerald-300 flex items-center gap-2">
                       <Zap className="w-4 h-4 text-emerald-400" />
-                      <span>Cheat Sheet de Repaso Rápido (Léelo 10 min antes de la llamada)</span>
+                      <span>{ol.cheatSheetTitle}</span>
                     </h3>
                     <ul className="space-y-2 text-xs text-slate-200 pl-4 list-disc">
                       {currentOffer.interviewPrep.cheatSheet.map((item, i) => (
@@ -745,7 +749,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   {/* Anticipated Q&A Cards */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                      Preguntas Técnicas & Conductuales más Probables para {currentOffer.role}:
+                      {ol.technicalQuestionsTitle(currentOffer.role)}
                     </h4>
 
                     {currentOffer.interviewPrep.frequentQuestions.map((qa, i) => (
@@ -771,15 +775,15 @@ export const OffersView: React.FC<OffersViewProps> = ({
           ) : (
             <div className="p-12 text-center bg-slate-900/40 border border-slate-800 rounded-3xl space-y-4">
               <Briefcase className="w-12 h-12 text-indigo-400 mx-auto" />
-              <h3 className="text-lg font-bold text-white">No hay ofertas seleccionadas</h3>
+              <h3 className="text-lg font-bold text-white">{ol.emptySelectedOffersTitle}</h3>
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Carga los datos de una postulación para generar tu CV enfocado y analizar palabras clave ATS.
+                {ol.emptySelectedOffersDesc}
               </p>
               <button
                 onClick={() => setIsNewOfferModalOpen(true)}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl"
               >
-                + Cargar Oferta Ahora
+                {ol.loadOfferNowBtn}
               </button>
             </div>
           )}
@@ -802,11 +806,11 @@ export const OffersView: React.FC<OffersViewProps> = ({
             <div className="space-y-1">
               <div className="inline-flex items-center gap-1.5 text-indigo-400 text-xs font-mono font-bold">
                 <Briefcase className="w-3.5 h-3.5" />
-                <span>NUEVA VACANTE / POSTULACIÓN</span>
+                <span>{ol.modalKicker}</span>
               </div>
-              <h3 className="text-xl font-bold text-white">Ingresar Ficha de Oferta Laboral</h3>
+              <h3 className="text-xl font-bold text-white">{ol.modalTitle}</h3>
               <p className="text-xs text-slate-400">
-                Pega la descripción del rol para extraer requisitos y cruzarlo con tus logros.
+                {ol.modalSubtitle}
               </p>
             </div>
 
@@ -824,7 +828,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-slate-300 font-semibold">Título del Rol *</label>
+                  <label className="text-slate-300 font-semibold">{ol.roleTitleLabel}</label>
                   <input
                     type="text"
                     required
@@ -837,11 +841,11 @@ export const OffersView: React.FC<OffersViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-slate-300 font-semibold">Descripción / Requisitos de la Oferta *</label>
+                <label className="text-slate-300 font-semibold">{ol.jobDescriptionLabel}</label>
                 <textarea
                   required
                   rows={4}
-                  placeholder="Pega aquí los requisitos, stack y responsabilidades del puesto..."
+                  placeholder={ol.jobDescriptionPlaceholder}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-indigo-500 font-sans"
@@ -851,11 +855,11 @@ export const OffersView: React.FC<OffersViewProps> = ({
               {/* Conditions: Salary & Modality */}
               <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
                 <span className="text-[11px] font-bold text-indigo-300 uppercase font-mono block">
-                  Tus Condiciones Pretendidas para esta Vacante:
+                  {ol.targetConditionsHeader}
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div>
-                    <label className="text-[10px] text-slate-400">Salario Mínimo</label>
+                    <label className="text-[10px] text-slate-400">{ol.minSalaryLabel}</label>
                     <input
                       type="number"
                       placeholder="6000"
@@ -865,7 +869,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400">Salario Máximo</label>
+                    <label className="text-[10px] text-slate-400">{ol.maxSalaryLabel}</label>
                     <input
                       type="number"
                       placeholder="9000"
@@ -888,15 +892,15 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400">Modalidad</label>
+                    <label className="text-[10px] text-slate-400">{ol.modalityLabel}</label>
                     <select
                       value={formModality}
                       onChange={(e) => setFormModality(e.target.value as any)}
                       className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs"
                     >
-                      <option value="100% Remoto">100% Remoto</option>
-                      <option value="Híbrido">Híbrido</option>
-                      <option value="Presencial">Presencial</option>
+                      <option value="100% Remoto">{ol.modalityRemote}</option>
+                      <option value="Híbrido">{ol.modalityHybrid}</option>
+                      <option value="Presencial">{ol.modalityOnsite}</option>
                     </select>
                   </div>
                 </div>
@@ -914,7 +918,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-900/30 transition-all"
                 >
-                  Guardar & Analizar Oferta
+                  {ol.saveAndAnalyzeBtn}
                 </button>
               </div>
             </form>

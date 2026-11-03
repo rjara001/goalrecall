@@ -21,6 +21,8 @@ import {
   generateSTARStories, 
   generateCaseStudyMarkdown 
 } from "../utils/synthesis";
+import { useI18n } from "../i18n";
+import { MODALS_LOCALES } from "../i18n/modalsLocales";
 
 interface SynthesisHubProps {
   logs: LogEntry[];
@@ -28,6 +30,8 @@ interface SynthesisHubProps {
 }
 
 export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) => {
+  const { t, language } = useI18n();
+  const sl = MODALS_LOCALES[language]?.synthesisHub || MODALS_LOCALES.en.synthesisHub;
   const [activeMode, setActiveMode] = useState<"xyz" | "star" | "casestudy">("xyz");
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -76,16 +80,14 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
-              Estudio de Síntesis de Carrera
+              {t.synthesis.title}
             </span>
-            <span className="text-slate-600">·</span>
-            <span className="text-xs text-slate-400">Automatización de CV & Entrevistas</span>
           </div>
           <h2 className="text-xl font-bold text-white tracking-tight">
-            Transforma Bitácoras en Activos de Carrera
+            {t.synthesis.title}
           </h2>
           <p className="text-xs text-slate-400 max-w-2xl mt-1 leading-relaxed">
-            Sintetiza tus logros diarios en bullets de CV con la fórmula Google XYZ, prepara historias STAR para entrevistas de conducta o exporta casos de estudio para tu portafolio.
+            {t.synthesis.subtitle}
           </p>
         </div>
 
@@ -96,7 +98,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
             onChange={(e) => setSelectedClient(e.target.value)}
             className="bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-medium"
           >
-            <option value="all">Todos los Clientes ({logs.length} logros)</option>
+            <option value="all">{t.common.all} ({logs.length})</option>
             {clients.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -104,11 +106,11 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
 
           <button
             onClick={handlePrint}
-            title="Imprimir o Guardar como PDF"
+            title={t.common.download}
             className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors flex items-center gap-1.5 text-xs font-medium"
           >
             <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Imprimir / PDF</span>
+            <span className="hidden sm:inline">PDF</span>
           </button>
         </div>
       </div>
@@ -124,7 +126,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
           }`}
         >
           <Briefcase className="w-4 h-4" />
-          <span>Fórmula Google XYZ (CV)</span>
+          <span>{sl.googleXyzTab}</span>
           <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/20">
             {xyzBullets.length}
           </span>
@@ -139,7 +141,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Historias STAR (Entrevistas)</span>
+          <span>{sl.starTab}</span>
           <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/20">
             {starStories.length}
           </span>
@@ -154,7 +156,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>Caso de Estudio (Portfolio Markdown)</span>
+          <span>{sl.caseStudyTab}</span>
         </button>
       </div>
 
@@ -167,10 +169,10 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
             <div className="p-4 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold text-slate-200">
-                  Estructura estándar de Google: "Accomplished [X] as measured by [Y], by doing [Z]"
+                  {sl.googleXyzLead}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Bullets de alto impacto calibrados para captar la atención de reclutadores y Hiring Managers.
+                  {sl.googleXyzDesc}
                 </p>
               </div>
               <button
@@ -183,7 +185,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-medium rounded-lg border border-slate-700 transition-colors shrink-0"
               >
                 {copiedId === "all-xyz" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedId === "all-xyz" ? "¡Copiados!" : "Copiar Todos"}</span>
+                <span>{copiedId === "all-xyz" ? sl.copied : sl.copyAll}</span>
               </button>
             </div>
 
@@ -192,7 +194,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                 <Briefcase className="w-8 h-8 text-cyan-400 mx-auto opacity-60" />
                 <h4 className="text-sm font-bold text-white">Sin logros para sintetizar en Google XYZ</h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Registra tus primeras victorias técnicas en la Bitácora o sube tu CV para autogenerar bullets de alto impacto con métricas comprobables.
+                  {sl.emptyXyz}
                 </p>
               </div>
             ) : (
@@ -214,7 +216,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                         • {item.bullet}
                       </p>
                       <div className="flex items-center gap-2 text-[11px] text-emerald-400/90 font-mono">
-                        <span className="font-semibold text-emerald-500">Métrica clave:</span>
+                        <span className="font-semibold text-emerald-500">{sl.keyMetric}</span>
                         <span>{item.impact}</span>
                       </div>
                     </div>
@@ -238,10 +240,10 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
           <div className="space-y-4">
             <div className="p-4 bg-slate-950 border border-slate-800/80 rounded-xl">
               <p className="text-xs font-bold text-slate-200">
-                Framework STAR: Situación, Tarea, Acción y Resultado
+                {sl.starLead}
               </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Utiliza estas fichas para responder preguntas de conducta: "¿Cuéntame sobre un fallo crítico que resolviste?" o "¿Cómo lideras decisiones de arquitectura?".
+                {sl.starDesc}
               </p>
             </div>
 
@@ -250,7 +252,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                 <Layers className="w-8 h-8 text-cyan-400 mx-auto opacity-60" />
                 <h4 className="text-sm font-bold text-white">Sin fichas STAR disponibles</h4>
                 <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  Añade tus logros técnicos en la Bitácora para autogenerar historias STAR estructuradas (Situación, Tarea, Acción, Resultado) para entrevistas.
+                  {sl.emptyStar}
                 </p>
               </div>
             ) : (
@@ -288,7 +290,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-lg border border-slate-700 transition-colors shrink-0"
                       >
                         {copiedId === story.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedId === story.id ? "¡Copiado!" : "Copiar Ficha STAR"}</span>
+                        <span>{copiedId === story.id ? sl.copied : sl.copyStarCard}</span>
                       </button>
                     </div>
 
@@ -296,28 +298,28 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                       <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-bold block mb-1">
-                          [S] Situación (Contexto)
+                          {sl.starLabels.s}
                         </span>
                         <p className="text-slate-300 leading-relaxed">{story.situation}</p>
                       </div>
 
                       <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold block mb-1">
-                          [T] Tarea (Objetivo y Reto)
+                          {sl.starLabels.t}
                         </span>
                         <p className="text-slate-300 leading-relaxed">{story.task}</p>
                       </div>
 
                       <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-blue-400 font-bold block mb-1">
-                          [A] Acción (Implementación Técnica)
+                          {sl.starLabels.a}
                         </span>
                         <p className="text-slate-300 leading-relaxed">{story.action}</p>
                       </div>
 
                       <div className="p-3 bg-slate-950/70 border border-emerald-950/80 rounded-lg">
                         <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold block mb-1">
-                          [R] Resultado (Impacto Cuantitativo)
+                          {sl.starLabels.r}
                         </span>
                         <p className="text-emerald-200 font-mono font-medium leading-relaxed">{story.result}</p>
                       </div>
@@ -335,7 +337,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold text-slate-200">
-                  Caso de estudio técnico estructurado en Markdown (.md)
+                  {sl.caseStudyDesc}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
                   Listo para pegar en repositorios de GitHub, Notion o tu sitio web de portafolio personal.
@@ -348,7 +350,7 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
                 >
                   {copiedId === "md-all" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedId === "md-all" ? "¡Copiado!" : "Copiar Markdown"}</span>
+                  <span>{copiedId === "md-all" ? sl.copied : t.common.copy}</span>
                 </button>
 
                 <button

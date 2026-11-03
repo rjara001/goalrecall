@@ -29,26 +29,52 @@ import {
   Minus,
   Palette
 } from "lucide-react";
-import { LogCategory, LogEntry, UserProfile, VisitorMessage } from "../types";
+import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
+import { ProductCard } from "./ProductCard";
+import { useI18n } from "../i18n";
 
 interface PublicDeckProps {
   logs: LogEntry[];
+  products?: Product[];
   userProfile: UserProfile;
   onSendVisitorMessage: (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => void;
+  onBackToLanding?: () => void;
+  onOpenAuth?: () => void;
+  isVisitorPreview?: boolean;
+  isOwner?: boolean;
+  onOpenNewProduct?: () => void;
+  onEditProduct?: (product: Product) => void;
+  onDeleteProduct?: (id: string) => void;
+  onToggleProductPublic?: (id: string) => void;
 }
 
 export const PublicDeck: React.FC<PublicDeckProps> = ({
   logs,
+  products = [],
   userProfile,
   onSendVisitorMessage,
+  onBackToLanding,
+  onOpenAuth,
+  isVisitorPreview,
+  isOwner = false,
+  onOpenNewProduct,
+  onEditProduct,
+  onDeleteProduct,
+  onToggleProductPublic,
 }) => {
-  // CRITICAL SANDBOX ISOLATION: Strict filter for public entries ONLY
-  const publicLogs = useMemo(() => logs.filter((l) => l.isPublic), [logs]);
+  const { t } = useI18n();
 
+  // CRITICAL PRIVACY ISOLATION: Strict filter for public entries ONLY (excludes Bóveda Privada for non-owners)
+  const publicLogs = useMemo(() => logs.filter((l) => isOwner || l.isPublic), [logs, isOwner]);
+  const publicProducts = useMemo(() => products.filter((p) => isOwner || p.isPublic !== false), [products, isOwner]);
+
+  const [activeTab, setActiveTab] = useState<"achievements" | "products">("achievements");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [selectedTech, setSelectedTech] = useState<string>("all");
   const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [showOtherNetworks, setShowOtherNetworks] = useState<boolean>(false);
 
@@ -98,6 +124,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   const categories = useMemo(() => Array.from(new Set(publicLogs.map((l) => l.category))), [publicLogs]);
   const tags = useMemo(() => Array.from(new Set(publicLogs.flatMap((l) => l.tags))), [publicLogs]);
 
+  // Unique tech stacks across public products
+  const allTechList = useMemo(() => {
+    const set = new Set<string>();
+    publicProducts.forEach((p) => {
+      p.techStack?.forEach((t) => set.add(t));
+    });
+    return Array.from(set).sort();
+  }, [publicProducts]);
+
   // Filtered public logs
   const filteredPublicLogs = useMemo(() => {
     return publicLogs.filter((log) => {
@@ -106,6 +141,14 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
       return true;
     });
   }, [publicLogs, selectedCategory, selectedTag]);
+
+  // Filtered public products
+  const filteredPublicProducts = useMemo(() => {
+    return publicProducts.filter((prod) => {
+      if (selectedTech !== "all" && !prod.techStack?.includes(selectedTech)) return false;
+      return true;
+    });
+  }, [publicProducts, selectedTech]);
 
   const handleNoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,18 +173,69 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   };
 
   const handleSelectFromChat = (log: LogEntry) => {
+    setActiveTab("achievements");
     setHighlightedLogId(log.id);
-    const element = document.getElementById(`public-log-${log.id}`);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    setTimeout(() => {
+      const element = document.getElementById(`public-log-${log.id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+  };
+
+  const handleSelectProductFromChat = (prod: Product) => {
+    setActiveTab("products");
+    setHighlightedProductId(prod.id);
+    setTimeout(() => {
+      const element = document.getElementById(`public-product-${prod.id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
   };
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-16">
       
-      {/* Executive Hero Deck */}
-      <div className="p-6 sm:p-8 bg-gradient-to-br from-[#0B1220] via-slate-900 to-[#0A101C] border border-emerald-950/80 rounded-3xl relative overflow-hidden shadow-2xl">
+      {/* Visitor Preview Guidance Banner */}
+      {isVisitorPreview && (
+        <div className="bg-gradient-to-r from-emerald-950/70 via-slate-900 to-cyan-950/70 border border-emerald-700/50 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-white text-sm flex items-center gap-2">
+                <span>{t.publicDeck.badge}</span>
+              </p>
+              <p className="text-xs text-slate-300">
+                {t.publicDeck.subtitle}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto justify-end">
+            {onBackToLanding && (
+              <button
+                onClick={onBackToLanding}
+                className="px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-all"
+              >
+                {t.common.back}
+              </button>
+            )}
+            {onOpenAuth && (
+              <button
+                onClick={onOpenAuth}
+                className="px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 rounded-xl shadow-sm transition-all"
+              >
+                {t.nav.signIn}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hero Header: Executive Profile */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-[#0B111E] to-[#080C14] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
@@ -159,7 +253,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 </h1>
                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  Vitrina Verificada
+                  {t.publicDeck.verifiedBadge}
                 </span>
                 {userProfile.availabilityStatus && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-cyan-300 bg-cyan-950/80 border border-cyan-800/60 px-2 py-0.5 rounded-full">
@@ -176,7 +270,9 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 <MapPin className="w-3.5 h-3.5 text-slate-500" />
                 <span>{userProfile.location}</span>
                 <span className="text-slate-600">·</span>
-                <span className="font-mono text-emerald-400">{publicLogs.length} logros públicos</span>
+                <span className="font-mono text-emerald-400">{publicLogs.length} logros</span>
+                <span className="text-slate-600">·</span>
+                <span className="font-mono text-cyan-400">{publicProducts.length} productos</span>
               </p>
             </div>
           </div>
@@ -184,7 +280,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
           {/* Social Links & Quick Contact */}
           <div className="flex flex-col sm:items-end gap-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              {/* Primary LinkedIn (High relevance) */}
+              {/* Primary LinkedIn */}
               {primaryLinkedin && (
                 <a
                   href={primaryLinkedin.startsWith("http") ? primaryLinkedin : `https://${primaryLinkedin}`}
@@ -198,7 +294,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 </a>
               )}
 
-              {/* Primary GitHub (High relevance) */}
+              {/* Primary GitHub */}
               {primaryGithub && (
                 <a
                   href={primaryGithub.startsWith("http") ? primaryGithub : `https://${primaryGithub}`}
@@ -212,7 +308,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 </a>
               )}
 
-              {/* Secondary networks accordion toggle with [+] */}
+              {/* Secondary networks toggle */}
               {secondaryNetworks.length > 0 && (
                 <button
                   type="button"
@@ -279,216 +375,314 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
         </div>
       </div>
 
-      {/* Main Two-Column Layout: Public Achievements + First Mate Assistant */}
+      {/* Main Two-Column Layout: Public Showcase Tabs + First Mate Assistant */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* Left Column: Public Achievements Timeline (7 Cols) */}
+        {/* Left Column: Showcase Container (7 Cols) */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Header & Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <span>Vitrina de Logros Públicos</span>
-                <span className="text-xs font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded">
-                  {filteredPublicLogs.length}
+          {/* Navigation Tabs (As requested in user ASCII diagram) */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-1.5 p-1 bg-[#080C14] border border-slate-800 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setActiveTab("achievements")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === "achievements"
+                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="text-amber-400">★</span>
+                <span>Logros y Experiencia</span>
+                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-400 border border-slate-700/60">
+                  {publicLogs.length}
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Resultados medibles y victorias técnicas autorizadas para divulgación.
-              </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("products")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === "products"
+                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="text-emerald-400">🚀</span>
+                <span>Productos & Showcase</span>
+                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700/60">
+                  {publicProducts.length}
+                </span>
+              </button>
             </div>
 
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-[#080C14] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
-            >
-              <option value="all">Todas las Categorías</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            {/* Right side filter based on active tab */}
+            {activeTab === "achievements" ? (
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="bg-[#080C14] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="all">{t.publicDeck.filterAll}</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <select
+                  value={selectedTech}
+                  onChange={(e) => setSelectedTech(e.target.value)}
+                  className="bg-[#080C14] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="all">Todas las tecnologías ({allTechList.length})</option>
+                  {allTechList.map((tech) => (
+                    <option key={tech} value={tech}>{tech}</option>
+                  ))}
+                </select>
+
+                {isOwner && onOpenNewProduct && (
+                  <button
+                    type="button"
+                    onClick={onOpenNewProduct}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Nuevo Producto</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Cards List */}
-          {filteredPublicLogs.length === 0 ? (
-            <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
-              <p className="text-xs text-slate-400">
-                No hay logros públicos en esta categoría.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredPublicLogs.map((log) => {
-                const isHighlighted = highlightedLogId === log.id;
-                return (
-                  <div
-                    id={`public-log-${log.id}`}
-                    key={log.id}
-                    className={`p-5 rounded-2xl border transition-all ${
-                      isHighlighted
-                        ? "bg-slate-900 border-emerald-400 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-950/30"
-                        : "bg-slate-900/60 hover:bg-slate-900/90 border-slate-800"
-                    }`}
-                  >
-                    {/* Top Row: Unboxed Metadata */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-2">
-                      <div className="flex items-center gap-2 text-slate-400 font-medium">
-                        <span className="text-white font-semibold">{log.client}</span>
-                        <span>·</span>
-                        <span className="text-slate-300">{log.project}</span>
-                        <span>·</span>
-                        <span className="font-mono text-slate-400">{log.date}</span>
-                      </div>
-
-                      <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
-                        {log.category}
-                      </span>
-                    </div>
-
-                    {/* Headline - Logro (Multilínea) */}
-                    <div className="mb-2.5">
-                      <span className="text-[10px] font-mono text-emerald-400 font-semibold tracking-wider uppercase block mb-1">
-                        Logro Verificado (Viñeta CV)
-                      </span>
-                      <h3 className="text-base font-semibold text-white leading-relaxed whitespace-pre-wrap">
-                        {log.title}
-                      </h3>
-                    </div>
-
-                    {/* Impact Metric Box */}
-                    <div className="p-3 bg-slate-950 border border-emerald-950 rounded-xl mb-3 flex items-start gap-2.5">
-                      <Zap className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
-                          Impacto Medible
-                        </span>
-                        <p className="text-xs sm:text-sm text-emerald-200 font-mono font-medium whitespace-pre-wrap">
-                          {log.impact}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Breakdown Accordions for Recruiters & Visitors */}
-                    {(log.whatWasSought || log.whyImportant || log.howApplied || log.description) && (
-                      <div className="space-y-1.5 mb-3">
-                        {log.whatWasSought && (
-                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
-                            <button
-                              type="button"
-                              onClick={() => toggleField(`${log.id}-what`)}
-                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-indigo-300 hover:bg-slate-900 transition-colors text-left"
-                            >
-                              <span className="flex items-center gap-1.5 font-medium">
-                                <Target className="w-3.5 h-3.5 text-indigo-400" />
-                                <span>{expandedFields[`${log.id}-what`] ? "−" : "+"} ¿Qué se buscaba lograr?</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-500">
-                                {expandedFields[`${log.id}-what`] ? "Cerrar" : "Ver"}
-                              </span>
-                            </button>
-                            {expandedFields[`${log.id}-what`] && (
-                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
-                                {log.whatWasSought}
-                              </p>
-                            )}
+          {/* Tab 1: Public Achievements */}
+          {activeTab === "achievements" && (
+            <>
+              {filteredPublicLogs.length === 0 ? (
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+                  <p className="text-xs text-slate-400">
+                    {t.publicDeck.emptyPublicLogsTitle}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredPublicLogs.map((log) => {
+                    const isHighlighted = highlightedLogId === log.id;
+                    return (
+                      <div
+                        id={`public-log-${log.id}`}
+                        key={log.id}
+                        className={`p-5 rounded-2xl border transition-all ${
+                          isHighlighted
+                            ? "bg-slate-900 border-emerald-400 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-950/30"
+                            : "bg-slate-900/60 hover:bg-slate-900/90 border-slate-800"
+                        }`}
+                      >
+                        {/* Top Row: Unboxed Metadata */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-2">
+                          <div className="flex items-center gap-2 text-slate-400 font-medium">
+                            <span className="text-white font-semibold">{log.client}</span>
+                            <span>·</span>
+                            <span className="text-slate-300">{log.project}</span>
+                            <span>·</span>
+                            <span className="font-mono text-slate-400">{log.date}</span>
                           </div>
-                        )}
 
-                        {log.whyImportant && (
-                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
-                            <button
-                              type="button"
-                              onClick={() => toggleField(`${log.id}-why`)}
-                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-amber-300 hover:bg-slate-900 transition-colors text-left"
-                            >
-                              <span className="flex items-center gap-1.5 font-medium">
-                                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-                                <span>{expandedFields[`${log.id}-why`] ? "−" : "+"} ¿Por qué era importante?</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-500">
-                                {expandedFields[`${log.id}-why`] ? "Cerrar" : "Ver"}
-                              </span>
-                            </button>
-                            {expandedFields[`${log.id}-why`] && (
-                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
-                                {log.whyImportant}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {log.howApplied && (
-                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
-                            <button
-                              type="button"
-                              onClick={() => toggleField(`${log.id}-how`)}
-                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-cyan-300 hover:bg-slate-900 transition-colors text-left"
-                            >
-                              <span className="flex items-center gap-1.5 font-medium">
-                                <Layers className="w-3.5 h-3.5 text-cyan-400" />
-                                <span>{expandedFields[`${log.id}-how`] ? "−" : "+"} ¿Cómo se aplicó la solución?</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-500">
-                                {expandedFields[`${log.id}-how`] ? "Cerrar" : "Ver"}
-                              </span>
-                            </button>
-                            {expandedFields[`${log.id}-how`] && (
-                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
-                                {log.howApplied}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {log.description && (
-                          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
-                            <button
-                              type="button"
-                              onClick={() => toggleField(`${log.id}-desc`)}
-                              className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-purple-300 hover:bg-slate-900 transition-colors text-left"
-                            >
-                              <span className="flex items-center gap-1.5 font-medium">
-                                <FileText className="w-3.5 h-3.5 text-purple-400" />
-                                <span>{expandedFields[`${log.id}-desc`] ? "−" : "+"} Detalle o Descripción profunda</span>
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-500">
-                                {expandedFields[`${log.id}-desc`] ? "Cerrar" : "Ver"}
-                              </span>
-                            </button>
-                            {expandedFields[`${log.id}-desc`] && (
-                              <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
-                                {log.description}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Tags */}
-                    {log.tags && log.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {log.tags.map((t) => (
-                          <span
-                            key={t}
-                            onClick={() => setSelectedTag(selectedTag === t ? "all" : t)}
-                            className={`text-[11px] font-mono px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                              selectedTag === t
-                                ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                : "text-cyan-400/90 bg-cyan-950/40 border border-cyan-800/30 hover:border-cyan-500"
-                            }`}
-                          >
-                            {t}
+                          <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
+                            {log.category}
                           </span>
-                        ))}
+                        </div>
+
+                        {/* Headline - Logro (Multilínea) */}
+                        <div className="mb-2.5">
+                          <span className="text-[10px] font-mono text-emerald-400 font-semibold tracking-wider uppercase block mb-1">
+                            Logro Verificado (Viñeta CV)
+                          </span>
+                          <h3 className="text-base font-semibold text-white leading-relaxed whitespace-pre-wrap">
+                            {log.title}
+                          </h3>
+                        </div>
+
+                        {/* Impact Metric Box */}
+                        <div className="p-3 bg-slate-950 border border-emerald-950 rounded-xl mb-3 flex items-start gap-2.5">
+                          <Zap className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500 font-bold block">
+                              Impacto Medible
+                            </span>
+                            <p className="text-xs sm:text-sm text-emerald-200 font-mono font-medium whitespace-pre-wrap">
+                              {log.impact}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Breakdown Accordions for Recruiters & Visitors */}
+                        {(log.whatWasSought || log.whyImportant || log.howApplied || log.description) && (
+                          <div className="space-y-1.5 mb-3">
+                            {log.whatWasSought && (
+                              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleField(`${log.id}-what`)}
+                                  className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-indigo-300 hover:bg-slate-900 transition-colors text-left"
+                                >
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <Target className="w-3.5 h-3.5 text-indigo-400" />
+                                    <span>{expandedFields[`${log.id}-what`] ? "−" : "+"} ¿Qué se buscaba lograr?</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    {expandedFields[`${log.id}-what`] ? "Cerrar" : "Ver"}
+                                  </span>
+                                </button>
+                                {expandedFields[`${log.id}-what`] && (
+                                  <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                    {log.whatWasSought}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {log.whyImportant && (
+                              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleField(`${log.id}-why`)}
+                                  className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-amber-300 hover:bg-slate-900 transition-colors text-left"
+                                >
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>{expandedFields[`${log.id}-why`] ? "−" : "+"} ¿Por qué era importante?</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    {expandedFields[`${log.id}-why`] ? "Cerrar" : "Ver"}
+                                  </span>
+                                </button>
+                                {expandedFields[`${log.id}-why`] && (
+                                  <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                    {log.whyImportant}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {log.howApplied && (
+                              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleField(`${log.id}-how`)}
+                                  className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-cyan-300 hover:bg-slate-900 transition-colors text-left"
+                                >
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                                    <span>{expandedFields[`${log.id}-how`] ? "−" : "+"} ¿Cómo se aplicó la solución?</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    {expandedFields[`${log.id}-how`] ? "Cerrar" : "Ver"}
+                                  </span>
+                                </button>
+                                {expandedFields[`${log.id}-how`] && (
+                                  <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                    {log.howApplied}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+
+                            {log.description && (
+                              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/40">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleField(`${log.id}-desc`)}
+                                  className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-purple-300 hover:bg-slate-900 transition-colors text-left"
+                                >
+                                  <span className="flex items-center gap-1.5 font-medium">
+                                    <FileText className="w-3.5 h-3.5 text-purple-400" />
+                                    <span>{expandedFields[`${log.id}-desc`] ? "−" : "+"} Detalle o Descripción profunda</span>
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    {expandedFields[`${log.id}-desc`] ? "Cerrar" : "Ver"}
+                                  </span>
+                                </button>
+                                {expandedFields[`${log.id}-desc`] && (
+                                  <p className="px-3 pb-2 pt-1 text-xs text-slate-300 border-t border-slate-800/60 leading-relaxed whitespace-pre-wrap">
+                                    {log.description}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Tags */}
+                        {log.tags && log.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {log.tags.map((t) => (
+                              <span
+                                key={t}
+                                className="text-[11px] font-mono px-2 py-0.5 bg-slate-800 text-slate-400 rounded-md"
+                              >
+                                #{t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Tab 2: Products & Showcase */}
+          {activeTab === "products" && (
+            <div className="space-y-6">
+              {filteredPublicProducts.length === 0 ? (
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 space-y-3">
+                  <Rocket className="w-9 h-9 text-slate-600 mx-auto" />
+                  <p className="text-sm font-semibold text-slate-300">
+                    No hay productos visibles en el showcase
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Los productos, librerías, SaaS o herramientas registradas como públicas se exhiben aquí con sus capturas de pantalla, tecnologías y logros de arquitectura asociados.
+                  </p>
+                  {isOwner && onOpenNewProduct && (
+                    <button
+                      type="button"
+                      onClick={onOpenNewProduct}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-emerald-500/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Agregar Primer Producto</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {filteredPublicProducts.map((prod) => {
+                    const relatedLogs = publicLogs.filter((l) => prod.relatedAchievementIds?.includes(l.id));
+                    const isHighlighted = highlightedProductId === prod.id;
+                    return (
+                      <div
+                        id={`public-product-${prod.id}`}
+                        key={prod.id}
+                        className={isHighlighted ? "ring-2 ring-cyan-400 rounded-2xl" : ""}
+                      >
+                        <ProductCard
+                          product={prod}
+                          relatedLogs={relatedLogs}
+                          onSelectLog={handleSelectFromChat}
+                          isOwner={isOwner}
+                          onEdit={onEditProduct}
+                          onDelete={onDeleteProduct}
+                          onTogglePublic={onToggleProductPublic}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -499,8 +693,11 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
           {/* First Mate AI Widget */}
           <FirstMateChat
             publicLogs={publicLogs}
+            publicProducts={publicProducts}
             userProfile={userProfile}
+            activeTab={activeTab}
             onSelectLog={handleSelectFromChat}
+            onSelectProduct={handleSelectProductFromChat}
             onOpenLeaveNote={() => {
               const el = document.getElementById("leave-note");
               el?.scrollIntoView({ behavior: "smooth" });
@@ -514,9 +711,9 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 <MessageSquare className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">Dejar un Recado / Contacto Directo</h3>
+                <h3 className="text-sm font-bold text-white">{t.publicDeck.recruiterNoteTitle}</h3>
                 <p className="text-[11px] text-slate-400">
-                  ¿Preguntas sobre disponibilidad, asesoría técnica o reclutamiento?
+                  {t.publicDeck.recruiterNoteSubtitle}
                 </p>
               </div>
             </div>
@@ -524,56 +721,53 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
             {noteSent ? (
               <div className="p-4 bg-emerald-950/80 border border-emerald-500/40 rounded-xl text-center space-y-2 animate-in fade-in">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                <p className="text-xs font-bold text-emerald-200">¡Recado enviado con éxito!</p>
-                <p className="text-[11px] text-emerald-300/80">
-                  El mensaje se ha entregado en el Inbox privado de {userProfile.name}.
-                </p>
+                <p className="text-xs font-bold text-emerald-200">{t.publicDeck.noteSentSuccess}</p>
               </div>
             ) : (
               <form onSubmit={handleNoteSubmit} className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Tu Nombre *</label>
+                  <label className="block text-slate-300 font-semibold mb-1">{t.common.role} / {t.auth.nameLabel} *</label>
                   <input
                     type="text"
                     required
                     value={visitorName}
                     onChange={(e) => setVisitorName(e.target.value)}
-                    placeholder="ej. Elena Rostova"
+                    placeholder={t.publicDeck.recruiterNamePlaceholder}
                     className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Tu Correo Electrónico *</label>
+                  <label className="block text-slate-300 font-semibold mb-1">{t.auth.emailLabel} *</label>
                   <input
                     type="email"
                     required
                     value={visitorEmail}
                     onChange={(e) => setVisitorEmail(e.target.value)}
-                    placeholder="ej. elena@techventures.io"
+                    placeholder={t.publicDeck.recruiterEmailPlaceholder}
                     className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Empresa / Organización (Opcional)</label>
+                  <label className="block text-slate-300 font-semibold mb-1">{t.common.company} ({t.common.optional})</label>
                   <input
                     type="text"
                     value={visitorOrg}
                     onChange={(e) => setVisitorOrg(e.target.value)}
-                    placeholder="ej. ScalePeak Cloud"
+                    placeholder={t.publicDeck.recruiterCompanyPlaceholder}
                     className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Mensaje *</label>
+                  <label className="block text-slate-300 font-semibold mb-1">{t.common.notes} *</label>
                   <textarea
                     required
                     rows={3}
                     value={visitorMessage}
                     onChange={(e) => setVisitorMessage(e.target.value)}
-                    placeholder="Escribe tu consulta sobre proyectos, vacantes o retos de ingeniería..."
+                    placeholder={t.publicDeck.recruiterMessagePlaceholder}
                     className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
                   />
                 </div>
@@ -582,7 +776,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   type="submit"
                   className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-emerald-500/20"
                 >
-                  Enviar Mensaje / Recado
+                  {t.publicDeck.sendRecruiterNote}
                 </button>
               </form>
             )}
