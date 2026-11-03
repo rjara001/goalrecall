@@ -62,6 +62,7 @@ import {
   MAX_FREE_MONTHLY_AI_USES,
   saveProWaitlistEmail
 } from "../utils/storage";
+import { extractCvDataLocally } from "../utils/localCvExtractor";
 
 interface ExtractedBullet {
   id: string;
@@ -422,26 +423,49 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   const sendExtractionRequest = async (payload: any) => {
     setProcessingStep("Auditando completitud e identificando campos pendientes...");
 
-    const response = await fetch("/api/cv/extract-full-cv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let data: any = null;
 
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => null);
-      throw new Error(errorJson?.error || `Servidor respondió con código ${response.status}`);
+    // Only attempt backend fetch if not explicitly forcing local parser
+    if (!payload.forceLocal) {
+      try {
+        const response = await fetch("/api/cv/extract-full-cv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        // If the server returns valid JSON (not an HTML fallback from static hosting rewrites)
+        if (response.ok && contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          console.warn(
+            "Backend API no disponible o estático (Firebase Hosting). Activando extractor local verídico automático."
+          );
+        }
+      } catch (networkErr) {
+        console.warn(
+          "Error de conexión con /api/cv/extract-full-cv. Ejecutando extractor local verídico:",
+          networkErr
+        );
+      }
     }
 
-    const data = await response.json();
+    // High fidelity offline/static fallback if backend wasn't available or was bypassed
+    if (!data) {
+      data = extractCvDataLocally(
+        payload.textContent || "",
+        payload.fileName || "CV_Documento.txt"
+      );
+    }
 
-    // If successfully extracted via Gemini AI, record usage count
-    if (!payload.forceLocal && data.engine !== "local-strict-parser") {
+    // If successfully extracted via Gemini AI on a real backend, record usage count
+    if (!payload.forceLocal && data.engine && data.engine !== "local-strict-parser") {
       recordAiUsage();
       setAiUsage(getAiUsage());
     }
 
-    setExtractionEngine(data.engine || "Gemini 3.8 Flash");
+    setExtractionEngine(data.engine || "local-strict-parser");
     setExtractedCv(data.cvData || null);
     setPendingFields(data.pendingFields || []);
     setCompletenessScore(data.completenessScore || 0);
