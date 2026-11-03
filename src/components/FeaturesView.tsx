@@ -89,7 +89,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
 
   // Simulator 2: Real CV Extractor Preview
   const [sampleCvText, setSampleCvText] = useState(
-    `EXPERIENCIA LABORAL\n\nParserDigital / Chambers & Partners (Oct 2025 - Presente)\nSenior Full Stack Developer\n- Lideró la migración del motor de rankings a Next.js 15 y Node.js, reduciendo el First Contentful Paint en 42%.\n- Implementó arquitectura de microservicios con colas de RabbitMQ para procesar 15,000 postulaciones diarias.\n\nDunnhumby (2023 - 2025)\nData Platform Engineer\n- Optimizó pipelines de Spark y BigQuery, disminuyendo costos de computación en $18,000 USD mensuales.`
+    `EXPERIENCIA LABORAL\n\nAcme Cloud Labs / Apex Global (Oct 2025 - Presente)\nSenior Full Stack Developer\n- Lideró la migración del motor de rankings a Next.js 15 y Node.js, reduciendo el First Contentful Paint en 42%.\n- Implementó arquitectura de microservicios con colas de RabbitMQ para procesar 15,000 postulaciones diarias.\n\nNovaStream Analytics (2023 - 2025)\nData Platform Engineer\n- Optimizó pipelines de Spark y BigQuery, disminuyendo costos de computación en $18,000 USD mensuales.`
   );
   const [isCvExtracted, setIsCvExtracted] = useState(true);
 
@@ -529,7 +529,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                   <div className="space-y-3 p-3 bg-slate-950 rounded-xl border border-slate-800 h-[190px] overflow-y-auto">
                     <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">ParserDigital / Chambers & Partners</span>
+                        <span className="font-bold text-white">Acme Cloud Labs / Apex Global</span>
                         <span className="text-[10px] text-slate-400 font-mono">Oct 2025 - Presente</span>
                       </div>
                       <p className="text-cyan-300 text-[11px]">Senior Full Stack Developer</p>
@@ -542,7 +542,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
 
                     <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">Dunnhumby</span>
+                        <span className="font-bold text-white">NovaStream Analytics</span>
                         <span className="text-[10px] text-slate-400 font-mono">2023 - 2025</span>
                       </div>
                       <p className="text-cyan-300 text-[11px]">Data Platform Engineer</p>
@@ -582,7 +582,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 <p className="pl-4"><span className="text-purple-400">"exportedAt"</span>: <span className="text-amber-300">"2026-10-27T22:30:00.000Z"</span>,</p>
                 <p className="pl-4"><span className="text-purple-400">"user"</span>: {"{"} <span className="text-cyan-300">"name"</span>: <span className="text-amber-300">"Alex Morgan"</span>, <span className="text-cyan-300">"email"</span>: <span className="text-amber-300">"alex.morgan@ejemplo.com"</span>, <span className="text-cyan-300">"avatar"</span>: <span className="text-amber-300">"https://..."</span> {"}"},</p>
                 <p className="pl-4"><span className="text-purple-400">"logs"</span>: [ {"{"} <span className="text-cyan-300">"id"</span>: <span className="text-amber-300">"log-101"</span>, <span className="text-cyan-300">"title"</span>: <span className="text-amber-300">"..."</span>, <span className="text-cyan-300">"impact"</span>: <span className="text-amber-300">"..."</span>, <span className="text-cyan-300">"isPublic"</span>: <span className="text-blue-400">false</span> {"}"} ],</p>
-                <p className="pl-4"><span className="text-purple-400">"experiences"</span>: [ {"{"} <span className="text-cyan-300">"company"</span>: <span className="text-amber-300">"ParserDigital"</span>, <span className="text-cyan-300">"role"</span>: <span className="text-amber-300">"Senior Developer"</span> {"}"} ],</p>
+                <p className="pl-4"><span className="text-purple-400">"experiences"</span>: [ {"{"} <span className="text-cyan-300">"company"</span>: <span className="text-amber-300">"Acme Cloud Labs"</span>, <span className="text-cyan-300">"role"</span>: <span className="text-amber-300">"Senior Developer"</span> {"}"} ],</p>
                 <p className="pl-4"><span className="text-purple-400">"inbox"</span>: [ ... ]</p>
                 <p className="text-teal-400">{"}"}</p>
               </div>

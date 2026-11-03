@@ -95,83 +95,81 @@ interface CvUploadModalProps {
 const SAMPLE_CV_TEXT = `Experiencia Laboral
 
 Senior Full Stack Developer
-@ ParserDigital / Chambers & Partners
+@ CloudScale Systems / Apex Global Data
 Oct 2025 — Present
-• Delivered the Digital Submissions platform for Chambers & Partners in 7 months, on time and on budget, now rolling out to 10,000+ law firms worldwide for rankings and legal awards submissions.
-• Replaced a fragmented, document-heavy process with structured digital workflows, converting Word/Excel submissions into live collaboration, secure sharing, guided editing, and contributor tracking, unlocking structured data for new commercial products.
-• Owned the end-to-end development of the History Navigation component, a version-tracking and audit feature showing who changed what and when, with visual highlighting of additions, removals, and modifications across document versions.
-• Built the section sharing feature from scratch, enabling submission sections to be distributed to contributors with per-user permissions, plus secure public URL access with configurable expiration for external collaborators.
-• Developed frontend applications within a Microfrontend architecture using Angular 21 and Native Federation, building modular components and feature flows with Signals, OnPush change detection, and Standalone Components.
-• Developed backend services with .NET 10 Minimal APIs and MediatR, applying Vertical Slice Architecture to keep domain logic decoupled, modular, and easy to maintain.
-• Engineered a Notion-style dynamic navigation drawer with section-level completion tracking, and a structured multi-section editor with draft persistence and real-time validation (errors and warnings).
-• Integrated with the Chambers Central API (CcApi) to keep law firm, contact, and ranking data synchronized across systems.
+• Delivered the Enterprise Workflow Platform in 7 months, on time and on budget, rolling out to 10,000+ corporate partners worldwide for compliance and operational verification.
+• Replaced a fragmented, document-heavy process with structured digital workflows, converting manual submissions into live collaboration, secure sharing, guided editing, and contributor tracking.
+• Owned the end-to-end development of the History Navigation audit component, a version-tracking feature showing who changed what and when, with visual highlighting of additions, removals, and modifications across document versions.
+• Built the granular permission-sharing feature from scratch, enabling document sections to be distributed to contributors with per-user permissions and secure temporary URL access.
+• Developed frontend applications within a Microfrontend architecture using Angular 21 and Native Federation, building modular components and feature flows with Signals and OnPush change detection.
+• Developed backend services with .NET 10 Minimal APIs and MediatR, applying Vertical Slice Architecture to keep domain logic decoupled, modular, and maintainable.
+• Engineered a Notion-style dynamic navigation drawer with section-level completion tracking, and a structured multi-section editor with draft persistence and real-time validation.
+• Integrated with core enterprise master APIs to keep account, contact, and audit logs synchronized across external systems.
 • Contributed to CI/CD pipelines with Azure DevOps and Docker, with automated test suites using xUnit (backend) and Karma/Jasmine (frontend).
 • Used AI-assisted development tools (GitHub Copilot) to speed up prototyping and routine tasks, keeping the focus on architecture, performance, and code quality.
-Tecnologías: Angular 21, Native Federation, .NET 10, Minimal APIs, MediatR, Vertical Slice Architecture, Microservices, Bootstrap 5, Azure DevOps, Docker, Vitest, xUnit, Karma, Jasmine, GitHub Copilot, CcApi
+Tecnologías: Angular 21, Native Federation, .NET 10, Minimal APIs, MediatR, Vertical Slice Architecture, Microservices, Bootstrap 5, Azure DevOps, Docker, Vitest, xUnit, Karma, Jasmine, GitHub Copilot
 
 Full Stack Developer
-@ ParserDigital / Dunnhumby
+@ NovaStream Analytics
 Oct 2024 — Oct 2025
-• Built and maintained dynamic reporting forms and dashboards using Next.js and NestJS, integrating with Databricks APIs to present curated data provided by the data engineering team.
+• Built and maintained dynamic reporting forms and dashboards using Next.js and NestJS, integrating with distributed query engines to present curated analytics datasets.
 • Designed and implemented PostgreSQL relational models and stored procedures to support reporting interfaces and ensure reliable data delivery.
-• Integrated Azure Service Principals for secure execution of Databricks queries, implementing serverless access and token management via NestJS.
+• Integrated Azure Service Principals for secure token management and serverless query execution via NestJS.
 • Deployed the platform on Azure Kubernetes Service (AKS) with CI/CD pipelines, enabling scalable, reliable, and reproducible production environments.
-• Developed reusable web components and microfrontend modules using React, Next.js, and Webpack, improving frontend modularity, code reuse, and maintainability across reporting dashboards.
+• Developed reusable web components and microfrontend modules using React, Next.js, and Webpack, improving frontend modularity and code reuse.
 • Enhanced CI/CD pipelines in GitLab, optimizing deployments and automating environment provisioning, reducing production errors and manual tasks.
 • Implemented observability and monitoring with New Relic and OpenTelemetry, improving real-time performance tracking and accelerating issue resolution.
 • Applied unit and integration testing with Jest and enforced semantic versioning, ensuring high-quality releases and consistent component management.
-Tecnologías: React, Next.js, NestJS, .NET 9, GraphQL, REST APIs, Node.js, PostgreSQL, CI/CD, Azure, Webpack, AKS, Databricks APIs, GitLab, New Relic, OpenTelemetry, Jest
+Tecnologías: React, Next.js, NestJS, .NET 9, GraphQL, REST APIs, Node.js, PostgreSQL, CI/CD, Azure, Webpack, AKS, GitLab, New Relic, OpenTelemetry, Jest
 
 Backend Developer
-@ Raisin
+@ Aura Financial SaaS
 Sep 2023 — Oct 2024
-• Developed new features for the SaaS platform, maintaining back-office systems, APIs, and batch processes using .NET Core.
-• Designed and optimized SQL Server stored procedures to improve database efficiency and ensure reliable data processing.
-• Contributed to GraphQL, Java and Go middleware development, enhancing API performance and scalability.
-• Led deployment of services to AWS, automating release processes and improving system reliability.
-• Collaborated in an Agile team of 15, delivering features for US-based clients within Scrum cycles, improving sprint delivery efficiency.
+• Developed core SaaS platform features, maintaining back-office services, REST APIs, and batch payment processors using .NET Core and Go.
+• Designed and optimized SQL Server stored procedures and table indexes to improve database throughput and ensure reliable data processing.
+• Contributed to GraphQL, Java, and Go middleware development, enhancing API performance and scalability.
+• Led deployment of microservices to AWS, automating release processes and improving system reliability with zero-downtime deployments.
+• Collaborated in an Agile team of 15, delivering enterprise features within two-week Scrum sprints.
 • Implemented unit and integration testing to ensure code quality and system stability across backend services.
 Tecnologías: .NET Core, GraphQL, Go, Java, Node.js, AWS, SQL Server, Git
 
 Full Stack Developer
-@ AndBank.com
+@ Vanguard Mobile Technologies
 Aug 2022 — Sep 2023
-• Developed and enhanced mobile applications using React and Xamarin, improving user engagement across Android and iOS platforms.
-• Implemented multithreading in C# to optimize background data loading, significantly improving app performance.
-• Led deployment and troubleshooting via App Center, modernizing legacy Xamarin code and streamlining mobile release processes.
+• Developed and enhanced cross-platform mobile applications using React and mobile frameworks, improving user engagement across Android and iOS platforms.
+• Implemented multithreading in C# to optimize background data loading, significantly reducing cold start latency.
+• Streamlined mobile deployment pipelines and telemetry diagnostics via App Center, modernizing legacy modules.
 • Developed new features in React and TypeScript, enhancing app functionality and user experience.
-• Collaborated closely with cross-functional teams, including designers, UX specialists, and backend engineers, to deliver seamless mobile experiences.
-Tecnologías: React, TypeScript, .NET Core, Xamarin, Android, iOS, Git, App Center, C#
+• Collaborated closely with cross-functional teams, including product designers and QA engineers, to deliver seamless mobile experiences.
+Tecnologías: React, TypeScript, .NET Core, Mobile Frameworks, Android, iOS, Git, App Center, C#
 
 Full Stack Developer
-@ Taller Technologies / Paypal.com
+@ FinPulse Global Platform
 Mar 2021 — Jun 2022
-• Developed new features for PayPal’s investment mobile app using React Native, enhancing user experience and functionality.
-• Implemented GraphQL APIs and serverless AWS Lambda functions, improving performance and scalability of backend services.
-• Gained experience in Docker, Kubernetes, and microservices architecture, contributing to reliable and scalable deployments.
-• Troubleshoot core repositories, particularly the checkout experience, resolving critical issues and improving system stability.
-• Participated in Agile development cycles using Jira, collaborating with cross-functional teams to deliver features on time.
+• Developed high-traffic user onboarding and transactional features using React Native and TypeScript, enhancing checkout conversion.
+• Implemented GraphQL APIs and serverless AWS Lambda microservices, improving latency under high concurrency.
+• Hardened core checkout and payment orchestration services, resolving concurrency race conditions during promotional campaigns.
+• Participated in Agile development cycles using Jira, collaborating with cross-functional teams to deliver milestones reliably.
 Tecnologías: Node.js, Angular, React, React Native, GraphQL, NestJS, TypeScript, AWS, Docker, Kubernetes, AWS Lambda, Jira
 
 Full Stack Developer
-@ Falabella Bank, Santiago
+@ Horizon Bank Digital
 Jan 2020 — Mar 2021
-• Developed omnichannel digital experiences, implementing frontend and backend features for Falabella Bank’s platforms.
-• Designed and maintained REST APIs and microservices, ensuring scalable and reliable integration between systems.
-• Implemented CI/CD pipelines and automated testing using Jenkins and Jest, improving deployment efficiency and code quality.
-• Collaborated with cross-functional teams, including strategists, designers, UX specialists, and developers, to deliver cohesive digital solutions.
-• Contributed to debugging and troubleshooting across platforms, resolving production issues and enhancing system stability.
-Tecnologías: Node.js, NestJS, CI/CD, Jenkins, REST APIs, WebServices, Docker Compose, Docker Swarm, Jest, Portainer, Apigee
+• Developed omnichannel digital experiences, implementing secure frontend customer dashboards and backend account services.
+• Designed and maintained REST APIs and microservices, ensuring resilient integration between legacy core systems and modern web interfaces.
+• Implemented CI/CD pipelines and automated testing using Jenkins and Jest, improving deployment cadence and code reliability.
+• Collaborated with UX researchers and security auditors to deliver fully compliant fintech solutions.
+• Diagnosed and resolved production incidents across distributed clusters, maintaining 99.95% system uptime.
+Tecnologías: Node.js, NestJS, CI/CD, Jenkins, REST APIs, WebServices, Docker Compose, Docker Swarm, Jest, Portainer, API Gateway
 
 Technical Lead
-@ Falabella Retail, Santiago
+@ OmniCommerce Cloud Solutions
 Apr 2019 — Jan 2020
-• Led and mentored an Agile development team, building AI-driven virtual assistants using Azure Cognitive Services.
-• Fostered a collaborative environment, conducting regular code reviews, providing technical guidance, and promoting best practices.
-• Managed team workflows and implemented continuous improvement initiatives, enhancing delivery efficiency and code quality.
-• Delivered business process automation solutions leveraging Azure RPA, GCP serverless, and web scraping tools, reducing manual workload.
-• Oversaw deployment and maintenance of applications using Docker, Kubernetes, and CI/CD pipelines, ensuring scalable and reliable production environments.
-Tecnologías: Node.js, Azure, PostgreSQL, MongoDB, Docker`;
+• Led and mentored an engineering team building conversational AI assistants and automated self-service portals.
+• Fostered a high-performing engineering culture, conducting architectural reviews and instituting automated linting and testing gates.
+• Delivered business process automation pipelines using cloud serverless functions and worker queues, eliminating 300+ hours of monthly manual processing.
+• Oversaw deployment and maintenance of containerized services using Docker, Kubernetes, and CI/CD pipelines.
+Tecnologías: Node.js, Cloud AI APIs, GCP, Kubernetes, PostgreSQL, MongoDB, Docker`;
 
 export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   isOpen,
@@ -928,11 +926,11 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                             </span>
                           </div>
                           <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-                            Contiene una trayectoria técnica de muestra: 8 empresas (Chambers & Partners, Dunnhumby, Raisin, AndBank, PayPal, Falabella Bank, Falabella Retail, Proyectos Personales), 28 viñetas técnicas reales, tecnologías y educación.
+                            Contiene una trayectoria técnica de muestra: 8 empresas (CloudScale Systems, NovaStream Analytics, Aura SaaS, Vanguard Tech, FinPulse Global, Horizon Bank, OmniCommerce, Proyectos Personales), 28 viñetas técnicas con métricas, tecnologías y educación.
                           </p>
                           <div className="flex flex-wrap items-center gap-2 pt-1">
                             <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">8 Experiencias</span>
-                            <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">28 Viñetas Reales</span>
+                            <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">28 Viñetas Técnicas</span>
                             <span className="text-[10px] text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">Stack Tecnológico</span>
                             <span className="text-[10px] text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/50">100% Sin Alucinaciones</span>
                           </div>

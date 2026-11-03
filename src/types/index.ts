@@ -29,12 +29,12 @@ export type LogCategory =
 export interface WorkExperience {
   id: string;
   userId?: string;
-  company: string; // e.g. "ParserDigital / Chambers & Partners"
+  company: string; // e.g. "Acme Cloud Labs / Apex Global"
   role: string; // e.g. "Senior Full Stack Developer"
   startDate: string; // e.g. "Oct 2025" or "2022"
   endDate?: string; // e.g. "Present" or "2024"
   isCurrent?: boolean; // true if currently working here
-  location?: string; // e.g. "Santiago, Chile / Remoto"
+  location?: string; // e.g. "San Francisco, CA / Remote"
   summary?: string; // brief context/mission of the team or role
   bullets?: string[]; // real textual bullets extracted from CV
   technologies?: string[]; // primary tech stack
@@ -49,7 +49,7 @@ export interface LogEntry {
   experienceId?: string; // Strictly links this achievement to its parent WorkExperience
   originalBullet?: string; // Reference to the original CV bullet this achievement was extracted from
   date: string; // ISO format: YYYY-MM-DD
-  client: string; // e.g. "ParserDigital", "ClientX"
+  client: string; // e.g. "Acme Corp", "ClientX"
   project: string; // e.g. "Digital Submissions", "Checkout Revamp"
   category: LogCategory;
   // 1. Logro (multilínea): campo resumen, es la viñeta que aparecerá en el CV o que fue cargada desde el CV

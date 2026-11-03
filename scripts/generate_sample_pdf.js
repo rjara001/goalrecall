@@ -30,7 +30,7 @@ doc.moveDown(0.3);
 
 // Contact Info Line
 doc.font("Helvetica").fontSize(9).fillColor(subtleColor)
-  .text("Santiago, Chile · Remote · alex.morgan@ejemplo.com · +56 9 8765 4321 · linkedin.com/in/alexmorgan · github.com/alexmorgan", {
+  .text("San Francisco, CA · Remote · alex.morgan@ejemplo.com · +1 555 019 2834 · linkedin.com/in/alexmorgan · github.com/alexmorgan", {
     lineGap: 2,
   });
 
@@ -42,7 +42,7 @@ doc.moveDown(0.8);
 doc.font("Helvetica-Bold").fontSize(11).fillColor(primaryColor).text("RESUMEN PROFESIONAL");
 doc.moveDown(0.3);
 doc.font("Helvetica").fontSize(9.5).fillColor(textColor).text(
-  "Seasoned Full Stack Software Engineer con más de 12 años de experiencia diseñando y entregando soluciones escalables de alto rendimiento para plataformas globales y fintechs (PayPal, Chambers & Partners, Dunnhumby, Falabella, Raisin). Especializado en arquitecturas distribuidas, microfrontends, optimización de latencia y desarrollo full-stack con TypeScript, React, Next.js, Angular 21, Node.js, .NET 10 y cloud en AWS y Azure.",
+  "Seasoned Full Stack Software Engineer con más de 12 años de experiencia diseñando y entregando soluciones escalables de alto rendimiento para plataformas globales SaaS y fintech (CloudScale Systems, NovaStream, Aura SaaS, FinPulse Global). Especializado en arquitecturas distribuidas, microfrontends, optimización de latencia y desarrollo full-stack con TypeScript, React, Next.js, Angular 21, Node.js, .NET 10 y cloud en AWS y Azure.",
   { align: "justify", lineGap: 3 }
 );
 doc.moveDown(0.8);
@@ -90,40 +90,40 @@ function addExperience(role, company, period, bullets, technologies) {
   doc.moveDown(0.7);
 }
 
-// 1. ParserDigital / Chambers & Partners
+// 1. CloudScale Systems / Apex Global Data
 addExperience(
   "Senior Full Stack Developer",
-  "ParserDigital / Chambers & Partners",
+  "CloudScale Systems / Apex Global Data",
   "Oct 2025 — Present · Remote",
   [
-    "Delivered the Digital Submissions platform for Chambers & Partners in 7 months, on time and on budget, rolling out to 10,000+ law firms worldwide for legal rankings.",
-    "Replaced fragmented manual submissions with live digital workflows, converting Word/Excel documents into structured collaboration and contributor tracking.",
+    "Delivered the Enterprise Workflow Platform in 7 months, on time and on budget, rolling out to 10,000+ corporate partners worldwide for compliance and operational verification.",
+    "Replaced fragmented manual submissions with live digital workflows, converting manual submissions into structured collaboration and contributor tracking.",
     "Owned the end-to-end development of the History Navigation audit component, visual diffing additions, removals and modifications across document versions.",
     "Developed frontend microfrontends using Angular 21 and Native Federation, implementing modular reactive state flows with Signals and OnPush detection.",
     "Architected backend microservices with .NET 10 Minimal APIs and MediatR applying Vertical Slice Architecture to decouple domain logic.",
-    "Integrated with Chambers Central API (CcApi) and configured CI/CD pipelines with Azure DevOps and Docker with automated xUnit test suites."
+    "Integrated with core enterprise master APIs and configured CI/CD pipelines with Azure DevOps and Docker with automated xUnit test suites."
   ],
-  ["Angular 21", "Native Federation", ".NET 10", "Minimal APIs", "MediatR", "Azure DevOps", "Docker", "xUnit", "CcApi"]
+  ["Angular 21", "Native Federation", ".NET 10", "Minimal APIs", "MediatR", "Azure DevOps", "Docker", "xUnit"]
 );
 
-// 2. ParserDigital / Dunnhumby
+// 2. NovaStream Analytics
 addExperience(
   "Full Stack Developer",
-  "ParserDigital / Dunnhumby",
+  "NovaStream Analytics",
   "Oct 2024 — Oct 2025 · Remote",
   [
-    "Built and maintained dynamic enterprise reporting dashboards using Next.js and NestJS, integrating Databricks APIs for large-scale curated datasets.",
+    "Built and maintained dynamic enterprise reporting dashboards using Next.js and NestJS, integrating distributed query engines for large-scale curated datasets.",
     "Designed and implemented PostgreSQL relational models and stored procedures, improving report query throughput by 35%.",
     "Integrated Azure Service Principals for secure token management and serverless query execution via NestJS.",
     "Deployed scalable applications on Azure Kubernetes Service (AKS) with automated CI/CD pipelines in GitLab and observability via OpenTelemetry."
   ],
-  ["React", "Next.js", "NestJS", ".NET 9", "PostgreSQL", "Azure", "AKS", "Databricks", "GitLab", "OpenTelemetry"]
+  ["React", "Next.js", "NestJS", ".NET 9", "PostgreSQL", "Azure", "AKS", "GitLab", "OpenTelemetry"]
 );
 
-// 3. Raisin
+// 3. Aura Financial SaaS
 addExperience(
   "Backend Developer",
-  "Raisin",
+  "Aura Financial SaaS",
   "Sep 2023 — Oct 2024 · Remote",
   [
     "Developed core SaaS platform features, maintainable back-office REST APIs and batch transaction processors using .NET Core and Go.",
@@ -133,57 +133,57 @@ addExperience(
   [".NET Core", "GraphQL", "Go", "Node.js", "AWS", "SQL Server", "Docker"]
 );
 
-// 4. AndBank
+// 4. Vanguard Mobile Technologies
 addExperience(
   "Full Stack Developer",
-  "AndBank.com",
-  "Aug 2022 — Sep 2023 · On-Site",
+  "Vanguard Mobile Technologies",
+  "Aug 2022 — Sep 2023 · Remote",
   [
-    "Enhanced digital banking mobile and web interfaces with React, TypeScript and C# .NET Core.",
+    "Enhanced cross-platform mobile applications with React and mobile frameworks, improving user engagement across platforms.",
     "Implemented multithreading background data loading in C#, reducing mobile cold-start loading times by 50%.",
     "Streamlined release pipelines and crash diagnostics via App Center and automated integration tests."
   ],
-  ["React", "TypeScript", ".NET Core", "Xamarin", "C#", "App Center"]
+  ["React", "TypeScript", ".NET Core", "Mobile Frameworks", "C#", "App Center"]
 );
 
-// 5. PayPal
+// 5. FinPulse Global Platform
 addExperience(
   "Full Stack Developer (Remote)",
-  "Taller Technologies / Paypal.com",
+  "FinPulse Global Platform",
   "Mar 2021 — Jun 2022 · Remote",
   [
-    "Developed features for PayPal investment mobile app using React Native, improving onboarding flow conversion by 22%.",
+    "Developed features for transactional mobile apps using React Native, improving onboarding flow conversion by 22%.",
     "Implemented GraphQL APIs and serverless AWS Lambda functions, reducing backend latency to sub-80ms p99.",
     "Hardened checkout core repositories, eliminating critical concurrency bottlenecks during high-traffic promotional events.",
-    "Participated in Agile Scrum sprints using Jira, collaborating with cross-functional global teams across US time zones."
+    "Participated in Agile Scrum sprints using Jira, collaborating with cross-functional global teams across time zones."
   ],
   ["React Native", "TypeScript", "Node.js", "GraphQL", "AWS Lambda", "Docker", "Kubernetes"]
 );
 
-// 6. Falabella Bank
+// 6. Horizon Bank Digital
 addExperience(
   "Full Stack Developer",
-  "Falabella Bank, Santiago",
-  "Jan 2020 — Mar 2021 · Santiago, Chile",
+  "Horizon Bank Digital",
+  "Jan 2020 — Mar 2021 · Remote",
   [
     "Developed omnichannel banking digital experiences, implementing secure customer onboarding flows and account management microservices.",
     "Implemented CI/CD pipelines and automated integration testing with Jenkins, Docker and Jest, accelerating sprint release cycles.",
-    "Maintained and optimized REST APIs and Apigee gateways handling high-volume transaction loads."
+    "Maintained and optimized REST APIs and gateways handling high-volume transaction loads."
   ],
-  ["Node.js", "NestJS", "REST APIs", "Docker", "Jenkins", "Apigee", "Jest"]
+  ["Node.js", "NestJS", "REST APIs", "Docker", "Jenkins", "Jest"]
 );
 
-// 7. Falabella Retail
+// 7. OmniCommerce Cloud Solutions
 addExperience(
   "Technical Lead",
-  "Falabella Retail, Santiago",
-  "Apr 2019 — Jan 2020 · Santiago, Chile",
+  "OmniCommerce Cloud Solutions",
+  "Apr 2019 — Jan 2020 · Remote",
   [
-    "Led and mentored an engineering team building enterprise AI-driven virtual assistants using Azure Cognitive Services.",
-    "Delivered process automation solutions leveraging Azure RPA and GCP serverless, saving 300+ hours of monthly manual operational workload.",
+    "Led and mentored an engineering team building enterprise conversational AI assistants and automated self-service portals.",
+    "Delivered process automation solutions leveraging cloud serverless functions, saving 300+ hours of monthly manual operational workload.",
     "Oversaw containerized deployments on Kubernetes with strict code reviews and testing standards."
   ],
-  ["Node.js", "Azure Cognitive Services", "GCP", "Kubernetes", "PostgreSQL", "Docker"]
+  ["Node.js", "Cloud AI APIs", "GCP", "Kubernetes", "PostgreSQL", "Docker"]
 );
 
 // 8. Proyectos Personales
@@ -204,8 +204,8 @@ if (doc.y > 680) {
 }
 doc.font("Helvetica-Bold").fontSize(11).fillColor(primaryColor).text("EDUCACIÓN & CERTIFICACIONES");
 doc.moveDown(0.3);
-doc.font("Helvetica-Bold").fontSize(9.5).fillColor(primaryColor).text("Ingeniería en Computación e Informática");
-doc.font("Helvetica").fontSize(8.5).fillColor(subtleColor).text("Universidad de Chile · Titulado con Distinción");
+doc.font("Helvetica-Bold").fontSize(9.5).fillColor(primaryColor).text("B.S. in Computer Science & Software Engineering");
+doc.font("Helvetica").fontSize(8.5).fillColor(subtleColor).text("University of Technology · Honors Graduate");
 doc.moveDown(0.4);
 doc.font("Helvetica-Bold").fontSize(9.5).fillColor(primaryColor).text("Certificaciones:");
 doc.font("Helvetica").fontSize(9).fillColor(textColor).text("• AWS Certified Solutions Architect - Associate");
