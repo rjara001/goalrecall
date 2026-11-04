@@ -1475,6 +1475,57 @@ function generateUsernameSuggestions(username: string, existingIndex: Record<str
   return candidates.filter((c) => !RESERVED_USERNAMES.has(c) && !existingIndex[c]).slice(0, 3);
 }
 
+// Endpoint to register/claim a username without a full backup
+app.post("/api/public/claim-username", (req, res) => {
+  try {
+    const { username, userKey, userProfile, logs, products } = req.body;
+    if (!username || !userKey) {
+      return res.status(400).json({ error: "username and userKey are required." });
+    }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (RESERVED_USERNAMES.has(cleanUsername)) {
+      return res.status(400).json({ error: "Palabra reservada del sistema." });
+    }
+
+    const index = getUsernameIndex();
+    const existingOwner = index[cleanUsername];
+    if (existingOwner && existingOwner.toLowerCase() !== userKey.trim().toLowerCase()) {
+      return res.status(409).json({ error: "Username already taken." });
+    }
+
+    // Update index
+    setUsernameIndex(cleanUsername, userKey);
+
+    // Also update sync file if userProfile or payload is provided
+    const filePath = getSyncFilePath(userKey);
+    let record: any = { userKey, updatedAt: Date.now(), payload: {} };
+    if (fs.existsSync(filePath)) {
+      try {
+        record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      } catch {
+        // start fresh record
+      }
+    }
+    if (!record.payload) record.payload = {};
+    if (userProfile) {
+      record.payload.user = { ...(record.payload.user || {}), ...userProfile, username: cleanUsername };
+    }
+    if (Array.isArray(logs)) {
+      record.payload.logs = logs;
+    }
+    if (Array.isArray(products)) {
+      record.payload.products = products;
+    }
+    record.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
+
+    return res.json({ success: true, username: cleanUsername, userKey });
+  } catch (err: any) {
+    console.error("Error claiming username:", err);
+    return res.status(500).json({ error: "Failed to claim username." });
+  }
+});
+
 // Endpoint to check if username is available
 app.get("/api/public/check-username/:username", (req, res) => {
   try {

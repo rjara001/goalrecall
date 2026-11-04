@@ -10,7 +10,7 @@ import {
   Product
 } from "../types";
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   LOGS: "captains_logs_v1",
   USER: "captains_user_v1",
   CUSTOM_ACCOUNTS: "goal_recall_custom_accounts_v1",

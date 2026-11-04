@@ -17,6 +17,7 @@ import { OffersView } from "./components/OffersView";
 import { ProductModal } from "./components/ProductModal";
 import { ShareDeckModal } from "./components/ShareDeckModal";
 import { 
+  STORAGE_KEYS,
   getStoredLogs, 
   saveLogs, 
   addLog, 
@@ -77,7 +78,7 @@ export default function App() {
 
       // If root path "/" or empty and an active user exists, redirect directly to quarters
       try {
-        const stored = localStorage.getItem("captains_user_v1");
+        const stored = localStorage.getItem(STORAGE_KEYS.USER);
         if (stored) {
           const u = JSON.parse(stored);
           if (u && (u.id || u.email || u.name)) {
@@ -690,6 +691,20 @@ export default function App() {
   const handleUpdateProfile = (updated: UserProfile) => {
     saveUser(updated);
     setUser(updated);
+    if (updated.username) {
+      // Automatically register the handle on the backend index so /u/:username works right away
+      fetch("/api/public/claim-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: updated.username,
+          userKey: updated.id || updated.email || "usr-current",
+          userProfile: updated,
+          logs,
+          products,
+        }),
+      }).catch((e) => console.error("Silent claim-username sync error:", e));
+    }
     showToast(t.toasts.profileUpdated, "success");
   };
 
