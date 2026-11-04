@@ -59,6 +59,7 @@ import {
 import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer, Product } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 import { useI18n } from "./i18n";
+import { APP_VERSION } from "./constants/version";
 import { parseSharedDeckFromUrl } from "./utils/publicDeckShare";
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
@@ -1212,6 +1213,9 @@ export default function App() {
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {t.app.footerPrivacy}
+            </p>
+            <p className="font-mono text-xs text-slate-400">
+              v{APP_VERSION}
             </p>
           </div>
 
