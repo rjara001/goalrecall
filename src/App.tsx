@@ -57,6 +57,7 @@ import {
 import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer, Product } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 import { useI18n } from "./i18n";
+import { parseSharedDeckFromUrl } from "./utils/publicDeckShare";
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
 
@@ -111,6 +112,11 @@ export default function App() {
   const [inbox, setInbox] = useState<VisitorMessage[]>([]);
   const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [sharedDeck, setSharedDeck] = useState<{
+    userProfile: UserProfile;
+    logs: LogEntry[];
+    products: Product[];
+  } | null>(null);
 
   // Modals
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
@@ -214,11 +220,38 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Check for shared recruiter deck (#deck=...) on mount & hash changes
+  useEffect(() => {
+    const checkSharedDeck = () => {
+      parseSharedDeckFromUrl().then((deck) => {
+        if (deck) {
+          setSharedDeck(deck);
+          setActiveView("public");
+        }
+      });
+    };
+
+    checkSharedDeck();
+
+    window.addEventListener("hashchange", checkSharedDeck);
+    return () => window.removeEventListener("hashchange", checkSharedDeck);
+  }, []);
+
   // Browser Navigation & History Handling (/docs, /features, /offers, /public)
   useEffect(() => {
     const handlePopState = () => {
       const p = window.location.pathname.toLowerCase();
       const h = window.location.hash.toLowerCase();
+      if (h.includes("deck=") || window.location.search.includes("deck=")) {
+        parseSharedDeckFromUrl().then((deck) => {
+          if (deck) {
+            setSharedDeck(deck);
+            setActiveView("public");
+          }
+        });
+        return;
+      }
+
       if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) {
         setActiveView("docs");
       } else if (p === "/features" || h === "#features") {
@@ -801,14 +834,22 @@ export default function App() {
         {/* VIEW 3: PUBLIC DECK (RECRUITER / CLIENT SHOWCASE) */}
         {activeView === "public" && (
           <PublicDeck
-            logs={logs}
-            products={products}
-            userProfile={user || INITIAL_USER}
+            logs={sharedDeck ? sharedDeck.logs : logs}
+            products={sharedDeck ? sharedDeck.products : products}
+            userProfile={sharedDeck ? sharedDeck.userProfile : (user || INITIAL_USER)}
             onSendVisitorMessage={handleSendVisitorMessage}
-            onBackToLanding={() => handleNavigateView("landing")}
+            onBackToLanding={() => {
+              if (sharedDeck) {
+                if (typeof window !== "undefined") {
+                  window.location.hash = "";
+                }
+                setSharedDeck(null);
+              }
+              handleNavigateView("landing");
+            }}
             onOpenAuth={() => setIsAuthOpen(true)}
-            isVisitorPreview={!user}
-            isOwner={Boolean(user && !user.isDemoUser)}
+            isVisitorPreview={Boolean(sharedDeck || !user)}
+            isOwner={Boolean(!sharedDeck && user && !user.isDemoUser)}
             onOpenNewProduct={() => {
               setEditingProduct(null);
               setIsProductModalOpen(true);

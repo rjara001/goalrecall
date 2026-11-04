@@ -27,11 +27,13 @@ import {
   Twitter,
   Plus,
   Minus,
-  Palette
+  Palette,
+  Share2
 } from "lucide-react";
 import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
 import { ProductCard } from "./ProductCard";
+import { ShareDeckModal } from "./ShareDeckModal";
 import { useI18n } from "../i18n";
 
 interface PublicDeckProps {
@@ -91,6 +93,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [showOtherNetworks, setShowOtherNetworks] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
 
   // Compute secondary employment networks
   const secondaryNetworks = useMemo(() => {
@@ -270,7 +273,17 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all active:scale-95 shrink-0"
+              title="Generar enlace seguro de tu vitrina para enviar a reclutadores"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Compartir con Recruiter</span>
+            </button>
+
             <div className="flex items-center p-1 bg-[#080C14] border border-slate-800 rounded-xl text-xs">
               <button
                 type="button"
@@ -391,9 +404,20 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 </button>
               )}
 
+              {/* Share with recruiter button */}
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-slate-950 font-bold rounded-xl text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-95"
+                title="Generar enlace seguro de tu vitrina para enviar a reclutadores"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Compartir Vitrina</span>
+              </button>
+
               <a
                 href="#leave-note"
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs shadow-sm shadow-emerald-500/20 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-semibold rounded-xl text-xs transition-all"
               >
                 <Mail className="w-4 h-4" />
                 <span>Dejar un Recado</span>
@@ -865,6 +889,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Share with Recruiter Modal */}
+      <ShareDeckModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        user={userProfile}
+        logs={logs}
+        products={products}
+      />
     </div>
   );
 };
