@@ -65,9 +65,23 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
 }) => {
   const { t } = useI18n();
 
-  // CRITICAL PRIVACY ISOLATION: Strict filter for public entries ONLY (excludes Bóveda Privada for non-owners)
-  const publicLogs = useMemo(() => logs.filter((l) => isOwner || l.isPublic), [logs, isOwner]);
-  const publicProducts = useMemo(() => products.filter((p) => isOwner || p.isPublic !== false), [products, isOwner]);
+  // Owner preview mode toggle: "public_only" (default, strict visitor view) vs "all_owner_audit"
+  const [ownerViewMode, setOwnerViewMode] = useState<"public_only" | "all_owner_audit">("public_only");
+
+  // CRITICAL PRIVACY ISOLATION: Strict filter for public entries ONLY (Bóveda Privada is NEVER exposed by default)
+  const publicLogs = useMemo(() => {
+    if (isOwner && ownerViewMode === "all_owner_audit") {
+      return logs;
+    }
+    return logs.filter((l) => l.isPublic);
+  }, [logs, isOwner, ownerViewMode]);
+
+  const publicProducts = useMemo(() => {
+    if (isOwner && ownerViewMode === "all_owner_audit") {
+      return products;
+    }
+    return products.filter((p) => p.isPublic !== false);
+  }, [products, isOwner, ownerViewMode]);
 
   const [activeTab, setActiveTab] = useState<"achievements" | "products">("achievements");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -230,6 +244,57 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 {t.nav.signIn}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Owner Guidance Banner with View Mode Switch */}
+      {isOwner && !isVisitorPreview && (
+        <div className="bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-white text-sm flex items-center gap-2">
+                <span>Vitrina Pública (Vista de Propietario)</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-semibold">
+                  {logs.filter((l) => l.isPublic).length} público(s) de {logs.length} en bitácora
+                </span>
+              </p>
+              <p className="text-xs text-slate-300">
+                {ownerViewMode === "public_only"
+                  ? "Estás viendo tu vitrina exactamente como la ven reclutadores y visitantes (solo logros con estado público)."
+                  : "Modo Auditoría de Dueño: Mostrando todos tus logros con su etiqueta de visibilidad (Público vs Bóveda Privada)."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+            <div className="flex items-center p-1 bg-[#080C14] border border-slate-800 rounded-xl text-xs">
+              <button
+                type="button"
+                onClick={() => setOwnerViewMode("public_only")}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  ownerViewMode === "public_only"
+                    ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Solo Públicos ({logs.filter((l) => l.isPublic).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOwnerViewMode("all_owner_audit")}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  ownerViewMode === "all_owner_audit"
+                    ? "bg-slate-800 text-white font-bold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Auditar Todos ({logs.length})
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -460,10 +525,16 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
           {activeTab === "achievements" && (
             <>
               {filteredPublicLogs.length === 0 ? (
-                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
-                  <p className="text-xs text-slate-400">
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 space-y-2">
+                  <ShieldCheck className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-300">
                     {t.publicDeck.emptyPublicLogsTitle}
                   </p>
+                  {isOwner && (
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Tus logros están en la Bóveda Privada por seguridad. Para exhibirlos aquí, ve a tu Cronología y activa el ícono de ojo verde en los logros que desees mostrar a reclutadores.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -489,9 +560,20 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                             <span className="font-mono text-slate-400">{log.date}</span>
                           </div>
 
-                          <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
-                            {log.category}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {isOwner && ownerViewMode === "all_owner_audit" && (
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                                log.isPublic
+                                  ? "text-emerald-300 border-emerald-800/60 bg-emerald-950/60 font-semibold"
+                                  : "text-amber-300 border-amber-800/60 bg-amber-950/60 font-semibold"
+                              }`}>
+                                {log.isPublic ? "Público" : "Bóveda Privada"}
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
+                              {log.category}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Headline - Logro (Multilínea) */}
