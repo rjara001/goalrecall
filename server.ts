@@ -1441,6 +1441,13 @@ function getUsernameIndex(): Record<string, string> {
   return {};
 }
 
+const RESERVED_USERNAMES = new Set([
+  "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
+  "login", "register", "auth", "settings", "terms", "privacy", "help",
+  "explore", "user", "users", "u", "p", "deck", "demo", "null", "undefined",
+  "goalrecall", "support", "billing", "dashboard", "app"
+]);
+
 function setUsernameIndex(username: string, userKey: string): void {
   try {
     const cleanUsername = username.trim().toLowerCase();
@@ -1452,6 +1459,99 @@ function setUsernameIndex(username: string, userKey: string): void {
     console.warn("Could not write username_index.json:", err);
   }
 }
+
+function generateUsernameSuggestions(username: string, existingIndex: Record<string, string>): string[] {
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  const base = clean || "user";
+  const candidates = [
+    `${base}001`,
+    `${base}01`,
+    `${base}1`,
+    `${base}_dev`,
+    `${base}_pro`,
+    `${base}_tech`,
+    `${base}${new Date().getFullYear()}`,
+  ];
+  return candidates.filter((c) => !RESERVED_USERNAMES.has(c) && !existingIndex[c]).slice(0, 3);
+}
+
+// Endpoint to check if username is available
+app.get("/api/public/check-username/:username", (req, res) => {
+  try {
+    const rawUsername = req.params.username?.trim();
+    const currentUserKey = (req.query.userKey as string)?.trim().toLowerCase();
+
+    if (!rawUsername) {
+      return res.status(400).json({ available: false, reason: "Nombre de usuario requerido." });
+    }
+
+    const cleanUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    if (cleanUsername.length < 3) {
+      return res.json({
+        available: false,
+        reason: "El nombre de usuario debe tener al menos 3 caracteres.",
+      });
+    }
+
+    if (cleanUsername.length > 30) {
+      return res.json({
+        available: false,
+        reason: "El nombre de usuario no puede exceder 30 caracteres.",
+      });
+    }
+
+    if (RESERVED_USERNAMES.has(cleanUsername)) {
+      const suggestions = generateUsernameSuggestions(cleanUsername, getUsernameIndex());
+      return res.json({
+        available: false,
+        reason: "Este nombre de usuario es una palabra reservada del sistema.",
+        suggestions,
+      });
+    }
+
+    const index = getUsernameIndex();
+    const existingOwner = index[cleanUsername];
+
+    // If already owned by someone else
+    if (existingOwner && (!currentUserKey || existingOwner.toLowerCase() !== currentUserKey)) {
+      const suggestions = generateUsernameSuggestions(cleanUsername, index);
+      return res.json({
+        available: false,
+        reason: "Esta URL ya está tomada por otro usuario.",
+        suggestions,
+      });
+    }
+
+    // Also check cloud sync files if not yet in index
+    if (!existingOwner) {
+      const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
+          const user = content?.payload?.user;
+          const uUsername = (user?.username || "").toLowerCase();
+          const uKey = (content.userKey || "").toLowerCase();
+
+          if (uUsername === cleanUsername && (!currentUserKey || uKey !== currentUserKey)) {
+            setUsernameIndex(cleanUsername, content.userKey);
+            const suggestions = generateUsernameSuggestions(cleanUsername, getUsernameIndex());
+            return res.json({
+              available: false,
+              reason: "Esta URL ya está tomada por otro usuario.",
+              suggestions,
+            });
+          }
+        } catch {}
+      }
+    }
+
+    return res.json({ available: true, username: cleanUsername });
+  } catch (err: any) {
+    console.error("Error checking username availability:", err);
+    return res.status(500).json({ error: "Error al verificar disponibilidad." });
+  }
+});
 
 app.post("/api/cloud-sync/save", (req, res) => {
   try {
@@ -1468,6 +1568,23 @@ app.post("/api/cloud-sync/save", (req, res) => {
       });
     }
 
+    // Validate username uniqueness on save
+    const requestedUsername = payload.user?.username?.trim().toLowerCase();
+    if (requestedUsername) {
+      if (RESERVED_USERNAMES.has(requestedUsername)) {
+        return res.status(409).json({ error: `El nombre de usuario "${requestedUsername}" es una palabra reservada.` });
+      }
+
+      const index = getUsernameIndex();
+      const existingOwner = index[requestedUsername];
+      if (existingOwner && existingOwner.toLowerCase() !== userKey.trim().toLowerCase()) {
+        return res.status(409).json({
+          error: `El nombre de usuario "${requestedUsername}" ya está tomado por otro usuario.`,
+          conflict: true
+        });
+      }
+    }
+
     const filePath = getSyncFilePath(userKey);
     const backupRecord = {
       userKey,
@@ -1477,8 +1594,8 @@ app.post("/api/cloud-sync/save", (req, res) => {
     fs.writeFileSync(filePath, JSON.stringify(backupRecord, null, 2), "utf-8");
 
     // If payload contains user with username, update username index
-    if (payload.user?.username) {
-      setUsernameIndex(payload.user.username, userKey);
+    if (requestedUsername) {
+      setUsernameIndex(requestedUsername, userKey);
     }
 
     return res.json({ success: true, savedAt: backupRecord.updatedAt, sizeBytes: payloadStr.length });

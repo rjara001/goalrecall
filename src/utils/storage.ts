@@ -27,6 +27,13 @@ export const INITIAL_EXPERIENCES: WorkExperience[] = [];
 
 export const DEFAULT_USERS: UserProfile[] = [];
 
+export const RESERVED_USERNAMES = new Set([
+  "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
+  "login", "register", "auth", "settings", "terms", "privacy", "help",
+  "explore", "user", "users", "u", "p", "deck", "demo", "null", "undefined",
+  "goalrecall", "support", "billing", "dashboard", "app"
+]);
+
 export const sanitizeUsername = (raw: string): string => {
   return raw
     .toLowerCase()
@@ -34,14 +41,68 @@ export const sanitizeUsername = (raw: string): string => {
     .replace(/[^a-z0-9_-]/g, "");
 };
 
-export const generateDefaultUsername = (name: string, email?: string): string => {
-  if (email && email.includes("@")) {
-    const prefix = sanitizeUsername(email.split("@")[0]);
-    if (prefix.length >= 3) return prefix;
+export const checkLocalUsernameAvailability = (
+  username: string,
+  currentUserId?: string
+): { available: boolean; reason?: string; suggestions?: string[] } => {
+  const clean = sanitizeUsername(username);
+  if (!clean || clean.length < 3) {
+    return { available: false, reason: "Mínimo 3 caracteres alfanuméricos." };
   }
-  const cleanName = sanitizeUsername(name);
-  if (cleanName.length >= 3) return cleanName;
-  return `user_${Math.random().toString(36).substring(2, 7)}`;
+  if (clean.length > 30) {
+    return { available: false, reason: "Máximo 30 caracteres permitidos." };
+  }
+  if (RESERVED_USERNAMES.has(clean)) {
+    return {
+      available: false,
+      reason: "Palabra reservada del sistema.",
+      suggestions: [`${clean}001`, `${clean}_pro`, `${clean}_dev`],
+    };
+  }
+
+  const accounts = getStoredCustomAccounts();
+  const taken = accounts.find(
+    (acc) =>
+      acc.username?.toLowerCase() === clean &&
+      (!currentUserId || acc.id !== currentUserId)
+  );
+
+  if (taken) {
+    return {
+      available: false,
+      reason: "Este nombre de usuario ya está tomado.",
+      suggestions: [`${clean}001`, `${clean}01`, `${clean}_pro`],
+    };
+  }
+
+  return { available: true };
+};
+
+export const generateDefaultUsername = (name: string, email?: string): string => {
+  let candidate = "";
+  if (email && email.includes("@")) {
+    candidate = sanitizeUsername(email.split("@")[0]);
+  }
+  if (!candidate || candidate.length < 3 || RESERVED_USERNAMES.has(candidate)) {
+    candidate = sanitizeUsername(name);
+  }
+  if (!candidate || candidate.length < 3 || RESERVED_USERNAMES.has(candidate)) {
+    candidate = `user_${Math.random().toString(36).substring(2, 7)}`;
+  }
+
+  // Ensure default candidate is unique among existing local accounts
+  const accounts = getStoredCustomAccounts();
+  let finalCandidate = candidate;
+  let counter = 1;
+  while (
+    RESERVED_USERNAMES.has(finalCandidate) ||
+    accounts.some((a) => a.username?.toLowerCase() === finalCandidate)
+  ) {
+    finalCandidate = `${candidate}${counter.toString().padStart(3, "0")}`;
+    counter++;
+  }
+
+  return finalCandidate;
 };
 
 export const INITIAL_USER: UserProfile = {
@@ -496,6 +557,14 @@ export const registerCustomAccount = (params: {
   const username = (params as any).username
     ? sanitizeUsername((params as any).username)
     : generateDefaultUsername(cleanName, cleanEmail);
+
+  const availability = checkLocalUsernameAvailability(username);
+  if (!availability.available) {
+    return {
+      success: false,
+      error: `Nombre de usuario no disponible: ${availability.reason}`,
+    };
+  }
 
   const newAccount: CustomAccount = {
     id: "usr-" + Date.now(),

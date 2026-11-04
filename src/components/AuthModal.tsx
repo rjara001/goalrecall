@@ -222,6 +222,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Custom Register Form State
   const [signupName, setSignupName] = useState("");
   const [signupUsername, setSignupUsername] = useState("");
+  const [signupUsernameStatus, setSignupUsernameStatus] = useState<{
+    checking: boolean;
+    available?: boolean;
+    reason?: string;
+    suggestions?: string[];
+  }>({ checking: false });
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
@@ -234,6 +240,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editUsername, setEditUsername] = useState(currentUser?.username || "");
+  const [editUsernameStatus, setEditUsernameStatus] = useState<{
+    checking: boolean;
+    available?: boolean;
+    reason?: string;
+    suggestions?: string[];
+  }>({ checking: false });
   const [editTitle, setEditTitle] = useState(currentUser?.title || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
   const [editLocation, setEditLocation] = useState(currentUser?.location || "");
@@ -262,6 +274,73 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoginError(null);
     setSignupError(null);
   }, [authMode]);
+
+  // Check availability for signup username
+  useEffect(() => {
+    if (authMode !== "signup" || !signupUsername) {
+      setSignupUsernameStatus({ checking: false });
+      return;
+    }
+    const clean = signupUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (clean.length < 3) {
+      setSignupUsernameStatus({ checking: false, available: false, reason: "Mínimo 3 caracteres." });
+      return;
+    }
+    setSignupUsernameStatus({ checking: true });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/public/check-username/${encodeURIComponent(clean)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSignupUsernameStatus({
+            checking: false,
+            available: data.available,
+            reason: data.reason,
+            suggestions: data.suggestions,
+          });
+        }
+      } catch {
+        setSignupUsernameStatus({ checking: false, available: true });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [signupUsername, authMode]);
+
+  // Check availability for edit username
+  useEffect(() => {
+    if (!isEditingProfile || !editUsername) {
+      setEditUsernameStatus({ checking: false });
+      return;
+    }
+    const clean = editUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (currentUser?.username && currentUser.username.toLowerCase() === clean) {
+      setEditUsernameStatus({ checking: false, available: true });
+      return;
+    }
+    if (clean.length < 3) {
+      setEditUsernameStatus({ checking: false, available: false, reason: "Mínimo 3 caracteres." });
+      return;
+    }
+    setEditUsernameStatus({ checking: true });
+    const timer = setTimeout(async () => {
+      try {
+        const userKey = currentUser?.email || currentUser?.id || "";
+        const res = await fetch(`/api/public/check-username/${encodeURIComponent(clean)}?userKey=${encodeURIComponent(userKey)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEditUsernameStatus({
+            checking: false,
+            available: data.available,
+            reason: data.reason,
+            suggestions: data.suggestions,
+          });
+        }
+      } catch {
+        setEditUsernameStatus({ checking: false, available: true });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [editUsername, isEditingProfile, currentUser]);
 
   // Initialize Google Identity Services when Client ID is available and unauthenticated
   useEffect(() => {
@@ -598,9 +677,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         value={editUsername}
                         onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
                         placeholder="rjara001"
-                        className="w-full bg-[#080C14] border border-slate-700 rounded-r-xl px-3 py-2 text-cyan-300 font-mono focus:outline-none focus:border-cyan-500"
+                        className={`w-full bg-[#080C14] border rounded-r-xl px-3 py-2 font-mono text-xs focus:outline-none transition-colors ${
+                          editUsernameStatus.available === false
+                            ? "border-red-500/80 text-red-300"
+                            : editUsernameStatus.available === true
+                            ? "border-emerald-500/80 text-emerald-300"
+                            : "border-slate-700 text-cyan-300 focus:border-cyan-500"
+                        }`}
                       />
                     </div>
+                    {editUsernameStatus.available === false && (
+                      <div className="mt-1 space-y-1">
+                        <p className="text-[10px] text-red-400 font-semibold">{editUsernameStatus.reason}</p>
+                        {editUsernameStatus.suggestions && (
+                          <div className="flex gap-1 flex-wrap">
+                            <span className="text-[10px] text-slate-400">Sugerencias:</span>
+                            {editUsernameStatus.suggestions.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setEditUsername(s)}
+                                className="text-[10px] text-cyan-300 bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-800/60"
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -789,9 +894,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         value={signupUsername}
                         onChange={(e) => setSignupUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
                         placeholder="rjara001"
-                        className="w-full bg-[#080C14] border border-slate-700 rounded-r-xl px-3 py-2 text-cyan-300 font-mono focus:outline-none focus:border-cyan-500 placeholder-slate-600"
+                        className={`w-full bg-[#080C14] border rounded-r-xl px-3 py-2 font-mono text-xs focus:outline-none transition-colors placeholder-slate-600 ${
+                          signupUsernameStatus.available === false
+                            ? "border-red-500/80 text-red-300"
+                            : signupUsernameStatus.available === true && signupUsername.length >= 3
+                            ? "border-emerald-500/80 text-emerald-300"
+                            : "border-slate-700 text-cyan-300 focus:border-cyan-500"
+                        }`}
                       />
                     </div>
+                    {signupUsernameStatus.available === false && (
+                      <div className="mt-1 space-y-1">
+                        <p className="text-[10px] text-red-400 font-semibold">{signupUsernameStatus.reason}</p>
+                        {signupUsernameStatus.suggestions && (
+                          <div className="flex gap-1 flex-wrap">
+                            <span className="text-[10px] text-slate-400">Sugerencias:</span>
+                            {signupUsernameStatus.suggestions.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setSignupUsername(s)}
+                                className="text-[10px] text-cyan-300 bg-cyan-950/60 px-1.5 py-0.2 rounded border border-cyan-800/60"
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div>
