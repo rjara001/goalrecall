@@ -70,6 +70,8 @@ export const ja: TranslationSchema = {
     systemFeatures: "システム機能",
     userGuide: "ユーザーガイド (/docs)",
     offersAndCv: "求人 & CV生成 (/offers)",
+    featuresGuide: "機能ガイド",
+    viewPublicLanding: "公開ランディングを見る",
   },
   landing: {
     ...en.landing,

@@ -263,10 +263,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
             <button
               onClick={onEnterQuarters}
-              className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+              className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-cyan-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>{t.nav.logbook}</span>
+              <span>{language === "es" ? "Volver a mi Espacio de Trabajo" : "Return to Workspace"}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

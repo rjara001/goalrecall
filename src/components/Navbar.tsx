@@ -78,7 +78,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         
         {/* Zone 1: Wordmark Brand */}
         <button
-          onClick={() => setActiveView("landing")}
+          onClick={() => {
+            if (user) {
+              setActiveView("quarters");
+              setActiveQuartersTab("timeline");
+              if (typeof window !== "undefined" && window.location.pathname !== "/quarters") {
+                window.history.pushState(null, "", "/quarters");
+              }
+            } else {
+              setActiveView("landing");
+              if (typeof window !== "undefined" && window.location.pathname !== "/") {
+                window.history.pushState(null, "", "/");
+              }
+            }
+          }}
           className="flex items-center gap-2.5 shrink-0 text-left group"
         >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/30 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/10 group-hover:border-cyan-400 transition-colors">
@@ -136,6 +149,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => {
                   setActiveView("quarters");
                   setActiveQuartersTab("timeline");
+                  if (typeof window !== "undefined" && window.location.pathname !== "/quarters") {
+                    window.history.pushState(null, "", "/quarters");
+                  }
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   activeView === "quarters" && activeQuartersTab === "timeline"
@@ -149,7 +165,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveView("offers")}
+                onClick={() => {
+                  setActiveView("offers");
+                  if (typeof window !== "undefined" && window.location.pathname !== "/offers") {
+                    window.history.pushState(null, "", "/offers");
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   activeView === "offers"
                     ? "bg-indigo-600 text-white font-semibold shadow-sm shadow-indigo-900/40"
@@ -161,7 +182,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveView("public")}
+                onClick={() => {
+                  setActiveView("public");
+                  if (typeof window !== "undefined" && window.location.pathname !== "/public") {
+                    window.history.pushState(null, "", "/public");
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   activeView === "public"
                     ? "bg-emerald-500 text-slate-950 font-semibold shadow-sm shadow-emerald-500/30"
@@ -174,6 +200,25 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-[10px] font-mono font-bold bg-slate-800/80 px-1.5 py-0.2 rounded text-emerald-300">
                   {publicLogsCount}
                 </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveView("features");
+                  if (typeof window !== "undefined" && window.location.pathname !== "/features") {
+                    window.history.pushState(null, "", "/features");
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  activeView === "features"
+                    ? "bg-purple-600 text-white font-semibold shadow-sm shadow-purple-900/40"
+                    : "text-slate-300 hover:text-white"
+                }`}
+                title={t.nav.featuresGuide}
+              >
+                <Layers className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden md:inline">{t.nav.featuresGuide}</span>
+                <span className="md:hidden">Guía</span>
               </button>
             </div>
           )}
@@ -333,11 +378,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onClick={() => {
                           setIsProfileMenuOpen(false);
                           setActiveView("features");
+                          if (typeof window !== "undefined" && window.location.pathname !== "/features") {
+                            window.history.pushState(null, "", "/features");
+                          }
                         }}
                         className="w-full text-left px-4 py-2 text-slate-200 hover:text-white hover:bg-slate-800/70 flex items-center gap-2.5 transition-colors"
                       >
-                        <Layers className="w-4 h-4 text-indigo-400" />
-                        <span className="font-medium">{t.nav.systemFeatures}</span>
+                        <Layers className="w-4 h-4 text-purple-400" />
+                        <span className="font-medium">{t.nav.featuresGuide}</span>
+                      </button>
+
+                      {/* View Public Landing */}
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          setActiveView("landing");
+                          if (typeof window !== "undefined" && window.location.pathname !== "/") {
+                            window.history.pushState(null, "", "/");
+                          }
+                        }}
+                        className="w-full text-left px-4 py-2 text-slate-200 hover:text-white hover:bg-slate-800/70 flex items-center gap-2.5 transition-colors"
+                      >
+                        <Home className="w-4 h-4 text-emerald-400" />
+                        <div>
+                          <span className="font-medium block">{t.nav.viewPublicLanding}</span>
+                          <span className="text-[10px] text-slate-400 block">Explorar landing comercial</span>
+                        </div>
                       </button>
                     </div>
 

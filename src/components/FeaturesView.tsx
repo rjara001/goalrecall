@@ -126,11 +126,11 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={onBackToLanding}
+              onClick={user ? onGoToQuarters : onBackToLanding}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all text-xs font-semibold"
             >
               <ArrowLeft className="w-4 h-4 text-cyan-400" />
-              <span>{t.app.backToHome}</span>
+              <span>{user ? (language === "es" ? "Volver a mi Bitácora" : "Back to Logbook") : t.app.backToHome}</span>
             </button>
             <span className="text-slate-700 hidden sm:inline">|</span>
             <div className="flex items-center gap-2">
@@ -139,7 +139,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 <span>GOAL RECALL</span>
               </span>
               <span className="text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-800/60 px-2 py-0.5 rounded-full">
-                {t.features.badge}
+                {user ? t.nav.featuresGuide : t.features.badge}
               </span>
             </div>
           </div>
@@ -150,7 +150,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
             >
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">{t.app.navLogbook}</span>
+              <span className="hidden sm:inline">{t.nav.newLog}</span>
             </button>
 
             {user ? (
@@ -159,7 +159,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-cyan-400 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 hover:from-cyan-400 hover:to-cyan-300 transition-all"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{t.app.navLogbook}</span>
+                <span>{t.nav.logbook}</span>
               </button>
             ) : (
               <button
@@ -178,9 +178,17 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(6,182,212,0.12),rgba(255,255,255,0))]" />
         
         <div className="max-w-5xl mx-auto relative z-10 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 text-xs font-medium">
-            <Award className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{t.features.badge}</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 text-xs font-medium">
+              <Award className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{user ? t.nav.featuresGuide : t.features.badge}</span>
+            </div>
+            {user && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-950/70 border border-purple-800/60 text-purple-300 text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{language === "es" ? "Sesión activa:" : "Active user:"} <strong className="text-white">{user.name}</strong></span>
+              </div>
+            )}
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight max-w-4xl mx-auto">
@@ -191,7 +199,12 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            {t.features.subtitle}
+            {user 
+              ? (language === "es" 
+                  ? "Guía interactiva de funcionalidades: prueba los simuladores de impacto, explora los esquemas de sincronización y salta directamente a tu espacio de trabajo."
+                  : "Interactive feature guide: test impact simulators, explore synchronization schemas, and jump directly to your workspace.")
+              : t.features.subtitle
+            }
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-xs">
@@ -793,7 +806,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 text-xs font-bold shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
             >
               <Sparkles className="w-4 h-4" />
-              <span>{fl.footer.startNow}</span>
+              <span>{user ? t.nav.newLog : fl.footer.startNow}</span>
             </button>
 
             {user ? (
@@ -802,7 +815,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
               >
                 <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                <span>{t.app.navLogbook}</span>
+                <span>{t.nav.logbook}</span>
               </button>
             ) : (
               <button

@@ -68,6 +68,8 @@ export const en: TranslationSchema = {
     systemFeatures: "System Features",
     userGuide: "Guides & Docs (/docs)",
     offersAndCv: "Offers & Resumes (/offers)",
+    featuresGuide: "Feature Guide",
+    viewPublicLanding: "View Public Landing",
   },
   landing: {
     badge: "Professional Single Source of Truth",
@@ -216,7 +218,7 @@ export const en: TranslationSchema = {
     },
   },
   features: {
-    title: "All GoalRecall Capabilities",
+    title: "All Core Features of",
     badge: "Comprehensive Platform",
     subtitle: "The single source of truth: capture, refine, and replicate your career records everywhere.",
     allFeatures: "Core Capabilities",

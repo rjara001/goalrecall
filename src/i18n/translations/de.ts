@@ -70,6 +70,8 @@ export const de: TranslationSchema = {
     systemFeatures: "Systemfunktionen",
     userGuide: "Handbuch & Dokumentation (/docs)",
     offersAndCv: "Angebote & Lebensläufe (/offers)",
+    featuresGuide: "Funktionsübersicht",
+    viewPublicLanding: "Öffentliche Landing-Page ansehen",
   },
   landing: {
     ...en.landing,

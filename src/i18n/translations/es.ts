@@ -68,6 +68,8 @@ export const es: TranslationSchema = {
     systemFeatures: "Características del Sistema",
     userGuide: "Guía y Documentación (/docs)",
     offersAndCv: "Ofertas & CVs (/offers)",
+    featuresGuide: "Guía de Funcionalidades",
+    viewPublicLanding: "Ver Landing Pública",
   },
   landing: {
     badge: "Punto Único de Verdad Profesional",
@@ -216,7 +218,7 @@ export const es: TranslationSchema = {
     },
   },
   features: {
-    title: "Todas las Características de GoalRecall",
+    title: "Todas las Características de",
     badge: "Plataforma Integral",
     subtitle: "El único punto de verdad de tu carrera: captura, refina y exporta tus logros a donde los necesites.",
     allFeatures: "Funcionalidades Principales",

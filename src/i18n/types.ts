@@ -84,6 +84,8 @@ export interface TranslationSchema {
     systemFeatures: string;
     userGuide: string;
     offersAndCv: string;
+    featuresGuide: string;
+    viewPublicLanding: string;
   };
   landing: {
     badge: string;

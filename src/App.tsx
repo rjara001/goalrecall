@@ -70,6 +70,20 @@ export default function App() {
       if (p === "/features" || h === "#features") return "features";
       if (p === "/offers" || h === "#offers") return "offers";
       if (p === "/public" || h === "#public") return "public";
+      if (p === "/quarters" || h === "#quarters") return "quarters";
+
+      // If root path "/" or empty and an active user exists, redirect directly to quarters
+      try {
+        const stored = localStorage.getItem("goalrecall_user_profile");
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (u && (u.id || u.email || u.name)) {
+            return "quarters";
+          }
+        }
+      } catch {
+        // fallback
+      }
     }
     return "landing";
   });
@@ -216,7 +230,12 @@ export default function App() {
       } else if (p === "/quarters" || h === "#quarters") {
         setActiveView("quarters");
       } else {
-        setActiveView("landing");
+        const stored = getStoredUser();
+        if (stored) {
+          setActiveView("quarters");
+        } else {
+          setActiveView("landing");
+        }
       }
     };
 
