@@ -27,8 +27,26 @@ export const INITIAL_EXPERIENCES: WorkExperience[] = [];
 
 export const DEFAULT_USERS: UserProfile[] = [];
 
+export const sanitizeUsername = (raw: string): string => {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]/g, "");
+};
+
+export const generateDefaultUsername = (name: string, email?: string): string => {
+  if (email && email.includes("@")) {
+    const prefix = sanitizeUsername(email.split("@")[0]);
+    if (prefix.length >= 3) return prefix;
+  }
+  const cleanName = sanitizeUsername(name);
+  if (cleanName.length >= 3) return cleanName;
+  return `user_${Math.random().toString(36).substring(2, 7)}`;
+};
+
 export const INITIAL_USER: UserProfile = {
   id: "usr-guest",
+  username: "usuario",
   name: "Usuario",
   email: "",
   avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
@@ -445,6 +463,7 @@ export const registerCustomAccount = (params: {
   name: string;
   email: string;
   password: string;
+  username?: string;
   title?: string;
   avatar?: string;
 }): { success: boolean; user?: UserProfile; error?: string } => {
@@ -474,8 +493,13 @@ export const registerCustomAccount = (params: {
     };
   }
 
+  const username = (params as any).username
+    ? sanitizeUsername((params as any).username)
+    : generateDefaultUsername(cleanName, cleanEmail);
+
   const newAccount: CustomAccount = {
     id: "usr-" + Date.now(),
+    username: username,
     name: cleanName,
     email: cleanEmail,
     passwordHash: hashPassword(cleanPwd),
@@ -496,6 +520,7 @@ export const registerCustomAccount = (params: {
 
   const userProfile: UserProfile = {
     id: newAccount.id,
+    username: newAccount.username,
     name: newAccount.name,
     email: newAccount.email,
     avatar: newAccount.avatar,
@@ -551,6 +576,7 @@ export const authenticateCustomAccount = (
 
   const userProfile: UserProfile = {
     id: target.id,
+    username: target.username || generateDefaultUsername(target.name, target.email),
     name: target.name,
     email: target.email,
     avatar: target.avatar,
@@ -618,7 +644,12 @@ export const getStoredUser = (): UserProfile | null => {
     if (!raw) {
       return null;
     }
-    return JSON.parse(raw);
+    const u: UserProfile = JSON.parse(raw);
+    if (u && !u.username && (u.name || u.email)) {
+      u.username = generateDefaultUsername(u.name || "user", u.email);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(u));
+    }
+    return u;
   } catch (e) {
     return null;
   }

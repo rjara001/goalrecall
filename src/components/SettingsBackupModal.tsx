@@ -389,6 +389,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
   const [availabilityStatus, setAvailabilityStatus] = useState<string>(
     "🟢 Disponible de inmediato (Full Remote)"
   );
+  const [username, setUsername] = useState<string>("");
 
   // Initialize or re-sync when modal opens or currentUser changes
   useEffect(() => {
@@ -409,6 +410,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
         if (activeUser.availabilityStatus) {
           setAvailabilityStatus(activeUser.availabilityStatus);
         }
+        setUsername(activeUser.username || "");
       }
       setSaveSuccess(false);
       setImportStatus(null);
@@ -469,8 +471,14 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
       twitter: links.twitter?.trim() || "",
     };
 
+    const cleanUsername = username
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_-]/g, "");
+
     const updatedUser: UserProfile = {
       ...activeUser,
+      username: cleanUsername || activeUser.username,
       github: cleanLinks.github,
       linkedin: cleanLinks.linkedin,
       socialLinks: cleanLinks,
@@ -605,6 +613,34 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     {st.showcaseNoticeDesc}
                   </p>
+                </div>
+              </div>
+
+              {/* Custom Handle / Username Field */}
+              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Enlace Personalizado de tu Vitrina Pública</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/60">
+                    goalrecall/u/{username || "usuario"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Define tu identificador único (handle) para compartir un enlace directo con reclutadores (ej. <code>rjara001</code>).
+                </p>
+                <div className="flex items-center mt-1.5">
+                  <span className="px-3 py-2 bg-slate-950/80 border border-r-0 border-slate-700 rounded-l-lg text-slate-400 font-mono text-xs select-none">
+                    /u/
+                  </span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                    placeholder="rjara001"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-r-lg text-cyan-300 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                  />
                 </div>
               </div>
 

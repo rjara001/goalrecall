@@ -221,6 +221,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Custom Register Form State
   const [signupName, setSignupName] = useState("");
+  const [signupUsername, setSignupUsername] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
@@ -232,6 +233,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Edit profile state (when logged in)
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(currentUser?.name || "");
+  const [editUsername, setEditUsername] = useState(currentUser?.username || "");
   const [editTitle, setEditTitle] = useState(currentUser?.title || "");
   const [editBio, setEditBio] = useState(currentUser?.bio || "");
   const [editLocation, setEditLocation] = useState(currentUser?.location || "");
@@ -248,6 +250,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     if (currentUser) {
       setEditName(currentUser.name);
+      setEditUsername(currentUser.username || "");
       setEditTitle(currentUser.title);
       setEditBio(currentUser.bio);
       setEditLocation(currentUser.location);
@@ -388,6 +391,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       name: signupName,
       email: signupEmail,
       password: signupPassword,
+      username: signupUsername ? signupUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "") : undefined,
       title: signupTitle || "Senior Software Engineer",
       avatar: signupAvatar,
     });
@@ -406,9 +410,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     if (!currentUser) return;
 
+    const cleanUsername = editUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
     const updated: UserProfile = {
       ...currentUser,
       name: editName.trim() || currentUser.name,
+      username: cleanUsername || currentUser.username,
       title: editTitle.trim() || currentUser.title,
       bio: editBio.trim() || currentUser.bio,
       location: editLocation.trim() || currentUser.location,
@@ -576,6 +582,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       onChange={(e) => setEditName(e.target.value)}
                       className="w-full bg-[#080C14] border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
+                      <span>Usuario / Handle Público</span>
+                      <span className="text-[10px] font-mono text-cyan-400">/u/{editUsername || "usuario"}</span>
+                    </label>
+                    <div className="flex items-center">
+                      <span className="px-3 py-2 bg-slate-950 border border-r-0 border-slate-700 rounded-l-xl text-slate-400 font-mono text-xs select-none">
+                        /u/
+                      </span>
+                      <input
+                        type="text"
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                        placeholder="rjara001"
+                        className="w-full bg-[#080C14] border border-slate-700 rounded-r-xl px-3 py-2 text-cyan-300 font-mono focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -749,6 +774,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <span>{loginError}</span>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1 flex items-center justify-between">
+                      <span>Usuario / Handle Público (para enlace /u/usuario)</span>
+                      <span className="text-[10px] font-mono text-cyan-400">Opcional</span>
+                    </label>
+                    <div className="flex items-center">
+                      <span className="px-3 py-2 bg-[#080C14] border border-r-0 border-slate-700 rounded-l-xl text-slate-400 font-mono text-xs select-none">
+                        /u/
+                      </span>
+                      <input
+                        type="text"
+                        value={signupUsername}
+                        onChange={(e) => setSignupUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                        placeholder="rjara001"
+                        className="w-full bg-[#080C14] border border-slate-700 rounded-r-xl px-3 py-2 text-cyan-300 font-mono focus:outline-none focus:border-cyan-500 placeholder-slate-600"
+                      />
+                    </div>
+                  </div>
 
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">

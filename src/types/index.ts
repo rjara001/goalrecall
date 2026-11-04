@@ -102,6 +102,7 @@ export type SkillCategory =
 
 export interface UserProfile {
   id: string;
+  username?: string; // Custom public handle (e.g. "rjara001" for goalrecall/u/rjara001)
   name: string;
   email: string;
   avatar: string;
@@ -123,6 +124,7 @@ export interface UserProfile {
 
 export interface CustomAccount {
   id: string;
+  username?: string; // Custom public handle (e.g. "rjara001")
   name: string;
   email: string; // Used as login credential (case-insensitive)
   passwordHash: string; // Base64 encoded password hash

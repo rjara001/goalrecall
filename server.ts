@@ -1427,6 +1427,32 @@ function getSyncFilePath(userKey: string): string {
   return path.resolve(CLOUD_SYNC_DIR, `user_${safeKey}.json`);
 }
 
+// Global username registry to quickly resolve /u/:username -> userKey
+const USERNAME_INDEX_FILE = path.resolve(CLOUD_SYNC_DIR, "username_index.json");
+
+function getUsernameIndex(): Record<string, string> {
+  try {
+    if (fs.existsSync(USERNAME_INDEX_FILE)) {
+      return JSON.parse(fs.readFileSync(USERNAME_INDEX_FILE, "utf-8"));
+    }
+  } catch (err) {
+    console.warn("Could not read username_index.json:", err);
+  }
+  return {};
+}
+
+function setUsernameIndex(username: string, userKey: string): void {
+  try {
+    const cleanUsername = username.trim().toLowerCase();
+    if (!cleanUsername) return;
+    const index = getUsernameIndex();
+    index[cleanUsername] = userKey;
+    fs.writeFileSync(USERNAME_INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write username_index.json:", err);
+  }
+}
+
 app.post("/api/cloud-sync/save", (req, res) => {
   try {
     const { userKey, payload } = req.body;
@@ -1449,10 +1475,110 @@ app.post("/api/cloud-sync/save", (req, res) => {
       payload,
     };
     fs.writeFileSync(filePath, JSON.stringify(backupRecord, null, 2), "utf-8");
+
+    // If payload contains user with username, update username index
+    if (payload.user?.username) {
+      setUsernameIndex(payload.user.username, userKey);
+    }
+
     return res.json({ success: true, savedAt: backupRecord.updatedAt, sizeBytes: payloadStr.length });
   } catch (err: any) {
     console.error("Error saving cloud sync backup:", err);
     return res.status(500).json({ error: "Failed to persist cloud backup." });
+  }
+});
+
+// Public Showcase Resolver: /api/public/u/:username
+// Strictly returns ONLY public logs, public products, and public user profile
+app.get("/api/public/u/:username", (req, res) => {
+  try {
+    const rawUsername = req.params.username?.trim();
+    if (!rawUsername) {
+      return res.status(400).json({ error: "Username is required." });
+    }
+    const cleanUsername = rawUsername.toLowerCase();
+    const index = getUsernameIndex();
+    let targetUserKey = index[cleanUsername];
+
+    // If not in index, scan available cloud_sync files to match username or email prefix
+    if (!targetUserKey) {
+      const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
+          const user = content?.payload?.user;
+          const uUsername = (user?.username || "").toLowerCase();
+          const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
+          const uId = (user?.id || "").toLowerCase();
+
+          if (
+            uUsername === cleanUsername ||
+            uEmailPrefix === cleanUsername ||
+            uId === cleanUsername ||
+            content.userKey.toLowerCase() === cleanUsername
+          ) {
+            targetUserKey = content.userKey;
+            if (user?.username) {
+              setUsernameIndex(user.username, content.userKey);
+            }
+            break;
+          }
+        } catch {
+          // ignore parsing error for single corrupt file
+        }
+      }
+    }
+
+    if (!targetUserKey) {
+      return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
+    }
+
+    const filePath = getSyncFilePath(targetUserKey);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Vitrina pública no encontrada." });
+    }
+
+    const record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const payload = record?.payload || {};
+    const rawUser = payload.user || {};
+    const allLogs = Array.isArray(payload.logs) ? payload.logs : [];
+    const allProducts = Array.isArray(payload.products) ? payload.products : [];
+
+    // STRICT PRIVACY ISOLATION:
+    // Only return logs with isPublic === true
+    const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+    // Only return products with isPublic !== false
+    const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+    const safeUserProfile = {
+      id: rawUser.id || `usr-public-${cleanUsername}`,
+      username: rawUser.username || cleanUsername,
+      name: rawUser.name || "Profesional Técnico",
+      title: rawUser.title || "",
+      bio: rawUser.bio || "",
+      avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      location: rawUser.location || "",
+      github: rawUser.socialLinks?.github || rawUser.github,
+      linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin,
+      socialLinks: rawUser.socialLinks || {},
+      availabilityStatus: rawUser.availabilityStatus,
+      skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+      email: rawUser.email || "",
+      authProvider: "custom",
+      isDemoUser: false,
+      isCustom: true,
+      createdAt: rawUser.createdAt || Date.now(),
+    };
+
+    return res.json({
+      success: true,
+      userProfile: safeUserProfile,
+      logs: publicLogs,
+      products: publicProducts,
+    });
+  } catch (err: any) {
+    console.error("Error retrieving public showcase by username:", err);
+    return res.status(500).json({ error: "Error al cargar la vitrina pública." });
   }
 });
 

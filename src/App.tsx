@@ -15,6 +15,7 @@ import { FeaturesView } from "./components/FeaturesView";
 import { AvatarModal } from "./components/AvatarModal";
 import { OffersView } from "./components/OffersView";
 import { ProductModal } from "./components/ProductModal";
+import { ShareDeckModal } from "./components/ShareDeckModal";
 import { 
   getStoredLogs, 
   saveLogs, 
@@ -67,6 +68,7 @@ export default function App() {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.toLowerCase();
       const h = window.location.hash.toLowerCase();
+      if (p.startsWith("/u/") || h.startsWith("#/u/")) return "public";
       if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) return "docs";
       if (p === "/features" || h === "#features") return "features";
       if (p === "/offers" || h === "#offers") return "offers";
@@ -75,7 +77,7 @@ export default function App() {
 
       // If root path "/" or empty and an active user exists, redirect directly to quarters
       try {
-        const stored = localStorage.getItem("goalrecall_user_profile");
+        const stored = localStorage.getItem("captains_user_v1");
         if (stored) {
           const u = JSON.parse(stored);
           if (u && (u.id || u.email || u.name)) {
@@ -117,6 +119,8 @@ export default function App() {
     logs: LogEntry[];
     products: Product[];
   } | null>(null);
+  const [usernameLookupError, setUsernameLookupError] = useState<string | null>(null);
+  const [isLoadingPublicUser, setIsLoadingPublicUser] = useState<boolean>(false);
 
   // Modals
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
@@ -131,6 +135,7 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "warning" } | null>(null);
@@ -220,37 +225,128 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Check for shared recruiter deck (#deck=...) on mount & hash changes
-  useEffect(() => {
-    const checkSharedDeck = () => {
-      parseSharedDeckFromUrl().then((deck) => {
-        if (deck) {
-          setSharedDeck(deck);
-          setActiveView("public");
-        }
+  // Helper to load showcase from custom username route /u/:username
+  const loadPublicShowcaseByUsername = async (targetUsername: string) => {
+    const clean = targetUsername.toLowerCase().trim();
+    if (!clean) return;
+
+    // Check if the target is the currently active local user
+    const localUser = getStoredUser();
+    if (
+      localUser &&
+      ((localUser.username && localUser.username.toLowerCase() === clean) ||
+        (localUser.email && localUser.email.split("@")[0].toLowerCase() === clean))
+    ) {
+      const localLogs = getStoredLogs();
+      const localProducts = getStoredProducts();
+      setSharedDeck({
+        userProfile: localUser,
+        logs: localLogs.filter((l) => l.isPublic),
+        products: localProducts.filter((p) => p.isPublic !== false),
       });
-    };
+      setUsernameLookupError(null);
+      setIsLoadingPublicUser(false);
+      setActiveView("public");
+      return;
+    }
 
-    checkSharedDeck();
+    setIsLoadingPublicUser(true);
+    setUsernameLookupError(null);
 
-    window.addEventListener("hashchange", checkSharedDeck);
-    return () => window.removeEventListener("hashchange", checkSharedDeck);
-  }, []);
+    try {
+      const res = await fetch(`/api/public/u/${encodeURIComponent(clean)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.userProfile) {
+          setSharedDeck({
+            userProfile: data.userProfile,
+            logs: data.logs || [],
+            products: data.products || [],
+          });
+          setUsernameLookupError(null);
+          setActiveView("public");
+          return;
+        }
+      }
+      // If not found in backend API
+      setUsernameLookupError(`No se encontró la vitrina pública para el usuario "@${clean}".`);
+      setSharedDeck(null);
+      setActiveView("public");
+    } catch (err) {
+      console.error("Error loading public showcase by username:", err);
+      setUsernameLookupError(`No fue posible cargar la vitrina para el usuario "@${clean}".`);
+      setSharedDeck(null);
+      setActiveView("public");
+    } finally {
+      setIsLoadingPublicUser(false);
+    }
+  };
 
-  // Browser Navigation & History Handling (/docs, /features, /offers, /public)
+  // Check for shared recruiter deck or /u/:username on mount & hash changes
   useEffect(() => {
-    const handlePopState = () => {
-      const p = window.location.pathname.toLowerCase();
-      const h = window.location.hash.toLowerCase();
+    const checkRouteOrDeck = () => {
+      const p = window.location.pathname;
+      const h = window.location.hash;
+
+      // 1. Detect /u/:username pattern
+      if (p.startsWith("/u/") || h.startsWith("#/u/")) {
+        const rawUsername = p.startsWith("/u/")
+          ? p.replace("/u/", "").split("/")[0]
+          : h.replace("#/u/", "").split("/")[0];
+        if (rawUsername) {
+          loadPublicShowcaseByUsername(rawUsername);
+          return;
+        }
+      }
+
+      // 2. Detect #deck=... or ?deck=...
       if (h.includes("deck=") || window.location.search.includes("deck=")) {
         parseSharedDeckFromUrl().then((deck) => {
           if (deck) {
             setSharedDeck(deck);
+            setUsernameLookupError(null);
             setActiveView("public");
           }
         });
         return;
       }
+    };
+
+    checkRouteOrDeck();
+
+    window.addEventListener("hashchange", checkRouteOrDeck);
+    return () => window.removeEventListener("hashchange", checkRouteOrDeck);
+  }, []);
+
+  // Browser Navigation & History Handling (/u/:username, /docs, /features, /offers, /public)
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      const h = window.location.hash.toLowerCase();
+
+      // Check /u/:username
+      if (p.startsWith("/u/") || h.startsWith("#/u/")) {
+        const rawUsername = p.startsWith("/u/")
+          ? p.replace("/u/", "").split("/")[0]
+          : h.replace("#/u/", "").split("/")[0];
+        if (rawUsername) {
+          loadPublicShowcaseByUsername(rawUsername);
+          return;
+        }
+      }
+
+      if (h.includes("deck=") || window.location.search.includes("deck=")) {
+        parseSharedDeckFromUrl().then((deck) => {
+          if (deck) {
+            setSharedDeck(deck);
+            setUsernameLookupError(null);
+            setActiveView("public");
+          }
+        });
+        return;
+      }
+
+      setUsernameLookupError(null);
 
       if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) {
         setActiveView("docs");
@@ -672,7 +768,10 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         activeView={activeView}
-        setActiveView={handleNavigateView}
+        setActiveView={(v) => {
+          setUsernameLookupError(null);
+          handleNavigateView(v);
+        }}
         activeQuartersTab={activeQuartersTab}
         setActiveQuartersTab={setActiveQuartersTab}
         onOpenQuickLog={() => {
@@ -682,6 +781,7 @@ export default function App() {
         onOpenCvUpload={() => setIsCvUploadOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenShareModal={() => setIsShareModalOpen(true)}
         onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
         onLogout={handleLogout}
         user={user}
@@ -833,34 +933,86 @@ export default function App() {
 
         {/* VIEW 3: PUBLIC DECK (RECRUITER / CLIENT SHOWCASE) */}
         {activeView === "public" && (
-          <PublicDeck
-            logs={sharedDeck ? sharedDeck.logs : logs}
-            products={sharedDeck ? sharedDeck.products : products}
-            userProfile={sharedDeck ? sharedDeck.userProfile : (user || INITIAL_USER)}
-            onSendVisitorMessage={handleSendVisitorMessage}
-            onBackToLanding={() => {
-              if (sharedDeck) {
-                if (typeof window !== "undefined") {
-                  window.location.hash = "";
+          isLoadingPublicUser ? (
+            <div className="py-24 text-center max-w-md mx-auto space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto animate-pulse">
+                <span className="text-xl font-bold font-mono">/u/</span>
+              </div>
+              <h3 className="text-base font-bold text-white">Cargando vitrina pública...</h3>
+              <p className="text-xs text-slate-400">Verificando logros y credenciales técnicas del usuario.</p>
+            </div>
+          ) : usernameLookupError ? (
+            <div className="py-20 text-center max-w-md mx-auto space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">Vitrina No Encontrada</h3>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  {usernameLookupError} Es posible que el enlace no esté escrito correctamente o que el usuario aún no haya publicado contenido.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    setUsernameLookupError(null);
+                    handleNavigateView("landing");
+                  }}
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm"
+                >
+                  Ir al Inicio
+                </button>
+                {user ? (
+                  <button
+                    onClick={() => {
+                      setUsernameLookupError(null);
+                      handleNavigateView("quarters");
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                  >
+                    Ir a Mi Bitácora
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsAuthOpen(true)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                  >
+                    Iniciar Sesión
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <PublicDeck
+              logs={sharedDeck ? sharedDeck.logs : logs}
+              products={sharedDeck ? sharedDeck.products : products}
+              userProfile={sharedDeck ? sharedDeck.userProfile : (user || INITIAL_USER)}
+              onSendVisitorMessage={handleSendVisitorMessage}
+              onBackToLanding={() => {
+                if (sharedDeck) {
+                  if (typeof window !== "undefined") {
+                    window.location.hash = "";
+                  }
+                  setSharedDeck(null);
                 }
-                setSharedDeck(null);
-              }
-              handleNavigateView("landing");
-            }}
-            onOpenAuth={() => setIsAuthOpen(true)}
-            isVisitorPreview={Boolean(sharedDeck || !user)}
-            isOwner={Boolean(!sharedDeck && user && !user.isDemoUser)}
-            onOpenNewProduct={() => {
-              setEditingProduct(null);
-              setIsProductModalOpen(true);
-            }}
-            onEditProduct={(p) => {
-              setEditingProduct(p);
-              setIsProductModalOpen(true);
-            }}
-            onDeleteProduct={handleDeleteProduct}
-            onToggleProductPublic={handleToggleProductPublic}
-          />
+                setUsernameLookupError(null);
+                handleNavigateView("landing");
+              }}
+              onOpenAuth={() => setIsAuthOpen(true)}
+              isVisitorPreview={Boolean(sharedDeck || !user)}
+              isOwner={Boolean(!sharedDeck && user && !user.isDemoUser)}
+              onOpenNewProduct={() => {
+                setEditingProduct(null);
+                setIsProductModalOpen(true);
+              }}
+              onEditProduct={(p) => {
+                setEditingProduct(p);
+                setIsProductModalOpen(true);
+              }}
+              onDeleteProduct={handleDeleteProduct}
+              onToggleProductPublic={handleToggleProductPublic}
+            />
+          )
         )}
 
         {/* VIEW 4: DEDICATED FEATURES SHOWCASE PAGE */}
@@ -1002,6 +1154,17 @@ export default function App() {
         userName={user?.name || "Usuario"}
         onSaveAvatar={handleUpdateAvatar}
       />
+
+      {/* Global Share Deck Modal */}
+      {user && (
+        <ShareDeckModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          user={user}
+          logs={logs}
+          products={products}
+        />
+      )}
 
       {/* Product Modal (Showcase & Personal Projects) */}
       <ProductModal

@@ -22,6 +22,8 @@ import {
 import { UserProfile } from "../types";
 import { useI18n, LanguageSelector } from "../i18n";
 
+import { Share2 } from "lucide-react";
+
 interface NavbarProps {
   activeView: "landing" | "quarters" | "public" | "features" | "docs" | "offers";
   setActiveView: (view: "landing" | "quarters" | "public" | "features" | "docs" | "offers") => void;
@@ -31,6 +33,7 @@ interface NavbarProps {
   onOpenCvUpload: () => void;
   onOpenAuth: () => void;
   onOpenSettings: () => void;
+  onOpenShareModal?: () => void;
   onOpenAvatarModal?: () => void;
   onLogout: () => void;
   user: UserProfile | null;
@@ -47,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenCvUpload,
   onOpenAuth,
   onOpenSettings,
+  onOpenShareModal,
   onOpenAvatarModal,
   onLogout,
   user,
@@ -247,6 +251,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             /* Authenticated User Actions: Clean 1 Primary CTA + Profile Menu */
             <div className="flex items-center gap-2.5">
+              {/* Compartir Vitrina Quick Action Button */}
+              {onOpenShareModal && (
+                <button
+                  type="button"
+                  onClick={onOpenShareModal}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 font-bold text-xs rounded-lg transition-all active:scale-95 shadow-sm"
+                  title="Compartir enlace de tu Vitrina Pública"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Compartir Vitrina</span>
+                  <span className="sm:hidden">Compartir</span>
+                </button>
+              )}
+
               {/* Primary Action Button: + Nuevo Logro */}
               <button
                 onClick={onOpenQuickLog}
@@ -317,6 +335,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     {/* Actions Group */}
                     <div className="py-1 text-xs">
+                      {/* Compartir Vitrina inside Dropdown */}
+                      {onOpenShareModal && (
+                        <button
+                          onClick={() => {
+                            setIsProfileMenuOpen(false);
+                            onOpenShareModal();
+                          }}
+                          className="w-full text-left px-4 py-2 text-emerald-300 hover:text-emerald-200 hover:bg-slate-800/70 flex items-center gap-2.5 transition-colors"
+                        >
+                          <Share2 className="w-4 h-4 text-emerald-400" />
+                          <div>
+                            <span className="font-medium block">Compartir Vitrina Pública</span>
+                            <span className="text-[10px] text-slate-400 block">goalrecall/u/{user.username || "usuario"}</span>
+                          </div>
+                        </button>
+                      )}
+
                       {/* Upload CV */}
                       <button
                         onClick={() => {
