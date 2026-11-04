@@ -10,7 +10,7 @@ import {
   Product
 } from "../types";
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   LOGS: "captains_logs_v1",
   USER: "captains_user_v1",
   CUSTOM_ACCOUNTS: "goal_recall_custom_accounts_v1",
@@ -27,8 +27,87 @@ export const INITIAL_EXPERIENCES: WorkExperience[] = [];
 
 export const DEFAULT_USERS: UserProfile[] = [];
 
+export const RESERVED_USERNAMES = new Set([
+  "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
+  "login", "register", "auth", "settings", "terms", "privacy", "help",
+  "explore", "user", "users", "u", "p", "deck", "demo", "null", "undefined",
+  "goalrecall", "support", "billing", "dashboard", "app"
+]);
+
+export const sanitizeUsername = (raw: string): string => {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]/g, "");
+};
+
+export const checkLocalUsernameAvailability = (
+  username: string,
+  currentUserId?: string
+): { available: boolean; reason?: string; suggestions?: string[] } => {
+  const clean = sanitizeUsername(username);
+  if (!clean || clean.length < 3) {
+    return { available: false, reason: "Mínimo 3 caracteres alfanuméricos." };
+  }
+  if (clean.length > 30) {
+    return { available: false, reason: "Máximo 30 caracteres permitidos." };
+  }
+  if (RESERVED_USERNAMES.has(clean)) {
+    return {
+      available: false,
+      reason: "Palabra reservada del sistema.",
+      suggestions: [`${clean}001`, `${clean}_pro`, `${clean}_dev`],
+    };
+  }
+
+  const accounts = getStoredCustomAccounts();
+  const taken = accounts.find(
+    (acc) =>
+      acc.username?.toLowerCase() === clean &&
+      (!currentUserId || acc.id !== currentUserId)
+  );
+
+  if (taken) {
+    return {
+      available: false,
+      reason: "Este nombre de usuario ya está tomado.",
+      suggestions: [`${clean}001`, `${clean}01`, `${clean}_pro`],
+    };
+  }
+
+  return { available: true };
+};
+
+export const generateDefaultUsername = (name: string, email?: string): string => {
+  let candidate = "";
+  if (email && email.includes("@")) {
+    candidate = sanitizeUsername(email.split("@")[0]);
+  }
+  if (!candidate || candidate.length < 3 || RESERVED_USERNAMES.has(candidate)) {
+    candidate = sanitizeUsername(name);
+  }
+  if (!candidate || candidate.length < 3 || RESERVED_USERNAMES.has(candidate)) {
+    candidate = `user_${Math.random().toString(36).substring(2, 7)}`;
+  }
+
+  // Ensure default candidate is unique among existing local accounts
+  const accounts = getStoredCustomAccounts();
+  let finalCandidate = candidate;
+  let counter = 1;
+  while (
+    RESERVED_USERNAMES.has(finalCandidate) ||
+    accounts.some((a) => a.username?.toLowerCase() === finalCandidate)
+  ) {
+    finalCandidate = `${candidate}${counter.toString().padStart(3, "0")}`;
+    counter++;
+  }
+
+  return finalCandidate;
+};
+
 export const INITIAL_USER: UserProfile = {
   id: "usr-guest",
+  username: "usuario",
   name: "Usuario",
   email: "",
   avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
@@ -445,6 +524,7 @@ export const registerCustomAccount = (params: {
   name: string;
   email: string;
   password: string;
+  username?: string;
   title?: string;
   avatar?: string;
 }): { success: boolean; user?: UserProfile; error?: string } => {
@@ -474,8 +554,21 @@ export const registerCustomAccount = (params: {
     };
   }
 
+  const username = (params as any).username
+    ? sanitizeUsername((params as any).username)
+    : generateDefaultUsername(cleanName, cleanEmail);
+
+  const availability = checkLocalUsernameAvailability(username);
+  if (!availability.available) {
+    return {
+      success: false,
+      error: `Nombre de usuario no disponible: ${availability.reason}`,
+    };
+  }
+
   const newAccount: CustomAccount = {
     id: "usr-" + Date.now(),
+    username: username,
     name: cleanName,
     email: cleanEmail,
     passwordHash: hashPassword(cleanPwd),
@@ -496,6 +589,7 @@ export const registerCustomAccount = (params: {
 
   const userProfile: UserProfile = {
     id: newAccount.id,
+    username: newAccount.username,
     name: newAccount.name,
     email: newAccount.email,
     avatar: newAccount.avatar,
@@ -551,6 +645,7 @@ export const authenticateCustomAccount = (
 
   const userProfile: UserProfile = {
     id: target.id,
+    username: target.username || generateDefaultUsername(target.name, target.email),
     name: target.name,
     email: target.email,
     avatar: target.avatar,
@@ -618,7 +713,12 @@ export const getStoredUser = (): UserProfile | null => {
     if (!raw) {
       return null;
     }
-    return JSON.parse(raw);
+    const u: UserProfile = JSON.parse(raw);
+    if (u && !u.username && (u.name || u.email)) {
+      u.username = generateDefaultUsername(u.name || "user", u.email);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(u));
+    }
+    return u;
   } catch (e) {
     return null;
   }

@@ -389,6 +389,13 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
   const [availabilityStatus, setAvailabilityStatus] = useState<string>(
     "🟢 Disponible de inmediato (Full Remote)"
   );
+  const [username, setUsername] = useState<string>("");
+  const [usernameStatus, setUsernameStatus] = useState<{
+    checking: boolean;
+    available?: boolean;
+    reason?: string;
+    suggestions?: string[];
+  }>({ checking: false });
 
   // Initialize or re-sync when modal opens or currentUser changes
   useEffect(() => {
@@ -409,11 +416,62 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
         if (activeUser.availabilityStatus) {
           setAvailabilityStatus(activeUser.availabilityStatus);
         }
+        setUsername(activeUser.username || "");
+        setUsernameStatus({ checking: false, available: true });
       }
       setSaveSuccess(false);
       setImportStatus(null);
     }
   }, [isOpen, currentUser]);
+
+  // Live debounced availability check
+  useEffect(() => {
+    if (!isOpen || !username) {
+      setUsernameStatus({ checking: false });
+      return;
+    }
+
+    const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const activeUser = currentUser || getStoredUser();
+
+    // If unchanged from current user's handle
+    if (activeUser?.username && activeUser.username.toLowerCase() === clean) {
+      setUsernameStatus({ checking: false, available: true });
+      return;
+    }
+
+    if (clean.length < 3) {
+      setUsernameStatus({
+        checking: false,
+        available: false,
+        reason: "Mínimo 3 caracteres alfanuméricos.",
+      });
+      return;
+    }
+
+    setUsernameStatus({ checking: true });
+    const timer = setTimeout(async () => {
+      try {
+        const userKey = activeUser?.email || activeUser?.id || "";
+        const res = await fetch(`/api/public/check-username/${encodeURIComponent(clean)}?userKey=${encodeURIComponent(userKey)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setUsernameStatus({
+            checking: false,
+            available: data.available,
+            reason: data.reason,
+            suggestions: data.suggestions,
+          });
+        } else {
+          setUsernameStatus({ checking: false, available: true });
+        }
+      } catch {
+        setUsernameStatus({ checking: false, available: true });
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [username, isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -469,8 +527,14 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
       twitter: links.twitter?.trim() || "",
     };
 
+    const cleanUsername = username
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_-]/g, "");
+
     const updatedUser: UserProfile = {
       ...activeUser,
+      username: cleanUsername || activeUser.username,
       github: cleanLinks.github,
       linkedin: cleanLinks.linkedin,
       socialLinks: cleanLinks,
@@ -606,6 +670,74 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
                     {st.showcaseNoticeDesc}
                   </p>
                 </div>
+              </div>
+
+              {/* Custom Handle / Username Field with Live Validation */}
+              <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Enlace Personalizado de tu Vitrina Pública</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/60">
+                    goalrecall/u/{username || "usuario"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Define tu identificador único (handle) para compartir un enlace directo con reclutadores (ej. <code>rjara001</code>).
+                </p>
+                <div className="flex items-center mt-1.5">
+                  <span className="px-3 py-2 bg-slate-950/80 border border-r-0 border-slate-700 rounded-l-lg text-slate-400 font-mono text-xs select-none">
+                    /u/
+                  </span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                    placeholder="rjara001"
+                    className={`w-full px-3 py-2 bg-slate-950 border rounded-r-lg text-xs font-mono focus:outline-none transition-colors ${
+                      usernameStatus.available === false
+                        ? "border-red-500/80 text-red-300"
+                        : usernameStatus.available === true
+                        ? "border-emerald-500/80 text-emerald-300"
+                        : "border-slate-700 text-cyan-300 focus:border-cyan-500"
+                    }`}
+                  />
+                </div>
+
+                {/* Validation Status Badge & Message */}
+                {usernameStatus.checking ? (
+                  <p className="text-[11px] text-slate-400 font-mono animate-pulse">
+                    Verificando disponibilidad de la URL...
+                  </p>
+                ) : usernameStatus.available === false ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-red-400 flex items-center gap-1 font-semibold">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>{usernameStatus.reason || "Esta URL no está disponible."}</span>
+                    </p>
+                    {usernameStatus.suggestions && usernameStatus.suggestions.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        <span className="text-[10px] text-slate-400 font-mono">Sugerencias libres:</span>
+                        {usernameStatus.suggestions.map((sug) => (
+                          <button
+                            type="button"
+                            key={sug}
+                            onClick={() => setUsername(sug)}
+                            className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/80 text-cyan-300 hover:text-white hover:bg-cyan-900 text-[10px] font-mono transition-colors"
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : usernameStatus.available === true && username.length >= 3 ? (
+                  <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-mono">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>URL disponible: goalrecall/u/{username}</span>
+                  </p>
+                ) : null}
               </div>
 
               {/* Profile Photo Quick Section */}
@@ -986,7 +1118,8 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition-all text-xs shadow-md shadow-cyan-500/20"
+                  disabled={usernameStatus.available === false}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl transition-all text-xs shadow-md shadow-cyan-500/20"
                 >
                   <Check className="w-4 h-4 stroke-[3]" />
                   <span>{st.saveBtn}</span>

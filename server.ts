@@ -1427,6 +1427,183 @@ function getSyncFilePath(userKey: string): string {
   return path.resolve(CLOUD_SYNC_DIR, `user_${safeKey}.json`);
 }
 
+// Global username registry to quickly resolve /u/:username -> userKey
+const USERNAME_INDEX_FILE = path.resolve(CLOUD_SYNC_DIR, "username_index.json");
+
+function getUsernameIndex(): Record<string, string> {
+  try {
+    if (fs.existsSync(USERNAME_INDEX_FILE)) {
+      return JSON.parse(fs.readFileSync(USERNAME_INDEX_FILE, "utf-8"));
+    }
+  } catch (err) {
+    console.warn("Could not read username_index.json:", err);
+  }
+  return {};
+}
+
+const RESERVED_USERNAMES = new Set([
+  "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
+  "login", "register", "auth", "settings", "terms", "privacy", "help",
+  "explore", "user", "users", "u", "p", "deck", "demo", "null", "undefined",
+  "goalrecall", "support", "billing", "dashboard", "app"
+]);
+
+function setUsernameIndex(username: string, userKey: string): void {
+  try {
+    const cleanUsername = username.trim().toLowerCase();
+    if (!cleanUsername) return;
+    const index = getUsernameIndex();
+    index[cleanUsername] = userKey;
+    fs.writeFileSync(USERNAME_INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write username_index.json:", err);
+  }
+}
+
+function generateUsernameSuggestions(username: string, existingIndex: Record<string, string>): string[] {
+  const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  const base = clean || "user";
+  const candidates = [
+    `${base}001`,
+    `${base}01`,
+    `${base}1`,
+    `${base}_dev`,
+    `${base}_pro`,
+    `${base}_tech`,
+    `${base}${new Date().getFullYear()}`,
+  ];
+  return candidates.filter((c) => !RESERVED_USERNAMES.has(c) && !existingIndex[c]).slice(0, 3);
+}
+
+// Endpoint to register/claim a username without a full backup
+app.post("/api/public/claim-username", (req, res) => {
+  try {
+    const { username, userKey, userProfile, logs, products } = req.body;
+    if (!username || !userKey) {
+      return res.status(400).json({ error: "username and userKey are required." });
+    }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (RESERVED_USERNAMES.has(cleanUsername)) {
+      return res.status(400).json({ error: "Palabra reservada del sistema." });
+    }
+
+    const index = getUsernameIndex();
+    const existingOwner = index[cleanUsername];
+    if (existingOwner && existingOwner.toLowerCase() !== userKey.trim().toLowerCase()) {
+      return res.status(409).json({ error: "Username already taken." });
+    }
+
+    // Update index
+    setUsernameIndex(cleanUsername, userKey);
+
+    // Also update sync file if userProfile or payload is provided
+    const filePath = getSyncFilePath(userKey);
+    let record: any = { userKey, updatedAt: Date.now(), payload: {} };
+    if (fs.existsSync(filePath)) {
+      try {
+        record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      } catch {
+        // start fresh record
+      }
+    }
+    if (!record.payload) record.payload = {};
+    if (userProfile) {
+      record.payload.user = { ...(record.payload.user || {}), ...userProfile, username: cleanUsername };
+    }
+    if (Array.isArray(logs)) {
+      record.payload.logs = logs;
+    }
+    if (Array.isArray(products)) {
+      record.payload.products = products;
+    }
+    record.updatedAt = Date.now();
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
+
+    return res.json({ success: true, username: cleanUsername, userKey });
+  } catch (err: any) {
+    console.error("Error claiming username:", err);
+    return res.status(500).json({ error: "Failed to claim username." });
+  }
+});
+
+// Endpoint to check if username is available
+app.get("/api/public/check-username/:username", (req, res) => {
+  try {
+    const rawUsername = req.params.username?.trim();
+    const currentUserKey = (req.query.userKey as string)?.trim().toLowerCase();
+
+    if (!rawUsername) {
+      return res.status(400).json({ available: false, reason: "Nombre de usuario requerido." });
+    }
+
+    const cleanUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    if (cleanUsername.length < 3) {
+      return res.json({
+        available: false,
+        reason: "El nombre de usuario debe tener al menos 3 caracteres.",
+      });
+    }
+
+    if (cleanUsername.length > 30) {
+      return res.json({
+        available: false,
+        reason: "El nombre de usuario no puede exceder 30 caracteres.",
+      });
+    }
+
+    if (RESERVED_USERNAMES.has(cleanUsername)) {
+      const suggestions = generateUsernameSuggestions(cleanUsername, getUsernameIndex());
+      return res.json({
+        available: false,
+        reason: "Este nombre de usuario es una palabra reservada del sistema.",
+        suggestions,
+      });
+    }
+
+    const index = getUsernameIndex();
+    const existingOwner = index[cleanUsername];
+
+    // If already owned by someone else
+    if (existingOwner && (!currentUserKey || existingOwner.toLowerCase() !== currentUserKey)) {
+      const suggestions = generateUsernameSuggestions(cleanUsername, index);
+      return res.json({
+        available: false,
+        reason: "Esta URL ya está tomada por otro usuario.",
+        suggestions,
+      });
+    }
+
+    // Also check cloud sync files if not yet in index
+    if (!existingOwner) {
+      const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
+          const user = content?.payload?.user;
+          const uUsername = (user?.username || "").toLowerCase();
+          const uKey = (content.userKey || "").toLowerCase();
+
+          if (uUsername === cleanUsername && (!currentUserKey || uKey !== currentUserKey)) {
+            setUsernameIndex(cleanUsername, content.userKey);
+            const suggestions = generateUsernameSuggestions(cleanUsername, getUsernameIndex());
+            return res.json({
+              available: false,
+              reason: "Esta URL ya está tomada por otro usuario.",
+              suggestions,
+            });
+          }
+        } catch {}
+      }
+    }
+
+    return res.json({ available: true, username: cleanUsername });
+  } catch (err: any) {
+    console.error("Error checking username availability:", err);
+    return res.status(500).json({ error: "Error al verificar disponibilidad." });
+  }
+});
+
 app.post("/api/cloud-sync/save", (req, res) => {
   try {
     const { userKey, payload } = req.body;
@@ -1442,6 +1619,23 @@ app.post("/api/cloud-sync/save", (req, res) => {
       });
     }
 
+    // Validate username uniqueness on save
+    const requestedUsername = payload.user?.username?.trim().toLowerCase();
+    if (requestedUsername) {
+      if (RESERVED_USERNAMES.has(requestedUsername)) {
+        return res.status(409).json({ error: `El nombre de usuario "${requestedUsername}" es una palabra reservada.` });
+      }
+
+      const index = getUsernameIndex();
+      const existingOwner = index[requestedUsername];
+      if (existingOwner && existingOwner.toLowerCase() !== userKey.trim().toLowerCase()) {
+        return res.status(409).json({
+          error: `El nombre de usuario "${requestedUsername}" ya está tomado por otro usuario.`,
+          conflict: true
+        });
+      }
+    }
+
     const filePath = getSyncFilePath(userKey);
     const backupRecord = {
       userKey,
@@ -1449,10 +1643,110 @@ app.post("/api/cloud-sync/save", (req, res) => {
       payload,
     };
     fs.writeFileSync(filePath, JSON.stringify(backupRecord, null, 2), "utf-8");
+
+    // If payload contains user with username, update username index
+    if (requestedUsername) {
+      setUsernameIndex(requestedUsername, userKey);
+    }
+
     return res.json({ success: true, savedAt: backupRecord.updatedAt, sizeBytes: payloadStr.length });
   } catch (err: any) {
     console.error("Error saving cloud sync backup:", err);
     return res.status(500).json({ error: "Failed to persist cloud backup." });
+  }
+});
+
+// Public Showcase Resolver: /api/public/u/:username
+// Strictly returns ONLY public logs, public products, and public user profile
+app.get("/api/public/u/:username", (req, res) => {
+  try {
+    const rawUsername = req.params.username?.trim();
+    if (!rawUsername) {
+      return res.status(400).json({ error: "Username is required." });
+    }
+    const cleanUsername = rawUsername.toLowerCase();
+    const index = getUsernameIndex();
+    let targetUserKey = index[cleanUsername];
+
+    // If not in index, scan available cloud_sync files to match username or email prefix
+    if (!targetUserKey) {
+      const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
+          const user = content?.payload?.user;
+          const uUsername = (user?.username || "").toLowerCase();
+          const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
+          const uId = (user?.id || "").toLowerCase();
+
+          if (
+            uUsername === cleanUsername ||
+            uEmailPrefix === cleanUsername ||
+            uId === cleanUsername ||
+            content.userKey.toLowerCase() === cleanUsername
+          ) {
+            targetUserKey = content.userKey;
+            if (user?.username) {
+              setUsernameIndex(user.username, content.userKey);
+            }
+            break;
+          }
+        } catch {
+          // ignore parsing error for single corrupt file
+        }
+      }
+    }
+
+    if (!targetUserKey) {
+      return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
+    }
+
+    const filePath = getSyncFilePath(targetUserKey);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Vitrina pública no encontrada." });
+    }
+
+    const record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const payload = record?.payload || {};
+    const rawUser = payload.user || {};
+    const allLogs = Array.isArray(payload.logs) ? payload.logs : [];
+    const allProducts = Array.isArray(payload.products) ? payload.products : [];
+
+    // STRICT PRIVACY ISOLATION:
+    // Only return logs with isPublic === true
+    const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+    // Only return products with isPublic !== false
+    const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+    const safeUserProfile = {
+      id: rawUser.id || `usr-public-${cleanUsername}`,
+      username: rawUser.username || cleanUsername,
+      name: rawUser.name || "Profesional Técnico",
+      title: rawUser.title || "",
+      bio: rawUser.bio || "",
+      avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      location: rawUser.location || "",
+      github: rawUser.socialLinks?.github || rawUser.github,
+      linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin,
+      socialLinks: rawUser.socialLinks || {},
+      availabilityStatus: rawUser.availabilityStatus,
+      skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+      email: rawUser.email || "",
+      authProvider: "custom",
+      isDemoUser: false,
+      isCustom: true,
+      createdAt: rawUser.createdAt || Date.now(),
+    };
+
+    return res.json({
+      success: true,
+      userProfile: safeUserProfile,
+      logs: publicLogs,
+      products: publicProducts,
+    });
+  } catch (err: any) {
+    console.error("Error retrieving public showcase by username:", err);
+    return res.status(500).json({ error: "Error al cargar la vitrina pública." });
   }
 });
 

@@ -32,7 +32,9 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   products,
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
+  const [cleanHandleUrl, setCleanHandleUrl] = useState<string>("");
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCleanLink, setCopiedCleanLink] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
 
@@ -46,6 +48,10 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     let isMounted = true;
     setIsGenerating(true);
 
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://goalrecall.com";
+    const userHandle = user.username || (user.email ? user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "") : "usuario");
+    setCleanHandleUrl(`${origin}/u/${userHandle}`);
+
     generatePublicDeckShareUrl(user, logs, products)
       .then((url) => {
         if (isMounted) {
@@ -56,9 +62,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
       .catch((err) => {
         console.error("Error generating share url:", err);
         if (isMounted) {
-          // fallback to simple origin url
-          const origin = typeof window !== "undefined" ? window.location.origin : "https://goalrecall.com";
-          setShareUrl(`${origin}/public`);
+          setShareUrl(`${origin}/u/${userHandle}`);
           setIsGenerating(false);
         }
       });
@@ -70,6 +74,15 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
 
   if (!isOpen) return null;
 
+  const activePrimaryUrl = cleanHandleUrl || shareUrl;
+
+  const handleCopyCleanLink = () => {
+    if (!activePrimaryUrl) return;
+    navigator.clipboard.writeText(activePrimaryUrl);
+    setCopiedCleanLink(true);
+    setTimeout(() => setCopiedCleanLink(false), 2500);
+  };
+
   const handleCopyLink = () => {
     if (!shareUrl) return;
     navigator.clipboard.writeText(shareUrl);
@@ -78,13 +91,13 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   };
 
   const recruiterMessage = `Hola, te comparto mi vitrina técnica interactiva en GoalRecall:
-${shareUrl}
+${activePrimaryUrl}
 
-Aquí puedes revisar mis logros de arquitectura con métricas verificadas, tecnologías y consultar a mi asistente First Mate AI sobre cualquier detalle de mi trayectoria.
+Aquí puedes revisar mis logros y productos con métricas verificadas, tecnologías y consultar a mi asistente First Mate AI sobre cualquier detalle de mi trayectoria.
 
 Quedo a tu disposición para conversar sobre la oportunidad.
 Saludos,
-${user.name || "Alex Morgan"}`;
+${user.name || "Usuario"}`;
 
   const handleCopyMessage = () => {
     navigator.clipboard.writeText(recruiterMessage);
@@ -136,18 +149,74 @@ ${user.name || "Alex Morgan"}`;
         {/* Content Body */}
         <div className="p-5 sm:p-6 space-y-6 overflow-y-auto">
           
-          {/* 1. Share URL Box */}
-          <div className="space-y-2">
+          {/* 1. Clean Direct URL Box (/u/:username) */}
+          <div className="space-y-2 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-cyan-950/40 border border-emerald-500/30">
             <label className="text-xs font-bold text-white flex items-center justify-between">
-              <span>Tu Enlace de Vitrina Pública</span>
+              <span className="flex items-center gap-1.5 text-emerald-300">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Enlace Directo de Usuario (Recomendado)</span>
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/60">
+                Limpio & Corto
+              </span>
+            </label>
+
+            <div className="flex flex-col sm:flex-row items-stretch gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  readOnly
+                  value={cleanHandleUrl}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  className="w-full bg-slate-950 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 selection:bg-emerald-900 selection:text-white truncate font-bold"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopyCleanLink}
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  {copiedCleanLink ? (
+                    <>
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>¡Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copiar Link</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.open(cleanHandleUrl, "_blank", "noopener,noreferrer")}
+                  title="Abrir vitrina pública en nueva pestaña"
+                  className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white rounded-xl text-xs transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Quien abra este enlace verá únicamente tus logros y productos públicos en <strong>goalrecall/u/{user.username || "usuario"}</strong>.
+            </p>
+          </div>
+
+          {/* 1.1 Snapshot URL Box (Compressed Payload Fallback) */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <span>Enlace Snapshot Independiente (Offline/Backup)</span>
               {publicLogs.length > 0 ? (
-                <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" />
-                  Listo para compartir ({publicLogs.length} logro{publicLogs.length > 1 ? "s" : ""} público{publicLogs.length > 1 ? "s" : ""})
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {publicLogs.length} logro(s) público(s)
                 </span>
               ) : (
                 <span className="text-[11px] text-amber-400 font-mono">
-                  Aviso: Tienes 0 logros públicos activos
+                  0 logros públicos
                 </span>
               )}
             </label>
@@ -157,42 +226,21 @@ ${user.name || "Alex Morgan"}`;
                 <input
                   type="text"
                   readOnly
-                  value={isGenerating ? "Generando enlace seguro..." : shareUrl}
+                  value={isGenerating ? "Generando..." : shareUrl}
                   onClick={(e) => (e.target as HTMLInputElement).select()}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500 selection:bg-cyan-900 selection:text-white truncate"
+                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-[11px] font-mono text-slate-400 focus:outline-none truncate"
                 />
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  disabled={isGenerating || !shareUrl}
-                  onClick={handleCopyLink}
-                  className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  {copiedLink ? (
-                    <>
-                      <Check className="w-4 h-4 stroke-[2.5]" />
-                      <span>¡Enlace Copiado!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      <span>Copiar Enlace</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isGenerating || !shareUrl}
-                  onClick={handleOpenPreview}
-                  title="Abrir en nueva pestaña para probar la vista de visitante"
-                  className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white rounded-xl text-xs transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={isGenerating || !shareUrl}
+                onClick={handleCopyLink}
+                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-medium text-xs rounded-xl transition-all flex items-center justify-center gap-1.5"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedLink ? "Copiado" : "Copiar"}</span>
+              </button>
             </div>
           </div>
 
