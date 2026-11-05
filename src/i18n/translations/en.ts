@@ -236,6 +236,12 @@ export const en: TranslationSchema = {
     quickDemo: "Quick Demo Access",
     switchRegister: "Don't have an account? Sign up here",
     switchLogin: "Already have an account? Sign in",
+    firebaseNotConfigured: "Firebase Authentication is not configured correctly in environment variables.",
+    signingIn: "Signing in...",
+    googleLoginFailed: "Google authentication failed. Please try again.",
+    popupClosedByUser: "Sign-in popup was closed before completion.",
+    authNetworkError: "Network error occurred while connecting to authentication service.",
+    unauthorizedDomain: "This domain is not authorized for Firebase Authentication.",
   },
   publicDeck: {
     badge: "VERIFIED PROFESSIONAL SHOWCASE",

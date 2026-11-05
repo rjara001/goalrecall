@@ -250,6 +250,12 @@ export interface TranslationSchema {
     quickDemo: string;
     switchRegister: string;
     switchLogin: string;
+    firebaseNotConfigured: string;
+    signingIn: string;
+    googleLoginFailed: string;
+    popupClosedByUser: string;
+    authNetworkError: string;
+    unauthorizedDomain: string;
   };
   publicDeck: {
     badge: string;

@@ -236,6 +236,12 @@ export const es: TranslationSchema = {
     quickDemo: "Acceso Rápido Demo",
     switchRegister: "¿No tienes cuenta? Regístrate aquí",
     switchLogin: "¿Ya tienes cuenta? Inicia sesión",
+    firebaseNotConfigured: "Firebase Authentication no está configurado correctamente en las variables de entorno.",
+    signingIn: "Iniciando sesión...",
+    googleLoginFailed: "Error al autenticar con Google. Inténtalo de nuevo.",
+    popupClosedByUser: "Se cerró la ventana de autenticación antes de completar el inicio de sesión.",
+    authNetworkError: "Error de conexión al comunicar con los servidores de autenticación.",
+    unauthorizedDomain: "Este dominio no está autorizado en la consola de Firebase.",
   },
   publicDeck: {
     badge: "VITRINA PROFESIONAL VERIFICADA",
