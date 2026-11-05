@@ -61,6 +61,11 @@ import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 import { useI18n } from "./i18n";
 import { APP_VERSION } from "./constants/version";
 import { parseSharedDeckFromUrl } from "./utils/publicDeckShare";
+import { auth, getRedirectResult } from "./firebase";
+
+// Global app version defined in vite.config.ts (with safe fallback)
+declare const APP_VERSION: string | undefined;
+const currentAppVersion = typeof APP_VERSION !== "undefined" ? APP_VERSION : "0.2.1";
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
 
@@ -200,6 +205,40 @@ export default function App() {
           setProducts(getStoredProducts());
         }
       });
+    }
+
+    // Check Firebase Auth redirect result on mount if redirected
+    if (auth) {
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result && result.user) {
+            const fbUser = result.user;
+            const userHandle = fbUser.email
+              ? fbUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "")
+              : "";
+            const googleUserProfile: UserProfile = {
+              ...INITIAL_USER,
+              id: "google-" + fbUser.uid,
+              username: userHandle || undefined,
+              name: fbUser.displayName || fbUser.email?.split("@")[0] || "Google User",
+              email: fbUser.email || "",
+              avatar: fbUser.photoURL || INITIAL_USER.avatar,
+              title: "",
+              bio: "",
+              location: "",
+              github: "",
+              linkedin: "",
+              skills: [],
+              authProvider: "google",
+              isCustom: false,
+              createdAt: Date.now(),
+            };
+            handleLogin(googleUserProfile);
+          }
+        })
+        .catch((err) => {
+          console.error("[App] Firebase getRedirectResult error:", err);
+        });
     }
   }, []);
 
@@ -656,6 +695,31 @@ export default function App() {
     const providerLabel = newUser.authProvider === "google" ? "Google" : "Email";
     showToast(`${newUser.name} · ${providerLabel} ✨`, "success");
     setActiveView("quarters");
+  };
+
+  const handleLoginDev = () => {
+    const devUser: UserProfile = {
+      ...INITIAL_USER,
+      id: "dev-" + Date.now(),
+      username: "devlead",
+      name: "Rodrigo Jara (Dev Lead)",
+      email: "rjara@example.com",
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      title: "Senior Full Stack Architect",
+      bio: "Engineering lead focused on scalable cloud systems and clean architecture.",
+      location: "Santiago, Chile / Remote",
+      skills: [
+        { name: "TypeScript", category: "Languages" },
+        { name: "React", category: "Frameworks" },
+        { name: "Node.js", category: "Frameworks" },
+        { name: "Firebase", category: "Cloud/DevOps" },
+      ],
+      authProvider: "custom",
+      isCustom: true,
+      createdAt: Date.now(),
+    };
+    handleLogin(devUser);
+    setIsAuthOpen(false);
   };
 
   const handleLogout = () => {
@@ -1149,6 +1213,7 @@ export default function App() {
         onLogout={handleLogout}
         onUpdateProfile={handleUpdateProfile}
         onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
+        onLoginDev={handleLoginDev}
       />
 
       {/* Settings & Backup Modal */}
@@ -1208,9 +1273,14 @@ export default function App() {
       <footer className="border-t border-slate-900 bg-[#060910] py-8 px-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-left">
-            <p className="font-mono text-xs text-slate-300 font-bold">
-              {t.app.footerTagline}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-xs text-slate-300 font-bold">
+                {t.app.footerTagline}
+              </p>
+              <span className="font-mono text-[10px] text-cyan-400 bg-cyan-950/70 border border-cyan-800/60 px-1.5 py-0.2 rounded font-semibold">
+                v{currentAppVersion}
+              </span>
+            </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {t.app.footerPrivacy}
             </p>
