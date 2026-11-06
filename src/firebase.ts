@@ -6,6 +6,7 @@ import {
   signInWithRedirect,
   getRedirectResult,
   signOut as firebaseSignOut,
+  connectAuthEmulator,
   Auth,
 } from "firebase/auth";
 
@@ -35,6 +36,15 @@ if (typeof window !== "undefined") {
     if (isFirebaseConfigured()) {
       app = getApps().length ? getApp() : initializeApp(firebaseConfig);
       auth = getAuth(app);
+
+      // Use emulators if configured (avoid glimmind/myfeedin/tabito default ports)
+      const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_HOST;
+      const emulatorPort = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_PORT;
+      if (emulatorHost && emulatorPort && import.meta.env.EMULATOR === "true") {
+        connectAuthEmulator(auth, `http://${emulatorHost}:${emulatorPort}`);
+        console.log(`[Firebase] Using Auth emulator on http://${emulatorHost}:${emulatorPort}`);
+      }
+
       googleProvider = new GoogleAuthProvider();
       // Mirror glimmind pattern: prompt select_account
       googleProvider.setCustomParameters({
