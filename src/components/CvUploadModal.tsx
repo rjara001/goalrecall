@@ -63,6 +63,7 @@ import {
   saveProWaitlistEmail
 } from "../utils/storage";
 import { extractCvDataLocally } from "../utils/localCvExtractor";
+import { extractTextFromPdf } from "../utils/pdfExtractor";
 
 interface ExtractedBullet {
   id: string;
@@ -312,7 +313,16 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       };
 
       if (isPdf) {
-        setProcessingStep("Analizando documento con Gemini 3.8 Flash (Modo Estricto Verídico)...");
+        setProcessingStep("Extrayendo texto y analizando documento con Gemini...");
+        let pdfText = "";
+        try {
+          pdfText = await extractTextFromPdf(file);
+        } catch (pdfErr) {
+          console.warn("Extracción cliente de PDF falló, usando base64:", pdfErr);
+        }
+        if (pdfText && pdfText.trim().length > 0) {
+          payload.textContent = pdfText;
+        }
         const base64Data = await fileToBase64(file);
         payload.fileBase64 = base64Data;
         payload.mimeType = "application/pdf";

@@ -244,12 +244,14 @@ export default function App() {
   // Global Keyboard Shortcuts (Cmd+K, Alt+L, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K or Alt + L opens quick log and switches to quarters if on landing
+      // Cmd/Ctrl + K or Alt + L opens quick log for logged-in users only
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (!user) return; // Disabled on public pages / unauthenticated state
         e.preventDefault();
         setEditingLog(null);
         setIsQuickLogOpen(true);
       } else if (e.altKey && e.key.toLowerCase() === "l") {
+        if (!user) return;
         e.preventDefault();
         setEditingLog(null);
         setIsQuickLogOpen(true);
@@ -263,7 +265,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [user]);
 
   // Helper to load showcase from custom username route /u/:username
   const loadPublicShowcaseByUsername = async (targetUsername: string) => {
@@ -1274,7 +1276,8 @@ export default function App() {
               {t.app.navFeatures}
             </button>
             <span>·</span>
-            <button
+            {/* Opción de ofertas comentada en footer */}
+            {/* <button
               onClick={() => {
                 if (!user) setIsAuthOpen(true);
                 else handleNavigateView("offers");
@@ -1283,7 +1286,7 @@ export default function App() {
             >
               {t.app.navOffers}
             </button>
-            <span>·</span>
+            <span>·</span> */}
             <button
               onClick={() => handleNavigateView("docs")}
               className="hover:text-cyan-400 transition-colors font-medium text-cyan-300"

@@ -299,54 +299,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {t.landing.heroDescription}
             </p>
 
-            {/* Primary & Secondary CTAs (REQ-01 & REQ-03) */}
+            {/* Primary & Secondary CTAs */}
             <div className="flex flex-col sm:flex-row items-center gap-3.5 pt-2">
               <button
-                onClick={onOpenQuickLog || onEnterQuarters}
-                className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:scale-95 group"
-              >
-                <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                <span>{t.landing.ctaPrimary}</span>
-                <span className="text-[11px] font-mono bg-cyan-950/40 text-slate-950 px-1.5 py-0.5 rounded font-bold">
-                  {t.landing.stat3Value}
-                </span>
-              </button>
-
-              <button
                 onClick={onOpenAuth}
-                className="w-full sm:w-auto px-5 py-3.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:scale-95"
               >
-                <UserCheck className="w-4 h-4 text-cyan-400" />
+                <UserCheck className="w-4 h-4 text-slate-950 stroke-[2.5]" />
                 <span>{t.nav.signIn}</span>
               </button>
 
               <button
                 onClick={onOpenDocs}
-                className="w-full sm:w-auto px-4 py-3.5 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-700/60 hover:border-cyan-500/40 text-cyan-300 hover:text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-5 py-3.5 bg-slate-900/80 hover:bg-slate-800/90 border border-slate-700/80 hover:border-cyan-500/40 text-slate-200 hover:text-white font-semibold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
                 title="Documentación Oficial y Guía de Usuario (/docs)"
               >
                 <BookOpen className="w-4 h-4 text-cyan-400" />
                 <span>{t.landing.ctaDocs}</span>
-              </button>
-            </div>
-
-            {/* Interactive Global Shortcut Badge (REQ-03) */}
-            <div className="pt-1">
-              <button
-                onClick={onOpenQuickLog || onEnterQuarters}
-                className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-cyan-800/40 hover:border-cyan-400/80 text-xs font-mono text-cyan-300 hover:text-white transition-all group"
-                title="Presiona este botón o usa el atajo ⌘K / Ctrl+K en tu teclado"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-                </span>
-                <span>Presiona</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-cyan-300 font-bold group-hover:border-cyan-500">
-                  ⌘K
-                </kbd>
-                <span>en esta página para probar captura rápida</span>
-                <ChevronRight className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
 

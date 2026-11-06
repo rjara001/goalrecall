@@ -168,7 +168,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="hidden md:inline text-[10px] opacity-75 font-mono">({t.nav.privateBadge})</span>
               </button>
 
-              <button
+              {/* Opción de Ofertas comentada temporalmente para desahogar la barra de navegación */}
+              {/* <button
                 onClick={() => {
                   setActiveView("offers");
                   if (typeof window !== "undefined" && window.location.pathname !== "/offers") {
@@ -183,7 +184,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
                 <span>{t.nav.offers}</span>
-              </button>
+              </button> */}
 
               <button
                 onClick={() => {
@@ -205,25 +206,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {publicLogsCount}
                 </span>
               </button>
-
-              <button
-                onClick={() => {
-                  setActiveView("features");
-                  if (typeof window !== "undefined" && window.location.pathname !== "/features") {
-                    window.history.pushState(null, "", "/features");
-                  }
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  activeView === "features"
-                    ? "bg-purple-600 text-white font-semibold shadow-sm shadow-purple-900/40"
-                    : "text-slate-300 hover:text-white"
-                }`}
-                title={t.nav.featuresGuide}
-              >
-                <Layers className="w-3.5 h-3.5 text-purple-400" />
-                <span className="hidden md:inline">{t.nav.featuresGuide}</span>
-                <span className="md:hidden">Guía</span>
-              </button>
             </div>
           )}
         </nav>
@@ -236,35 +218,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               <LanguageSelector />
               <button
                 onClick={onOpenAuth}
-                className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-lg transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 transition-all active:scale-95 flex items-center gap-1.5"
               >
-                <LogIn className="w-3.5 h-3.5 text-cyan-400" />
+                <LogIn className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
                 <span>{t.nav.signIn}</span>
-              </button>
-              <button
-                onClick={onOpenAuth}
-                className="px-3.5 py-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 transition-all active:scale-95 flex items-center gap-1"
-              >
-                <span>{t.nav.startFree}</span>
               </button>
             </div>
           ) : (
             /* Authenticated User Actions: Clean 1 Primary CTA + Profile Menu */
             <div className="flex items-center gap-2.5">
-              {/* Compartir Vitrina Quick Action Button */}
-              {onOpenShareModal && (
-                <button
-                  type="button"
-                  onClick={onOpenShareModal}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 font-bold text-xs rounded-lg transition-all active:scale-95 shadow-sm"
-                  title="Compartir enlace de tu Vitrina Pública"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden sm:inline">Compartir Vitrina</span>
-                  <span className="sm:hidden">Compartir</span>
-                </button>
-              )}
-
               {/* Primary Action Button: + Nuevo Logro */}
               <button
                 onClick={onOpenQuickLog}

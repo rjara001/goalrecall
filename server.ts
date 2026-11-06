@@ -516,16 +516,33 @@ async function extractTextFromBuffer(buffer: Buffer, mimeType?: string, fileName
   if (lowerMime.includes("pdf") || lowerName.endsWith(".pdf")) {
     try {
       // @ts-ignore
-      const parser = new PDFParse({ data: buffer });
-      const res = await parser.getText();
-      try {
-        await parser.destroy();
-      } catch (_) {}
-      if (res && typeof res.text === "string" && res.text.trim().length > 0) {
-        return res.text;
+      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+      const pdfDoc = await loadingTask.promise;
+      let fullText = "";
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const tc = await page.getTextContent();
+        fullText += tc.items.map((it: any) => it.str || "").join(" ") + "\n";
       }
-    } catch (pdfErr) {
-      console.warn("PDF extraction warning:", pdfErr);
+      if (fullText.trim().length > 0) {
+        return fullText.trim();
+      }
+    } catch (pdfjsErr) {
+      try {
+        // Fallback to PDFParse
+        // @ts-ignore
+        const parser = new PDFParse({ data: buffer });
+        const res = await parser.getText();
+        try {
+          await parser.destroy();
+        } catch (_) {}
+        if (res && typeof res.text === "string" && res.text.trim().length > 0) {
+          return res.text;
+        }
+      } catch (pdfErr) {
+        console.warn("PDF extraction warning:", pdfErr);
+      }
     }
   }
 
