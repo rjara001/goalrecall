@@ -696,31 +696,6 @@ export default function App() {
     setActiveView("quarters");
   };
 
-  const handleLoginDev = () => {
-    const devUser: UserProfile = {
-      ...INITIAL_USER,
-      id: "dev-" + Date.now(),
-      username: "devlead",
-      name: "Rodrigo Jara (Dev Lead)",
-      email: "rjara@example.com",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-      title: "Senior Full Stack Architect",
-      bio: "Engineering lead focused on scalable cloud systems and clean architecture.",
-      location: "Santiago, Chile / Remote",
-      skills: [
-        { name: "TypeScript", category: "Languages" },
-        { name: "React", category: "Frameworks" },
-        { name: "Node.js", category: "Frameworks" },
-        { name: "Firebase", category: "Cloud/DevOps" },
-      ],
-      authProvider: "custom",
-      isCustom: true,
-      createdAt: Date.now(),
-    };
-    handleLogin(devUser);
-    setIsAuthOpen(false);
-  };
-
   const handleLogout = () => {
     // 1. Clear session user and temporary CV data from storage
     clearSessionData();
@@ -1212,7 +1187,6 @@ export default function App() {
         onLogout={handleLogout}
         onUpdateProfile={handleUpdateProfile}
         onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
-        onLoginDev={handleLoginDev}
       />
 
       {/* Settings & Backup Modal */}

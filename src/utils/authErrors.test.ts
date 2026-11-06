@@ -29,6 +29,9 @@ describe("authErrors utility", () => {
   it("maps error codes to localization keys", () => {
     expect(describeAuthError({ code: "auth/popup-closed-by-user" }).key).toBe("popup_closed_by_user");
     expect(describeAuthError({ code: "auth/unauthorized-domain" }).key).toBe("firebase_unauthorized_domain");
+    expect(describeAuthError({ code: "auth/email-already-in-use" }).key).toBe("email_already_in_use");
+    expect(describeAuthError({ code: "auth/wrong-password" }).key).toBe("wrong_password");
+    expect(describeAuthError({ code: "auth/user-not-found" }).key).toBe("user_not_found");
     expect(describeAuthError({ code: "auth/network-request-failed" }).key).toBe("auth_network_error");
     expect(describeAuthError({ code: "auth/invalid-api-key" }).key).toBe("firebase_not_configured_correctly");
   });

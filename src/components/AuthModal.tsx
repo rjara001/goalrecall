@@ -33,6 +33,9 @@ import {
   googleProvider,
   signInWithPopup,
   signInWithRedirect,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateFirebaseProfile,
   isFirebaseConfigured,
 } from "../firebase";
 import {
@@ -49,7 +52,6 @@ interface AuthModalProps {
   onLogout: () => void;
   onUpdateProfile: (user: UserProfile) => void;
   onOpenAvatarModal?: () => void;
-  onLoginDev?: () => void;
 }
 
 const AVATAR_PRESETS = [
@@ -76,7 +78,6 @@ const AUTH_TEXTS: Record<string, {
   devAvatar: string;
   noAccount: string;
   hasAccount: string;
-  devLoginPrompt: string;
 }> = {
   es: {
     activeSession: "Sesión Activa & Perfil",
@@ -95,7 +96,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "Avatar de Desarrollador",
     noAccount: "¿No tienes una cuenta aún?",
     hasAccount: "¿Ya tienes una cuenta?",
-    devLoginPrompt: "Modo Desarrollo: Acceso de prueba rápido",
   },
   en: {
     activeSession: "Active Session & Profile",
@@ -114,7 +114,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "Developer Avatar",
     noAccount: "Don't have an account yet?",
     hasAccount: "Already have an account?",
-    devLoginPrompt: "Dev Mode: Quick Test Login",
   },
   pt: {
     activeSession: "Sessão Ativa & Perfil",
@@ -133,7 +132,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "Avatar de Programador",
     noAccount: "Ainda não tem conta?",
     hasAccount: "Já tem uma conta?",
-    devLoginPrompt: "Modo Desenvolvedor: Acesso rápido",
   },
   fr: {
     activeSession: "Session Active & Profil",
@@ -152,7 +150,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "Avatar de Développeur",
     noAccount: "Vous n'avez pas encore de compte ?",
     hasAccount: "Vous avez déjà un compte ?",
-    devLoginPrompt: "Mode Dev: Accès Rapide",
   },
   de: {
     activeSession: "Aktive Sitzung & Profil",
@@ -171,7 +168,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "Entwickler-Avatar",
     noAccount: "Noch kein Konto?",
     hasAccount: "Haben Sie bereits ein Konto?",
-    devLoginPrompt: "Dev-Modus: Schnellzugriff",
   },
   ja: {
     activeSession: "アクティブセッション＆プロフィール",
@@ -190,7 +186,6 @@ const AUTH_TEXTS: Record<string, {
     devAvatar: "開発者アバター",
     noAccount: "アカウントをお持ちでないですか？",
     hasAccount: "すでにアカウントをお持ちですか？",
-    devLoginPrompt: "開発モード：クイックテスト",
   },
 };
 
@@ -202,7 +197,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLogout,
   onUpdateProfile,
   onOpenAvatarModal,
-  onLoginDev,
 }) => {
   const { t, language } = useI18n();
   const at = AUTH_TEXTS[language] || AUTH_TEXTS.en;
@@ -404,14 +398,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // 2. Custom Login (Email/Username + Password)
-  const handleCustomLogin = (e: React.FormEvent) => {
+  // 2. Email/Password Login (Firebase Auth with local fallback)
+  const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
-    const result = authenticateCustomAccount(loginEmail, loginPassword);
+    const cleanEmail = loginEmail.trim();
+    const cleanPassword = loginPassword.trim();
+
+    // Try Firebase Authentication if configured and input looks like an email
+    if (isFirebaseConfigured() && auth && cleanEmail.includes("@")) {
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPassword);
+        const fbUser = userCredential.user;
+        const userHandle = fbUser.email
+          ? fbUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "")
+          : "";
+
+        const userProfile: UserProfile = {
+          ...INITIAL_USER,
+          id: "fb-" + fbUser.uid,
+          username: userHandle || undefined,
+          name: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
+          email: fbUser.email || cleanEmail,
+          avatar: fbUser.photoURL || INITIAL_USER.avatar,
+          title: "",
+          bio: "",
+          location: "",
+          github: "",
+          linkedin: "",
+          skills: [],
+          authProvider: "custom",
+          isCustom: true,
+          createdAt: Date.now(),
+        };
+
+        onLogin(userProfile);
+        onClose();
+        return;
+      } catch (err: any) {
+        console.warn("[AuthModal] Firebase signInWithEmailAndPassword failed, checking local storage:", err);
+        const errorInfo = describeAuthError(err);
+        // If wrong password or user not found in Firebase, show clear error
+        if (
+          err?.code === "auth/wrong-password" ||
+          err?.code === "auth/invalid-credential" ||
+          err?.code === "auth/user-not-found"
+        ) {
+          setLoginError(errorInfo.fallbackMessage);
+          return;
+        }
+      }
+    }
+
+    // Local account fallback (if offline or non-email username or Firebase not active)
+    const result = authenticateCustomAccount(cleanEmail, cleanPassword);
     if (!result.success || !result.user) {
-      setLoginError(result.error || "Error al autenticar credenciales.");
+      setLoginError(result.error || "Error al autenticar credenciales. Verifica tus datos o crea una cuenta.");
       return;
     }
 
@@ -419,8 +462,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  // 3. Custom Signup (Create new account with password)
-  const handleCustomRegister = (e: React.FormEvent) => {
+  // 3. Email/Password Signup (Firebase Auth with local registration)
+  const handleCustomRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError(null);
 
@@ -429,16 +472,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    if (signupPassword.length < 4) {
-      setSignupError("La contraseña debe tener al menos 4 caracteres.");
+    if (signupPassword.length < 6) {
+      setSignupError("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
 
+    const cleanEmail = signupEmail.trim();
+    const cleanName = signupName.trim();
+    const cleanUsername = signupUsername ? signupUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "") : undefined;
+
+    // Register with Firebase Auth if configured
+    if (isFirebaseConfigured() && auth) {
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, signupPassword);
+        const fbUser = userCredential.user;
+
+        try {
+          await updateFirebaseProfile(fbUser, {
+            displayName: cleanName,
+            photoURL: signupAvatar,
+          });
+        } catch (profileErr) {
+          console.warn("[AuthModal] Could not update displayName on Firebase user:", profileErr);
+        }
+
+        const userProfile: UserProfile = {
+          ...INITIAL_USER,
+          id: "fb-" + fbUser.uid,
+          username: cleanUsername || cleanEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+          name: cleanName,
+          email: cleanEmail,
+          avatar: signupAvatar,
+          title: signupTitle || "Senior Software Engineer",
+          bio: "",
+          location: "",
+          github: "",
+          linkedin: "",
+          skills: [],
+          authProvider: "custom",
+          isCustom: true,
+          createdAt: Date.now(),
+        };
+
+        // Also persist locally for fast cache / offline capabilities
+        registerCustomAccount({
+          name: cleanName,
+          email: cleanEmail,
+          password: signupPassword,
+          username: cleanUsername,
+          title: signupTitle || "Senior Software Engineer",
+          avatar: signupAvatar,
+        });
+
+        onLogin(userProfile);
+        onClose();
+        return;
+      } catch (err: any) {
+        console.error("[AuthModal] Firebase createUserWithEmailAndPassword error:", err);
+        const errorInfo = describeAuthError(err);
+        setSignupError(errorInfo.fallbackMessage);
+        return;
+      }
+    }
+
+    // Fallback local registration if Firebase is unconfigured
     const result = registerCustomAccount({
-      name: signupName,
-      email: signupEmail,
+      name: cleanName,
+      email: cleanEmail,
       password: signupPassword,
-      username: signupUsername ? signupUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "") : undefined,
+      username: cleanUsername,
       title: signupTitle || "Senior Software Engineer",
       avatar: signupAvatar,
     });
@@ -790,20 +892,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </>
                     )}
                   </button>
-
-                  {/* Dev Login Helper (mirroring glimmind onLoginDev pattern) */}
-                  {onLoginDev && (
-                    <div className="pt-0.5">
-                      <button
-                        type="button"
-                        onClick={onLoginDev}
-                        className="w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 text-[11px] rounded-lg border border-slate-800 border-dashed transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        <Sparkles className="w-3 h-3 text-cyan-400" />
-                        <span>{at.devLoginPrompt}</span>
-                      </button>
-                    </div>
-                  )}
 
                   {/* Divider */}
                   <div className="relative flex py-1 items-center">

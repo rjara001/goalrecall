@@ -215,17 +215,19 @@ export const purgeDummyPresetData = (): void => {
     if (rawAccounts) {
       const accounts: CustomAccount[] = JSON.parse(rawAccounts);
       if (Array.isArray(accounts)) {
-        const cleanedAccounts = accounts.map((acc) => {
-          const isDummyBio = acc.bio?.includes("12+ years") || acc.bio?.includes("Ingeniero de software enfocado");
-          return {
-            ...acc,
-            bio: isDummyBio ? "" : (acc.bio || ""),
-            title: acc.title === "Senior Full-Stack & Systems Architect" ? "" : (acc.title || ""),
-            github: acc.github === "https://github.com" ? "" : (acc.github || ""),
-            linkedin: acc.linkedin === "https://linkedin.com" ? "" : (acc.linkedin || ""),
-            skills: acc.skills?.filter((s: any) => s.name !== "TypeScript / Node.js" && s.name !== "Distributed Systems Architecture") || [],
-          };
-        });
+        const cleanedAccounts = accounts
+          .filter((acc) => acc.id !== "usr-alex-morgan" && acc.email !== "alex.morgan@ejemplo.com")
+          .map((acc) => {
+            const isDummyBio = acc.bio?.includes("12+ years") || acc.bio?.includes("Ingeniero de software enfocado");
+            return {
+              ...acc,
+              bio: isDummyBio ? "" : (acc.bio || ""),
+              title: acc.title === "Senior Full-Stack & Systems Architect" ? "" : (acc.title || ""),
+              github: acc.github === "https://github.com" ? "" : (acc.github || ""),
+              linkedin: acc.linkedin === "https://linkedin.com" ? "" : (acc.linkedin || ""),
+              skills: acc.skills?.filter((s: any) => s.name !== "TypeScript / Node.js" && s.name !== "Distributed Systems Architecture") || [],
+            };
+          });
         localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify(cleanedAccounts));
       }
     }
@@ -488,25 +490,12 @@ export const getStoredCustomAccounts = (): CustomAccount[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
     if (!raw) {
-      const seedAccount: CustomAccount = {
-        id: "usr-alex-morgan",
-        name: "Alex Morgan",
-        email: "alex.morgan@ejemplo.com",
-        passwordHash: hashPassword("admin123"),
-        title: "",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        bio: "",
-        location: "",
-        github: "",
-        linkedin: "",
-        skills: [],
-        createdAt: Date.now(),
-      };
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify([seedAccount]));
-      return [seedAccount];
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((acc) => acc.id !== "usr-alex-morgan" && acc.email !== "alex.morgan@ejemplo.com")
+      : [];
   } catch (e) {
     return [];
   }

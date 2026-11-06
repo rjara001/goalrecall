@@ -5,6 +5,9 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile as updateFirebaseProfile,
   signOut as firebaseSignOut,
   Auth,
 } from "firebase/auth";
@@ -57,5 +60,8 @@ export {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateFirebaseProfile,
   firebaseSignOut,
 };
