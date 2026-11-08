@@ -59,13 +59,13 @@ import {
 import { LogEntry, UserProfile, VisitorMessage, WorkExperience, LogCategory, JobOffer, Product } from "./types";
 import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 import { useI18n } from "./i18n";
-import { APP_VERSION } from "./constants/version";
+import { APP_VERSION as FALLBACK_APP_VERSION } from "./constants/version";
 import { parseSharedDeckFromUrl } from "./utils/publicDeckShare";
 import { auth, getRedirectResult } from "./firebase";
 
 // Global app version defined in vite.config.ts (with safe fallback)
 declare const APP_VERSION: string | undefined;
-const currentAppVersion = typeof APP_VERSION !== "undefined" ? APP_VERSION : "0.2.1";
+const currentAppVersion = typeof APP_VERSION !== "undefined" ? APP_VERSION : FALLBACK_APP_VERSION;
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
 

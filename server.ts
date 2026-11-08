@@ -612,27 +612,35 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
   const portfolioMatch = rawText.match(/(?:https?:\/\/)(?!linkedin|github|twitter|facebook|instagram)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/i);
   const portfolio = portfolioMatch ? portfolioMatch[0] : "";
 
-  // Location detection
+  // Location detection (ignoring PDF metadata words like Skia/PDF)
   const locationMatch = rawText.match(
     /(?:[A-ZÁÉÍÓÚ][a-záéíóú]+(?:\s+[A-ZÁÉÍÓÚ][a-záéíóú]+)*)\s*[,|\/]\s*([A-ZÁÉÍÓÚ][a-záéíóú]+|\bChile\b|\bMéxico\b|\bArgentina\b|\bEspaña\b|\bColombia\b|\bPerú\b|\bUSA\b|\bRemoto\b|\bRemote\b)/i
   );
-  const location = locationMatch ? locationMatch[0] : "";
+  let location = locationMatch ? locationMatch[0] : "";
+  if (/Skia\/PDF|Producer|Adobe/i.test(location)) {
+    location = "";
+  }
 
   // Name & headline detection:
   // Usually in top 8 non-empty lines, avoiding headers or contact info
   let name = "";
   let headline = "";
 
-  for (let i = 0; i < Math.min(8, lines.length); i++) {
+  const isBinaryOrJunk = (str: string) => {
+    return /^%PDF|Skia\/PDF|obj\b|endobj|\bstream\b|xref|trailer|startxref|[0-9.]+\s+[0-9.]+\s+[0-9.]+\s+[0-9.]+\s+re/i.test(str);
+  };
+
+  for (let i = 0; i < Math.min(12, lines.length); i++) {
     const l = lines[i];
+    if (isBinaryOrJunk(l)) continue;
     const isHeaderOrSection = /^(?:experiencia|historial|resumen|perfil|summary|skills|habilidades|educaci[oó]n|certificac|curriculum|cv|resume|hoja de vida)/i.test(l);
     const isContactLine = l.includes("@") || l.includes("http") || l.includes("github.com") || l.includes("linkedin.com") || /^\+?\d[\d\s-]{6,}/.test(l);
 
-    if (!name && !isHeaderOrSection && !isContactLine && l.length > 2 && l.length < 50) {
+    if (!name && !isHeaderOrSection && !isContactLine && l.length > 2 && l.length < 60) {
       name = l;
       // Check next line for potential headline
       const next = lines[i + 1];
-      if (next && !next.includes("@") && !next.includes("http") && !/^(?:experiencia|resumen|habilidades|skills)/i.test(next) && next.length < 80) {
+      if (next && !isBinaryOrJunk(next) && !next.includes("@") && !next.includes("http") && !/^(?:experiencia|resumen|habilidades|skills)/i.test(next) && next.length < 90) {
         headline = next;
       }
       break;
@@ -829,10 +837,22 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
         continue;
       }
 
+      const isDateRangeOnly = (str: string) => {
+        const s = str.trim();
+        const hasYear = /(?:19|20)\d\d/.test(s);
+        const hasPresent = /(?:presente|present|actualidad|current)/i.test(s);
+        const monthNames = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)/i;
+        if ((hasYear || hasPresent) && (monthNames.test(s) || /[-—–/]/.test(s) || /\b(?:to|a|hasta)\b/i.test(s))) {
+          if (!/^(?:desarroll|lider|implement|constru|cre[oó]|responsible|managed|led|worked|achieved)/i.test(s) && s.length < 80) {
+            return true;
+          }
+        }
+        return false;
+      };
+
       // 2. Lookahead: Check if this line is a job role preceding an upcoming "@ Company" line
       if (lines[i + 1] && lines[i + 1].startsWith("@")) {
         pushCurrentExp();
-        // The next iteration will parse "@ Company" and take this line as its role
         continue;
       }
 
@@ -845,7 +865,6 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
         let role = prevLine && !prevLine.startsWith("@") && !prevLine.startsWith("•") && !/^(?:Experiencia|Historial|Experience|Work)/i.test(prevLine) ? prevLine : (headline || "Ingeniero");
         let dateRange = "";
 
-        // Consume following date, location, or metadata lines
         let j = i + 1;
         while (j < lines.length && (
           lines[j].toLowerCase().includes("actualidad") ||
@@ -879,21 +898,73 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
         continue;
       }
 
-      // 4. Pattern: Role | Company | Date OR Company | Role | Date
-      if ((line.includes("|") || line.includes(" — ") || line.includes(" - ")) && /(?:19|20)\d\d|presente|present|actualidad/i.test(line) && line.length < 130) {
-        const parts = line.split(/[|—–-]/).map((p) => p.trim());
+      // 4. Lookahead: Upcoming line is Company/Role followed by Date Range
+      const isHeaderLine = /^(?:EXPERIENCIA|EXPERIENCE|HISTORIAL|TRAYECTORIA|EDUCACI[OÓ]N|HABILIDADES)/i.test(line);
+
+      if (!isHeaderLine && lines[i + 2] && isDateRangeOnly(lines[i + 2]) && !line.startsWith("•") && !line.startsWith("-") && !lines[i + 1].startsWith("•") && !lines[i + 1].startsWith("-")) {
         pushCurrentExp();
+        const company = line.trim();
+        const role = lines[i + 1].trim();
+        const dateRange = lines[i + 2].trim();
+        i = i + 2; // skip role and date line
+
         currentExp = {
           id: `exp-${Date.now()}-${experiences.length}`,
-          company: parts[0] || "Empresa",
-          role: parts[1] || headline || "Ingeniero",
-          startDate: parts[2] || "",
+          company: company,
+          role: role,
+          startDate: dateRange,
           description: "",
           bullets: [],
           technologies: [],
           category: "Feature ✨",
         };
         continue;
+      }
+
+      if (!isHeaderLine && lines[i + 1] && isDateRangeOnly(lines[i + 1]) && !line.startsWith("•") && !line.startsWith("-") && line.length < 100) {
+        pushCurrentExp();
+        const company = line.trim();
+        const role = headline || "Ingeniero";
+
+        const dateRange = lines[i + 1].trim();
+        i = i + 1; // skip date line
+
+        currentExp = {
+          id: `exp-${Date.now()}-${experiences.length}`,
+          company: company,
+          role: role,
+          startDate: dateRange,
+          description: "",
+          bullets: [],
+          technologies: [],
+          category: "Feature ✨",
+        };
+        continue;
+      }
+
+      // 5. Pattern: Role | Company | Date OR Company | Role | Date
+      if ((line.includes("|") || line.includes(" — ") || line.includes(" - ")) && /(?:19|20)\d\d|presente|present|actualidad/i.test(line) && line.length < 130) {
+        if (isDateRangeOnly(line)) {
+          if (currentExp && !currentExp.startDate) {
+            currentExp.startDate = line.trim();
+            continue;
+          }
+        }
+        const parts = line.split(/[|—–-]/).map((p) => p.trim());
+        if (!isDateRangeOnly(parts[0])) {
+          pushCurrentExp();
+          currentExp = {
+            id: `exp-${Date.now()}-${experiences.length}`,
+            company: parts[0] || "Empresa",
+            role: parts[1] || headline || "Ingeniero",
+            startDate: parts[2] || "",
+            description: "",
+            bullets: [],
+            technologies: [],
+            category: "Feature ✨",
+          };
+          continue;
+        }
       }
 
       // Filter page footers or page numbering (e.g. "4 of 6 --", "Page 4 of 6", "of 6 --") before stripping

@@ -63,6 +63,7 @@ import {
   saveProWaitlistEmail
 } from "../utils/storage";
 import { extractCvDataLocally } from "../utils/localCvExtractor";
+import { extractPdfText } from "../utils/pdfExtractor";
 
 interface ExtractedBullet {
   id: string;
@@ -312,7 +313,16 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       };
 
       if (isPdf) {
-        setProcessingStep("Analizando documento con Gemini 3.8 Flash (Modo Estricto Verídico)...");
+        setProcessingStep("Extrayendo texto del documento PDF en el navegador...");
+        try {
+          const pdfText = await extractPdfText(file);
+          if (pdfText && pdfText.trim().length > 0) {
+            payload.textContent = pdfText.trim();
+          }
+        } catch (pdfErr) {
+          console.warn("Extracción de PDF en cliente falló, continuando con base64:", pdfErr);
+        }
+        setProcessingStep("Analizando documento...");
         const base64Data = await fileToBase64(file);
         payload.fileBase64 = base64Data;
         payload.mimeType = "application/pdf";
@@ -491,8 +501,10 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
     setExtractedBullets(formatted);
     setIsProcessing(false);
 
-    // If there are pending fields, default to the "pending" tab so user immediately sees what's missing!
-    if (data.pendingFields && data.pendingFields.length > 0) {
+    // Default to the comprehensive radiography or bullets view if experiences exist
+    if (data.cvData?.experiences && data.cvData.experiences.length > 0) {
+      setReviewTab("radiography");
+    } else if (data.pendingFields && data.pendingFields.length > 0) {
       setReviewTab("pending");
     } else {
       setReviewTab("radiography");
