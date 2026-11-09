@@ -86,7 +86,6 @@ endobj
     expect(result.cvData.contact.name).not.toContain("%PDF");
     expect(result.cvData.contact.location).not.toContain("Skia/PDF");
   });
-});
 
   it("extracts experiences, education and contact details faithfully from real-world multiline CV format", () => {
     const multilineCv = `Rodrigo Jara P.
@@ -131,3 +130,4 @@ Education
     expect(result.cvData.education[0].institution).toBe("Complutense University of Madrid");
     expect(result.cvData.education[0].year).toBe("2021 – 2022");
   });
+});
