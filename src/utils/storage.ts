@@ -1367,6 +1367,11 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
     const res = await fetch(`/api/cloud-sync/load/${encodeURIComponent(userKey)}`);
     if (!res.ok) return false;
 
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      return false;
+    }
+
     const data = await res.json();
     if (data?.success && data?.backup?.payload) {
       const { payload } = data.backup;

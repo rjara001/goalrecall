@@ -22,6 +22,11 @@ export async function extractPdfText(
     data = new Uint8Array(fileOrBuffer as any);
   }
 
+  // Configure PDF.js worker source for browser environments
+  if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  }
+
   const loadingTask = pdfjsLib.getDocument({
     data,
     useSystemFonts: true,
