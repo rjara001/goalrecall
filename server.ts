@@ -587,10 +587,20 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
     };
   }
 
-  const lines = rawText
+  const rawLines = rawText
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+
+  const lines: string[] = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    let l = rawLines[i];
+    if (rawLines[i + 1] && /^(?:Present|Presente|Actualidad|(?:19|20)\d\d)/i.test(rawLines[i + 1]) && /[-—–]\s*$/.test(l)) {
+      l = `${l} ${rawLines[i + 1]}`;
+      i++;
+    }
+    lines.push(l);
+  }
 
   // Email regex
   const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -612,11 +622,24 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
   const portfolioMatch = rawText.match(/(?:https?:\/\/)(?!linkedin|github|twitter|facebook|instagram)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?/i);
   const portfolio = portfolioMatch ? portfolioMatch[0] : "";
 
-  // Location detection (ignoring PDF metadata words like Skia/PDF)
-  const locationMatch = rawText.match(
-    /(?:[A-ZÁÉÍÓÚ][a-záéíóú]+(?:\s+[A-ZÁÉÍÓÚ][a-záéíóú]+)*)\s*[,|\/]\s*([A-ZÁÉÍÓÚ][a-záéíóú]+|\bChile\b|\bMéxico\b|\bArgentina\b|\bEspaña\b|\bColombia\b|\bPerú\b|\bUSA\b|\bRemoto\b|\bRemote\b)/i
-  );
-  let location = locationMatch ? locationMatch[0] : "";
+  // Location detection: match common locations without picking up URLs or junk
+  let location = "";
+  const locationCandidates = lines.slice(0, 20);
+  for (const l of locationCandidates) {
+    if (l.includes("@") || l.includes("github.com") || l.includes("linkedin.com") || l.length > 80) continue;
+    const m = l.match(/\b([A-ZÁÉÍÓÚ][a-záéíóú]+(?:\s+[A-ZÁÉÍÓÚ][a-záéíóú]+)*\s*,\s*(?:Chile|México|Mexico|Argentina|España|Spain|Colombia|Perú|Peru|USA|EEUU|United States|UK|Remote|Remoto))\b/i);
+    if (m) {
+      location = m[0];
+      break;
+    }
+  }
+  if (!location) {
+    if (/\b(?:Santiago)\b/i.test(rawText) && /\b(?:Chile)\b/i.test(rawText)) {
+      location = "Santiago, Chile";
+    } else if (/\b(?:Remote|Remoto)\b/i.test(lines.slice(0, 45).join(" "))) {
+      location = "Remoto";
+    }
+  }
   if (/Skia\/PDF|Producer|Adobe/i.test(location)) {
     location = "";
   }
@@ -637,11 +660,10 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
     const isContactLine = l.includes("@") || l.includes("http") || l.includes("github.com") || l.includes("linkedin.com") || /^\+?\d[\d\s-]{6,}/.test(l);
 
     if (!name && !isHeaderOrSection && !isContactLine && l.length > 2 && l.length < 60) {
-      name = l;
-      // Check next line for potential headline
+      name = l.replace(/^[-–—•\s]+/, "").trim();
       const next = lines[i + 1];
-      if (next && !isBinaryOrJunk(next) && !next.includes("@") && !next.includes("http") && !/^(?:experiencia|resumen|habilidades|skills)/i.test(next) && next.length < 90) {
-        headline = next;
+      if (next && !isBinaryOrJunk(next) && !next.includes("@") && !next.includes("http") && !/^(?:experiencia|resumen|habilidades|skills|profile)/i.test(next) && next.length < 90) {
+        headline = next.replace(/^[-–—•\s]+/, "").trim();
       }
       break;
     }
@@ -765,31 +787,32 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
     }
 
     // Section detection
-    if (/^(?:EXPERIENCIA|EXPERIENCE|HISTORIAL LABORAL|TRAYECTORIA|WORK EXPERIENCE|EXPERIENCIA LABORAL)/i.test(upper)) {
+    const trimmedLine = line.trim();
+    if (/^(?:PROFESSIONAL\s+EXPERIENCE|WORK\s+EXPERIENCE|EXPERIENCIA\s+LABORAL|HISTORIAL\s+LABORAL|EXPERIENCIA|EXPERIENCE|TRAYECTORIA)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "experience";
       continue;
-    } else if (/^(?:EDUCACI[OÓ]N|EDUCATION|FORMACI[OÓ]N ACAD[EÉ]MICA|ACADEMIC|ESTUDIOS)/i.test(upper)) {
+    } else if (/^(?:EDUCACI[OÓ]N|EDUCATION|FORMACI[OÓ]N\s+ACAD[EÉ]MICA|ACADEMIC\s+BACKGROUND|ESTUDIOS)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "education";
       continue;
-    } else if (/^(?:HABILIDADES|SKILLS|COMPETENCIAS|TECNOLOG[IÍ]AS|TECH STACK|TECHNICAL SKILLS)/i.test(upper)) {
+    } else if (/^(?:HABILIDADES|SKILLS|COMPETENCIAS|TECNOLOG[IÍ]AS|TECH\s+STACK|TECHNICAL\s+SKILLS)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "skills";
       continue;
-    } else if (/^(?:CERTIFICACI[OÓ]N|CERTIFICACIONES|CERTIFICATES|CREDENTIALS)/i.test(upper)) {
+    } else if (/^(?:CERTIFICACI[OÓ]N|CERTIFICACIONES|CERTIFICATES|CREDENTIALS)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "certifications";
       continue;
-    } else if (/^(?:PROYECTOS|PROJECTS|PORTAFOLIO)/i.test(upper)) {
+    } else if (/^(?:PROYECTOS|PROJECTS|PORTAFOLIO)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "projects";
       continue;
-    } else if (/^(?:IDIOMAS|LANGUAGES)/i.test(upper)) {
+    } else if (/^(?:IDIOMAS|LANGUAGES)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "languages";
       continue;
-    } else if (/^(?:RESUMEN|PERFIL|SOBRE M[IÍ]|SUMMARY|ABOUT|PROFILE)/i.test(upper)) {
+    } else if (/^(?:RESUMEN(?:\s+PROFESIONAL)?|PERFIL(?:\s+PROFESIONAL)?|SOBRE\s+M[IÍ]|SUMMARY|ABOUT|PROFILE(?:\s+SUMMARY)?)\s*:?$/i.test(trimmedLine)) {
       pushCurrentExp();
       currentSection = "summary";
       continue;
@@ -839,11 +862,13 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
 
       const isDateRangeOnly = (str: string) => {
         const s = str.trim();
+        if (s.includes("|")) return false;
+        if (s.length > 50) return false;
         const hasYear = /(?:19|20)\d\d/.test(s);
         const hasPresent = /(?:presente|present|actualidad|current)/i.test(s);
         const monthNames = /(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)/i;
         if ((hasYear || hasPresent) && (monthNames.test(s) || /[-—–/]/.test(s) || /\b(?:to|a|hasta)\b/i.test(s))) {
-          if (!/^(?:desarroll|lider|implement|constru|cre[oó]|responsible|managed|led|worked|achieved)/i.test(s) && s.length < 80) {
+          if (!/^(?:desarroll|lider|implement|constru|cre[oó]|responsible|managed|led|worked|achieved)/i.test(s)) {
             return true;
           }
         }
@@ -943,21 +968,37 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
       }
 
       // 5. Pattern: Role | Company | Date OR Company | Role | Date
-      if ((line.includes("|") || line.includes(" — ") || line.includes(" - ")) && /(?:19|20)\d\d|presente|present|actualidad/i.test(line) && line.length < 130) {
-        if (isDateRangeOnly(line)) {
-          if (currentExp && !currentExp.startDate) {
-            currentExp.startDate = line.trim();
-            continue;
-          }
-        }
-        const parts = line.split(/[|—–-]/).map((p) => p.trim());
-        if (!isDateRangeOnly(parts[0])) {
+      if ((line.includes("|") || line.includes(" — ") || line.includes(" – ") || line.includes(" - ")) && /(?:19|20)\d\d|presente|present|actualidad/i.test(line) && line.length < 150) {
+        if (!isDateRangeOnly(line)) {
           pushCurrentExp();
+          let company = "";
+          let role = "";
+          let dateRange = "";
+
+          if (line.includes("|")) {
+            const pipeParts = line.split("|").map(p => p.trim());
+            const left = pipeParts[0];
+            dateRange = pipeParts.slice(1).join(" | ").trim();
+            if (left.includes("–") || left.includes("—") || left.includes(" - ")) {
+              const leftParts = left.split(/–|—|\s-\s/).map(p => p.trim());
+              company = leftParts[0] || "Empresa";
+              role = leftParts.slice(1).join(" – ") || headline || "Ingeniero";
+            } else {
+              company = left;
+              role = headline || "Ingeniero";
+            }
+          } else {
+            const parts = line.split(/[–—]|\s-\s/).map((p) => p.trim());
+            company = parts[0] || "Empresa";
+            role = parts[1] || headline || "Ingeniero";
+            dateRange = parts.slice(2).join(" – ") || "";
+          }
+
           currentExp = {
             id: `exp-${Date.now()}-${experiences.length}`,
-            company: parts[0] || "Empresa",
-            role: parts[1] || headline || "Ingeniero",
-            startDate: parts[2] || "",
+            company: company,
+            role: role,
+            startDate: dateRange,
             description: "",
             bullets: [],
             technologies: [],
@@ -1029,14 +1070,27 @@ function extractFullCvLocally(rawText: string, fileName: string): ExtractedCvDat
         continue;
       }
     } else if (currentSection === "education") {
-      if (line.length > 5 && line.length < 120 && !line.startsWith("•")) {
-        const parts = line.split(/[|—–,-]/).map((p) => p.trim());
-        education.push({
-          id: `edu-${Date.now()}-${education.length}`,
-          degree: parts[0] || line,
-          institution: parts[1] || "",
-          year: parts[2] || "",
-        });
+      if (line.length > 5 && line.length < 140 && !/^[•●○▪■◆\-*–—›\s]+$/.test(line)) {
+        const colonMatch = line.match(/^((?:19|20)\d\d(?:\s*[-–—]\s*(?:(?:19|20)\d\d|Presente|Present))?)\s*:\s*(.+)$/i);
+        if (colonMatch) {
+          const dates = colonMatch[1].trim();
+          const rest = colonMatch[2].trim();
+          const parts = rest.split(/[,|]/).map(s => s.trim()).filter(Boolean);
+          education.push({
+            id: `edu-${Date.now()}-${education.length}`,
+            degree: parts[0] || rest,
+            institution: parts.slice(1).join(", ") || "",
+            year: dates,
+          });
+        } else {
+          const parts = line.split(/[|—–,-]/).map((p) => p.trim());
+          education.push({
+            id: `edu-${Date.now()}-${education.length}`,
+            degree: parts[0] || line,
+            institution: parts[1] || "",
+            year: parts[2] || "",
+          });
+        }
       }
     } else if (currentSection === "certifications") {
       if (line.length > 5 && line.length < 120 && !line.startsWith("•")) {
