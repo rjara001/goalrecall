@@ -64,6 +64,7 @@ import {
 } from "../utils/storage";
 import { extractCvDataLocally } from "../utils/localCvExtractor";
 import { extractPdfText } from "../utils/pdfExtractor";
+import { auth } from "../firebase";
 
 interface ExtractedBullet {
   id: string;
@@ -436,9 +437,25 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
     // Only attempt backend fetch if not explicitly forcing local parser
     if (!payload.forceLocal) {
       try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+
+        // Attach Firebase Auth ID token if user is signed in
+        if (auth && auth.currentUser) {
+          try {
+            const token = await auth.currentUser.getIdToken();
+            if (token) {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
+          } catch (tokenErr) {
+            console.warn("No se pudo obtener el token de autenticación:", tokenErr);
+          }
+        }
+
         const response = await fetch("/api/cv/extract-full-cv", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(payload),
         });
 
@@ -446,6 +463,10 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
         // If the server returns valid JSON (not an HTML fallback from static hosting rewrites)
         if (response.ok && contentType.includes("application/json")) {
           data = await response.json();
+        } else if (response.status === 401) {
+          console.warn(
+            "Cloud Function requiere autenticación. Activando extractor local verídico."
+          );
         } else {
           console.warn(
             "Backend API no disponible o estático (Firebase Hosting). Activando extractor local verídico automático."

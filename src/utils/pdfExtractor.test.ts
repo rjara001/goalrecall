@@ -87,3 +87,47 @@ endobj
     expect(result.cvData.contact.location).not.toContain("Skia/PDF");
   });
 });
+
+  it("extracts experiences, education and contact details faithfully from real-world multiline CV format", () => {
+    const multilineCv = `Rodrigo Jara P.
+– Full Stack Software Engineer
+Email: rjara001@gmail.com | GitHub: github.com/rjara001 | LinkedIn:
+linkedin.com/in/rjara001
+Profile Summary
+Seasoned Full Stack Software Engineer with 18+ years of experience delivering scalable solutions.
+Technical Skills
+Languages: TypeScript (5 yrs), JavaScript (12+ yrs), Node.js (7+ yrs)
+Cloud & DevOps: Azure, AWS, Docker, Kubernetes
+Professional Experience
+ParserDigital / Chambers & Partners – Senior Full Stack Developer (Remote) | Oct 2025 –
+Present
+Tech Stack: Angular 21, Native Federation, .NET 10, Microservices, Azure DevOps, Docker
+●
+●
+Delivered the Digital Submissions platform for Chambers & Partners in 7 months.
+Replaced fragmented document-heavy process with structured digital workflows.
+ParserDigital / Dunnhumby – Full Stack Developer (Remote) | Oct 2024 – Oct 2025
+Tech Stack: React, Next.js, NestJS, .NET 9, PostgreSQL, AKS
+●
+Built dynamic reporting forms and dashboards using Next.js and NestJS.
+Education
+2021 – 2022: Master’s in Data Science, Complutense University of Madrid
+2005 – 2007: B.Sc. in Computer Science, University Central, Chile`;
+
+    const result = extractCvDataLocally(multilineCv, "cv_test.pdf");
+
+    expect(result.cvData.contact.name).toBe("Rodrigo Jara P.");
+    expect(result.cvData.contact.headline).toBe("Full Stack Software Engineer");
+    expect(result.cvData.contact.email).toBe("rjara001@gmail.com");
+    expect(result.cvData.contact.github).toBe("github.com/rjara001");
+    expect(result.cvData.contact.linkedin).toBe("linkedin.com/in/rjara001");
+    expect(result.cvData.experiences.length).toBe(2);
+    expect(result.cvData.experiences[0].company).toBe("ParserDigital / Chambers & Partners");
+    expect(result.cvData.experiences[0].role).toBe("Senior Full Stack Developer (Remote)");
+    expect(result.cvData.experiences[0].startDate).toBe("Oct 2025 – Present");
+    expect(result.cvData.experiences[0].bullets.length).toBeGreaterThanOrEqual(2);
+    expect(result.cvData.education.length).toBe(2);
+    expect(result.cvData.education[0].degree).toBe("Master’s in Data Science");
+    expect(result.cvData.education[0].institution).toBe("Complutense University of Madrid");
+    expect(result.cvData.education[0].year).toBe("2021 – 2022");
+  });
