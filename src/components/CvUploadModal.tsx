@@ -64,6 +64,7 @@ import {
 } from "../utils/storage";
 import { extractCvDataLocally } from "../utils/localCvExtractor";
 import { extractPdfText } from "../utils/pdfExtractor";
+import { extractDocxText } from "../utils/docxExtractor";
 import { auth } from "../firebase";
 
 interface ExtractedBullet {
@@ -304,6 +305,9 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
 
     try {
       const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+      const isDocx =
+        file.name.endsWith(".docx") ||
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       const isText =
         file.type.startsWith("text/") ||
         file.name.endsWith(".txt") ||
@@ -327,6 +331,20 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
         const base64Data = await fileToBase64(file);
         payload.fileBase64 = base64Data;
         payload.mimeType = "application/pdf";
+      } else if (isDocx) {
+        setProcessingStep("Extrayendo texto de Word (.docx) localmente...");
+        try {
+          const docxText = await extractDocxText(file);
+          if (docxText && docxText.trim().length > 0) {
+            payload.textContent = docxText.trim();
+          }
+        } catch (docxErr) {
+          console.warn("Extracción de DOCX en cliente falló, continuando con base64:", docxErr);
+        }
+        setProcessingStep("Analizando documento Word...");
+        const base64Data = await fileToBase64(file);
+        payload.fileBase64 = base64Data;
+        payload.mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       } else if (isText) {
         setProcessingStep("Parseando texto y extrayendo elementos del CV...");
         const text = await fileToText(file);
