@@ -236,6 +236,7 @@ function cvToAchievements(cv: ExtractedCvData, fileName?: string): ExtractedAchi
 export const apiExtractCv = onRequest(
   {
     cors: true,
+    invoker: "public",
     maxInstances: 10,
     timeoutSeconds: 60,
     memory: "256MiB",
