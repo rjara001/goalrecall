@@ -164,6 +164,7 @@ export const DUMMY_EXP_IDS = new Set([
 ]);
 
 export const purgeDummyPresetData = (): void => {
+  if (typeof localStorage === "undefined") return;
   try {
     const rawLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (rawLogs) {
@@ -429,11 +430,29 @@ export const hashPassword = (pwd: string): string => {
 };
 
 export const getStoredCustomAccounts = (): CustomAccount[] => {
+  if (inMemoryCustomAccounts.length === 0 && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) inMemoryCustomAccounts = parsed;
+      }
+    } catch {
+      // ignore
+    }
+  }
   return inMemoryCustomAccounts;
 };
 
 export const saveStoredCustomAccounts = (accounts: CustomAccount[]): void => {
   inMemoryCustomAccounts = accounts;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify(accounts));
+    } catch {
+      // ignore
+    }
+  }
 };
 
 export const registerCustomAccount = (params: {
@@ -624,6 +643,20 @@ export const deleteCustomUser = (_userId: string): { updatedList: UserProfile[];
 };
 
 export const getStoredUser = (): UserProfile | null => {
+  if (!inMemoryUser && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.USER);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.id || parsed.email || parsed.name)) {
+          inMemoryUser = parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (inMemoryUser && !inMemoryUser.username && (inMemoryUser.name || inMemoryUser.email)) {
     inMemoryUser.username = generateDefaultUsername(inMemoryUser.name || "user", inMemoryUser.email);
   }
@@ -632,6 +665,17 @@ export const getStoredUser = (): UserProfile | null => {
 
 export const saveUser = (user: UserProfile | null): void => {
   inMemoryUser = user;
+  if (typeof window !== "undefined") {
+    try {
+      if (user) {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.USER);
+      }
+    } catch {
+      // ignore
+    }
+  }
   triggerCloudSync();
 };
 
@@ -779,6 +823,13 @@ export const clearStoredCv = (): void => {
 export const clearSessionData = (): void => {
   saveUser(null);
   clearStoredCv();
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.USER);
+    } catch {
+      // ignore
+    }
+  }
 };
 
 // --- AI Usage Quota & Rate Limiting ---

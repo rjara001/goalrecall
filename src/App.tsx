@@ -62,7 +62,7 @@ import { Check, Info, AlertTriangle, Lock } from "lucide-react";
 import { useI18n } from "./i18n";
 import { APP_VERSION as FALLBACK_APP_VERSION } from "./constants/version";
 import { parseSharedDeckFromUrl } from "./utils/publicDeckShare";
-import { auth, getRedirectResult } from "./firebase";
+import { auth, getRedirectResult, onAuthStateChanged, firebaseSignOut } from "./firebase";
 
 // Global app version defined in vite.config.ts (with safe fallback)
 declare const APP_VERSION: string | undefined;
@@ -254,6 +254,36 @@ export default function App() {
         .catch((err) => {
           console.error("[App] Firebase getRedirectResult error:", err);
         });
+
+      // Maintain persistent Firebase Auth session across page refreshes
+      const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+        if (fbUser && !fbUser.isAnonymous) {
+          const stored = getStoredUser();
+          const userHandle = fbUser.email
+            ? fbUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "")
+            : "";
+          const activeUserProfile: UserProfile = {
+            ...(stored || INITIAL_USER),
+            id: stored?.id || "google-" + fbUser.uid,
+            username: stored?.username || userHandle || undefined,
+            name: stored?.name || fbUser.displayName || fbUser.email?.split("@")[0] || "Usuario",
+            email: fbUser.email || stored?.email || "",
+            avatar: stored?.avatar || fbUser.photoURL || INITIAL_USER.avatar,
+            authProvider: stored?.authProvider || "google",
+            isCustom: stored?.isCustom ?? false,
+          };
+          saveUser(activeUserProfile);
+          setUser(activeUserProfile);
+
+          // If on root "/" path or quarters, stay on quarters
+          const p = window.location.pathname.toLowerCase();
+          if (p === "/" || p === "" || p === "/quarters") {
+            setActiveView("quarters");
+          }
+        }
+      });
+
+      return () => unsubscribe();
     }
   }, []);
 
@@ -311,7 +341,8 @@ export default function App() {
 
     try {
       const res = await fetch(`/api/public/u/${encodeURIComponent(clean)}`);
-      if (res.ok) {
+      const contentType = res.headers.get("content-type") || "";
+      if (res.ok && contentType.includes("application/json")) {
         const data = await res.json();
         if (data && data.success && data.userProfile) {
           setSharedDeck({
@@ -760,7 +791,12 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    // 1. Clear session user and temporary CV data from storage
+    // 1. Firebase Auth Sign Out if active
+    if (auth && auth.currentUser && !auth.currentUser.isAnonymous) {
+      firebaseSignOut(auth).catch((err) => console.warn("[App] Firebase sign out error:", err));
+    }
+
+    // 2. Clear session user and temporary CV data from storage
     clearSessionData();
     setUser(null);
 
