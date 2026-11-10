@@ -56,6 +56,7 @@ import {
   saveStoredCv, 
   getStoredExperiences, 
   saveExperiences,
+  triggerCloudSync,
   checkCanUseAi,
   recordAiUsage,
   getAiUsage,
@@ -760,6 +761,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
       });
 
       saveExperiences(updatedExperiences);
+      triggerCloudSync(true);
       if (onExperiencesUpdated) {
         onExperiencesUpdated(updatedExperiences);
       }

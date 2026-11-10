@@ -1358,12 +1358,9 @@ export const triggerCloudSync = (immediate = false): void => {
   }
 };
 
-export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean> => {
+export const restoreFromCloud = async (userKey: string): Promise<boolean> => {
   if (typeof window === "undefined" || !userKey) return false;
   try {
-    const localLogs = getStoredLogs();
-    if (localLogs.length > 0) return false; // Already has local data
-
     const res = await fetch(`/api/cloud-sync/load/${encodeURIComponent(userKey)}`);
     if (!res.ok) return false;
 
@@ -1375,13 +1372,13 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
     const data = await res.json();
     if (data?.success && data?.backup?.payload) {
       const { payload } = data.backup;
-      if (Array.isArray(payload.logs) && payload.logs.length > 0) {
+      if (Array.isArray(payload.logs)) {
         localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(payload.logs));
       }
       if (payload.user) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(payload.user));
       }
-      if (Array.isArray(payload.experiences) && payload.experiences.length > 0) {
+      if (Array.isArray(payload.experiences)) {
         localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(payload.experiences));
       }
       if (Array.isArray(payload.inbox)) {
@@ -1393,6 +1390,7 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
       if (Array.isArray(payload.products)) {
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(payload.products));
       }
+      lastSyncedHash = computePayloadHash(payload);
       return true;
     }
     return false;
@@ -1401,3 +1399,5 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
     return false;
   }
 };
+
+export const restoreFromCloudIfEmpty = restoreFromCloud;

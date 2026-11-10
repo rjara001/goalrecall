@@ -50,6 +50,7 @@ import {
   clearSessionData,
   resetToDemoData,
   purgeDummyPresetData,
+  restoreFromCloud,
   restoreFromCloudIfEmpty,
   INITIAL_LOGS,
   INITIAL_EXPERIENCES,
@@ -509,8 +510,12 @@ export default function App() {
 
   const handleImportBatchLogs = (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
     batch.forEach((entry) => addLog(entry));
-    setLogs(getStoredLogs());
-    setExperiences(getStoredExperiences());
+    const nextLogs = getStoredLogs();
+    const nextExps = getStoredExperiences();
+    setLogs(nextLogs);
+    setExperiences(nextExps);
+    triggerCloudSync(true);
+    syncPublicShowcaseIfHandleSet(user, nextLogs, products, nextExps);
     showToast(`${t.toasts.bulletsImported} (${batch.length})`, "success");
   };
 
@@ -723,10 +728,10 @@ export default function App() {
     saveUser(newUser);
     setUser(newUser);
 
-    // If local logs is empty (e.g. new device or cleared cache), check for cloud backup
-    const currentLogs = getStoredLogs();
-    if (currentLogs.length === 0 && newUser.email) {
-      const restored = await restoreFromCloudIfEmpty(newUser.email);
+    // Always fetch user's vault from Firestore as primary source of truth
+    const userKey = newUser.email || newUser.id;
+    if (userKey) {
+      const restored = await restoreFromCloud(userKey);
       if (restored) {
         showToast(t.toasts.dataRestored, "success");
       }

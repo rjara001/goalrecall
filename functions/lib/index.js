@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.apiPublic = exports.apiExtractCv = void 0;
+exports.apiCloudSync = exports.apiPublic = exports.apiExtractCv = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = __importStar(require("firebase-admin"));
 const genai_1 = require("@google/genai");
@@ -577,6 +577,77 @@ exports.apiPublic = (0, https_1.onRequest)({
     catch (err) {
         console.error("Error in apiPublic Cloud Function:", err);
         res.status(500).json({ error: "Error en el servidor de vitrinas públicas.", details: err.message });
+    }
+});
+// ==========================================
+// CLOUD SYNC & FIRESTORE PERSISTENCE API
+// ==========================================
+exports.apiCloudSync = (0, https_1.onRequest)({
+    region: "us-central1",
+    cors: true,
+    invoker: "public",
+}, async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+    }
+    const path = req.path;
+    const db = admin.firestore();
+    try {
+        // 1. POST /api/cloud-sync/save
+        if (req.method === "POST" && (path.endsWith("/save") || path.endsWith("/save/"))) {
+            const { userKey, payload } = req.body || {};
+            if (!userKey || !payload) {
+                res.status(400).json({ error: "userKey and payload are required." });
+                return;
+            }
+            const safeKey = userKey.trim().toLowerCase().replace(/[^a-z0-9@._-]/g, "_");
+            const docRef = db.collection("user_vaults").doc(safeKey);
+            const backupRecord = {
+                userKey,
+                updatedAt: Date.now(),
+                payload,
+                serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+            };
+            await docRef.set(backupRecord, { merge: true });
+            // If payload has a username, also update public index
+            const username = payload.user?.username?.trim().toLowerCase();
+            if (username) {
+                await db.collection("public_handles").doc(username).set({
+                    username,
+                    userKey,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+            res.json({ success: true, savedAt: backupRecord.updatedAt });
+            return;
+        }
+        // 2. GET /api/cloud-sync/load/:userKey
+        if (req.method === "GET" && path.includes("/load/")) {
+            const rawKey = path.split("/load/")[1]?.split("/")[0]?.trim();
+            if (!rawKey) {
+                res.status(400).json({ error: "userKey is required." });
+                return;
+            }
+            const safeKey = decodeURIComponent(rawKey).trim().toLowerCase().replace(/[^a-z0-9@._-]/g, "_");
+            const docRef = db.collection("user_vaults").doc(safeKey);
+            const docSnap = await docRef.get();
+            if (!docSnap.exists) {
+                res.status(404).json({ error: "No cloud backup found for this user key." });
+                return;
+            }
+            const data = docSnap.data();
+            res.json({ success: true, backup: data });
+            return;
+        }
+        res.status(404).json({ error: "Endpoint de sincronización no encontrado." });
+    }
+    catch (err) {
+        console.error("Error in apiCloudSync Cloud Function:", err);
+        res.status(500).json({ error: "Error en el servidor de persistencia Firestore.", details: err.message });
     }
 });
 //# sourceMappingURL=index.js.map

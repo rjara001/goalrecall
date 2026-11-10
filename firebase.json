@@ -36,6 +36,10 @@
         "function": "apiPublic"
       },
       {
+        "source": "/api/cloud-sync/**",
+        "function": "apiCloudSync"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
