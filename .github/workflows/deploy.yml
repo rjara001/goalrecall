@@ -13,6 +13,8 @@ jobs:
   test_and_deploy:
     name: Test, Build & Deploy
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -35,9 +37,9 @@ jobs:
       - name: Build Frontend Application
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'goalrecall-bb4d0.firebaseapp.com' }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || 'goalrecall-bb4d0' }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || 'goalrecall-bb4d0.appspot.com' }}
+          VITE_FIREBASE_AUTH_DOMAIN: goalrecall-bb4d0.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: goalrecall-bb4d0
+          VITE_FIREBASE_STORAGE_BUCKET: goalrecall-bb4d0.appspot.com
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: bun run build
@@ -49,13 +51,11 @@ jobs:
           npm run build
 
       - name: Authenticate with Google Cloud Service Account
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 != '' }}
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 }}
 
       - name: Deploy Hosting to Firebase Production
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -64,6 +64,5 @@ jobs:
           channelId: live
 
       - name: Deploy Cloud Functions to Firebase
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 != '' }}
         run: |
           npx -y firebase-tools deploy --only functions --project goalrecall-bb4d0 --non-interactive
