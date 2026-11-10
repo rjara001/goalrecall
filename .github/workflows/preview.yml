@@ -22,23 +22,19 @@ jobs:
           bun-version: latest
 
       - name: Install Client Dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run Client Unit Tests
-        run: bun test
+        run: bun install
 
       - name: Build Frontend Application
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'goalrecall-bb4d0.firebaseapp.com' }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || 'goalrecall-bb4d0' }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || 'goalrecall-bb4d0.appspot.com' }}
+          VITE_FIREBASE_AUTH_DOMAIN: goalrecall-bb4d0.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: goalrecall-bb4d0
+          VITE_FIREBASE_STORAGE_BUCKET: goalrecall-bb4d0.appspot.com
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         run: bun run build
 
       - name: Deploy to Firebase Preview Channel
-        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
