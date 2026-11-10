@@ -694,19 +694,41 @@ export default function App() {
     saveUser(newUser);
     setUser(newUser);
 
-    // If local logs is empty (e.g. new device or cleared cache), check for cloud backup
-    const currentLogs = getStoredLogs();
-    if (currentLogs.length === 0 && newUser.email) {
-      const restored = await restoreFromCloudIfEmpty(newUser.email);
-      if (restored) {
+    // Hydrate user data directly from Firestore database
+    try {
+      const cloudData = await fetchCloudUserState();
+      if (cloudData) {
+        initializeStateFromCloud(cloudData);
+        if (cloudData.experiences) setExperiences(cloudData.experiences);
+        if (cloudData.logs) setLogs(cloudData.logs);
+        if (cloudData.jobOffers) setJobOffers(cloudData.jobOffers);
+        if (cloudData.products) setProducts(cloudData.products);
+        if (cloudData.user) {
+          const merged = { ...newUser, ...cloudData.user };
+          setUser(merged);
+          saveUser(merged);
+        }
         showToast(t.toasts.dataRestored, "success");
+      } else if (newUser.email) {
+        const restored = await restoreFromCloudIfEmpty(newUser.email);
+        if (restored) {
+          setLogs(getStoredLogs());
+          setExperiences(getStoredExperiences());
+          setInbox(getStoredInbox());
+          setJobOffers(getStoredJobOffers());
+          setProducts(getStoredProducts());
+          showToast(t.toasts.dataRestored, "success");
+        }
       }
+    } catch (err) {
+      console.warn("[App] Cloud data hydration notice:", err);
     }
 
     setLogs(getStoredLogs());
     setExperiences(getStoredExperiences());
     setInbox(getStoredInbox());
     setJobOffers(getStoredJobOffers());
+    setProducts(getStoredProducts());
     const providerLabel = newUser.authProvider === "google" ? "Google" : "Email";
     showToast(`${newUser.name} · ${providerLabel} ✨`, "success");
     setActiveView("quarters");
