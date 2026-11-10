@@ -6,8 +6,8 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     define: {
-      APP_VERSION: JSON.stringify('0.2.1'),
-      __APP_VERSION__: JSON.stringify('0.2.1'),
+      APP_VERSION: JSON.stringify('0.3.1'),
+      __APP_VERSION__: JSON.stringify('0.3.1'),
     },
     plugins: [react(), tailwindcss()],
     resolve: {
