@@ -499,6 +499,203 @@ Devuelve estrictamente un JSON válido conforme al schema.`;
   }
 );
 
+const RESERVED_USERNAMES = new Set([
+  "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
+  "login", "register", "auth", "settings", "terms", "privacy", "help",
+  "explore", "user", "users", "u", "p", "deck", "demo", "null", "undefined",
+  "goalrecall", "support", "billing", "dashboard", "app"
+]);
+
+export const apiPublic = onRequest(
+  {
+    cors: true,
+    invoker: "public",
+    maxInstances: 10,
+    timeoutSeconds: 30,
+    memory: "256MiB",
+  },
+  async (req, res) => {
+    // URL path handling: /api/public/u/:username, /api/public/claim-username, /api/public/check-username/:username
+    const rawPath = req.path || "";
+    const db = admin.firestore();
+
+    try {
+      // 1. Claim username: POST /api/public/claim-username
+      if (rawPath.endsWith("/claim-username") && req.method === "POST") {
+        const { username, userKey, userProfile, logs, products } = req.body || {};
+        if (!username || !userKey) {
+          res.status(400).json({ error: "username y userKey son obligatorios." });
+          return;
+        }
+
+        const cleanUsername = String(username).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        if (cleanUsername.length < 3) {
+          res.status(400).json({ error: "El nombre de usuario debe tener al menos 3 caracteres." });
+          return;
+        }
+        if (RESERVED_USERNAMES.has(cleanUsername)) {
+          res.status(400).json({ error: "Palabra reservada del sistema." });
+          return;
+        }
+
+        const showcaseRef = db.collection("public_showcases").doc(cleanUsername);
+        const existingSnap = await showcaseRef.get();
+        if (existingSnap.exists) {
+          const existingData = existingSnap.data();
+          if (existingData?.userId && existingData.userId !== userKey) {
+            res.status(409).json({ error: "El nombre de usuario ya está tomado por otra cuenta." });
+            return;
+          }
+        }
+
+        const allLogs = Array.isArray(logs) ? logs : [];
+        const allProducts = Array.isArray(products) ? products : [];
+        const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+        const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+        const safeUserProfile = {
+          id: userProfile?.id || `usr-public-${cleanUsername}`,
+          username: cleanUsername,
+          name: userProfile?.name || "Profesional Técnico",
+          title: userProfile?.title || "",
+          bio: userProfile?.bio || "",
+          avatar: userProfile?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+          location: userProfile?.location || "",
+          github: userProfile?.socialLinks?.github || userProfile?.github || "",
+          linkedin: userProfile?.socialLinks?.linkedin || userProfile?.linkedin || "",
+          socialLinks: userProfile?.socialLinks || {},
+          availabilityStatus: userProfile?.availabilityStatus || "",
+          skills: Array.isArray(userProfile?.skills) ? userProfile?.skills : [],
+          email: userProfile?.email || "",
+          authProvider: userProfile?.authProvider || "custom",
+          isDemoUser: false,
+          isCustom: userProfile?.isCustom ?? true,
+          createdAt: userProfile?.createdAt || Date.now(),
+        };
+
+        await showcaseRef.set({
+          userId: userKey,
+          username: cleanUsername,
+          userProfile: safeUserProfile,
+          logs: publicLogs,
+          products: publicProducts,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        res.json({ success: true, username: cleanUsername, userKey });
+        return;
+      }
+
+      // 2. Check username availability: GET /api/public/check-username/:username
+      if (rawPath.includes("/check-username/") && req.method === "GET") {
+        const usernameParam = rawPath.split("/check-username/")[1]?.split("/")[0]?.split("?")[0];
+        const clean = (usernameParam || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        if (clean.length < 3) {
+          res.json({ available: false, reason: "Mínimo 3 caracteres alfanuméricos." });
+          return;
+        }
+        if (RESERVED_USERNAMES.has(clean)) {
+          res.json({ available: false, reason: "Palabra reservada del sistema." });
+          return;
+        }
+
+        const snap = await db.collection("public_showcases").doc(clean).get();
+        if (snap.exists) {
+          const ownerKey = snap.data()?.userId;
+          const queryUserKey = (req.query.userKey as string)?.trim();
+          if (!queryUserKey || ownerKey !== queryUserKey) {
+            res.json({ available: false, reason: "Nombre de usuario ya tomado." });
+            return;
+          }
+        }
+
+        res.json({ available: true, username: clean });
+        return;
+      }
+
+      // 3. Resolve public showcase: GET /api/public/u/:username
+      if (rawPath.includes("/u/")) {
+        const usernameParam = rawPath.split("/u/")[1]?.split("/")[0]?.split("?")[0];
+        const clean = (usernameParam || "").toLowerCase().trim();
+        if (!clean) {
+          res.status(400).json({ error: "Se requiere nombre de usuario." });
+          return;
+        }
+
+        // Direct lookup in public_showcases collection
+        const showcaseDoc = await db.collection("public_showcases").doc(clean).get();
+        if (showcaseDoc.exists) {
+          const data = showcaseDoc.data();
+          res.json({
+            success: true,
+            userProfile: data?.userProfile,
+            logs: data?.logs || [],
+            products: data?.products || [],
+          });
+          return;
+        }
+
+        // Fallback: search users collection state for matched username
+        const usersSnap = await db.collection("users").get();
+        for (const doc of usersSnap.docs) {
+          const stateDoc = await doc.ref.collection("state").doc("main").get();
+          if (stateDoc.exists) {
+            const stateData = stateDoc.data();
+            const u = stateData?.user;
+            const uName = (u?.username || "").toLowerCase();
+            const uEmailPrefix = (u?.email || "").split("@")[0].toLowerCase();
+            if (uName === clean || uEmailPrefix === clean) {
+              const allLogs = Array.isArray(stateData?.logs) ? stateData.logs : [];
+              const allProducts = Array.isArray(stateData?.products) ? stateData.products : [];
+              const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+              const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+              const safeProfile = {
+                id: u.id || `usr-public-${clean}`,
+                username: u.username || clean,
+                name: u.name || "Profesional Técnico",
+                title: u.title || "",
+                bio: u.bio || "",
+                avatar: u.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                location: u.location || "",
+                github: u.socialLinks?.github || u.github || "",
+                linkedin: u.socialLinks?.linkedin || u.linkedin || "",
+                socialLinks: u.socialLinks || {},
+                availabilityStatus: u.availabilityStatus || "",
+                skills: Array.isArray(u.skills) ? u.skills : [],
+                email: u.email || "",
+                authProvider: u.authProvider || "google",
+                isDemoUser: false,
+                isCustom: u.isCustom ?? true,
+                createdAt: u.createdAt || Date.now(),
+              };
+
+              res.json({
+                success: true,
+                userProfile: safeProfile,
+                logs: publicLogs,
+                products: publicProducts,
+              });
+              return;
+            }
+          }
+        }
+
+        res.status(404).json({
+          success: false,
+          error: `Vitrina pública no encontrada para el usuario "@${clean}".`,
+        });
+        return;
+      }
+
+      res.status(404).json({ error: "Ruta de API pública no encontrada." });
+    } catch (err: any) {
+      console.error("Error en apiPublic Cloud Function:", err);
+      res.status(500).json({ error: "Error al procesar consulta pública.", details: err?.message });
+    }
+  }
+);
+
 export const apiUserData = onRequest(
   {
     cors: true,
@@ -559,6 +756,45 @@ export const apiUserData = onRequest(
         };
 
         await userDocRef.set(stateToSave, { merge: true });
+
+        // Maintain global public showcase registry if user configured a username
+        const rawUser = payload.user;
+        if (rawUser && rawUser.username) {
+          const cleanUsername = String(rawUser.username).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+          if (cleanUsername.length >= 3) {
+            const allLogs = Array.isArray(payload.logs) ? payload.logs : [];
+            const allProducts = Array.isArray(payload.products) ? payload.products : [];
+            const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+            const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+            await db.collection("public_showcases").doc(cleanUsername).set({
+              userId,
+              username: cleanUsername,
+              userProfile: {
+                id: rawUser.id || `usr-public-${cleanUsername}`,
+                username: cleanUsername,
+                name: rawUser.name || "Profesional Técnico",
+                title: rawUser.title || "",
+                bio: rawUser.bio || "",
+                avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                location: rawUser.location || "",
+                github: rawUser.socialLinks?.github || rawUser.github || "",
+                linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin || "",
+                socialLinks: rawUser.socialLinks || {},
+                availabilityStatus: rawUser.availabilityStatus || "",
+                skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+                email: rawUser.email || "",
+                authProvider: rawUser.authProvider || "google",
+                isDemoUser: false,
+                isCustom: rawUser.isCustom ?? true,
+                createdAt: rawUser.createdAt || Date.now(),
+              },
+              logs: publicLogs,
+              products: publicProducts,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+        }
 
         res.json({
           success: true,

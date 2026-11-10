@@ -36,6 +36,10 @@
         "function": "apiUserData"
       },
       {
+        "source": "/api/public/**",
+        "function": "apiPublic"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
