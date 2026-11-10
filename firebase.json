@@ -32,6 +32,14 @@
         "function": "apiExtractCv"
       },
       {
+        "source": "/api/public/**",
+        "function": "apiPublic"
+      },
+      {
+        "source": "/api/cloud-sync/**",
+        "function": "apiCloudSync"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

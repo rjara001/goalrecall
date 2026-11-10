@@ -106,6 +106,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   const [technologies, setTechnologies] = useState<string[]>([]);
   const [techInput, setTechInput] = useState("");
   const [isPersonalProjects, setIsPersonalProjects] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
 
   // Accordion open/close states (default all collapsed with +)
   const [isCompanyRoleOpen, setIsCompanyRoleOpen] = useState(false);
@@ -128,6 +129,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setBulletsText(initialData.bullets?.join("\n") || "");
       setTechnologies(initialData.technologies || []);
       setIsPersonalProjects(initialData.isPersonalProjects || false);
+      setIsPublic(initialData.isPublic ?? true);
     } else {
       setCompany("");
       setRole("");
@@ -139,6 +141,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setBulletsText("");
       setTechnologies(["TypeScript", "React", "Node.js"]);
       setIsPersonalProjects(false);
+      setIsPublic(true);
     }
     setModalStep("form");
     setIsCompanyRoleOpen(false);
@@ -189,6 +192,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
         bullets: parsedBullets.length > 0 ? parsedBullets : (initialData?.bullets || []),
         technologies,
         isPersonalProjects,
+        isPublic,
       },
       parsedBullets,
     };
@@ -554,6 +558,29 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                     >
                       {isPersonalProjects ? <FolderGit2 className="w-3 h-3 text-purple-400" /> : <Building className="w-3 h-3 text-cyan-400" />}
                       <span>{isPersonalProjects ? "Proyecto Personal" : "Empresa Formal"}</span>
+                    </button>
+                  </div>
+
+                  {/* Visibilidad Pública / Privada */}
+                  <div className="p-2.5 bg-slate-900/60 border border-slate-800 rounded-lg flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-slate-200 text-[11px]">Visibilidad en Vitrina Pública</p>
+                      <p className="text-[10px] text-slate-400">
+                        {isPublic
+                          ? "Visible en tu vitrina y enlace de reclutadores (/u/:username)"
+                          : "Bóveda Privada (Solo tú puedes verla en tu bitácora)"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPublic(!isPublic)}
+                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] border transition-colors flex items-center gap-1.5 ${
+                        isPublic
+                          ? "bg-emerald-950/60 border-emerald-500/60 text-emerald-300"
+                          : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <span>{isPublic ? "Público 🌐" : "Privado 🔒"}</span>
                     </button>
                   </div>
                 </div>

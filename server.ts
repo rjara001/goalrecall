@@ -1603,7 +1603,7 @@ function generateUsernameSuggestions(username: string, existingIndex: Record<str
 // Endpoint to register/claim a username without a full backup
 app.post("/api/public/claim-username", (req, res) => {
   try {
-    const { username, userKey, userProfile, logs, products } = req.body;
+    const { username, userKey, userProfile, logs, products, experiences } = req.body;
     if (!username || !userKey) {
       return res.status(400).json({ error: "username and userKey are required." });
     }
@@ -1640,6 +1640,9 @@ app.post("/api/public/claim-username", (req, res) => {
     }
     if (Array.isArray(products)) {
       record.payload.products = products;
+    }
+    if (Array.isArray(experiences)) {
+      record.payload.experiences = experiences;
     }
     record.updatedAt = Date.now();
     fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
@@ -1836,12 +1839,16 @@ app.get("/api/public/u/:username", (req, res) => {
     const rawUser = payload.user || {};
     const allLogs = Array.isArray(payload.logs) ? payload.logs : [];
     const allProducts = Array.isArray(payload.products) ? payload.products : [];
+    const allExperiences = Array.isArray(payload.experiences) ? payload.experiences : [];
 
     // STRICT PRIVACY ISOLATION:
     // Only return logs with isPublic === true
     const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
     // Only return products with isPublic !== false
     const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+    // Only return experiences declared isPublic !== false OR containing public logs
+    const publicExpIds = new Set(publicLogs.map((l: any) => l.experienceId).filter(Boolean));
+    const publicExperiences = allExperiences.filter((e: any) => e.isPublic !== false || publicExpIds.has(e.id));
 
     const safeUserProfile = {
       id: rawUser.id || `usr-public-${cleanUsername}`,
@@ -1866,6 +1873,7 @@ app.get("/api/public/u/:username", (req, res) => {
     return res.json({
       success: true,
       userProfile: safeUserProfile,
+      experiences: publicExperiences,
       logs: publicLogs,
       products: publicProducts,
     });

@@ -13,7 +13,7 @@ import {
   MessageSquare,
   Bot
 } from "lucide-react";
-import { LogEntry, Product, UserProfile } from "../types";
+import { LogEntry, Product, UserProfile, WorkExperience } from "../types";
 import { generatePublicDeckShareUrl } from "../utils/publicDeckShare";
 
 interface ShareDeckModalProps {
@@ -22,6 +22,7 @@ interface ShareDeckModalProps {
   user: UserProfile;
   logs: LogEntry[];
   products: Product[];
+  experiences?: WorkExperience[];
 }
 
 export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
@@ -30,6 +31,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   user,
   logs,
   products,
+  experiences = [],
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
   const [cleanHandleUrl, setCleanHandleUrl] = useState<string>("");
@@ -52,7 +54,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     const userHandle = user.username || (user.email ? user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "") : "usuario");
     setCleanHandleUrl(`${origin}/u/${userHandle}`);
 
-    generatePublicDeckShareUrl(user, logs, products)
+    generatePublicDeckShareUrl(user, logs, products, experiences)
       .then((url) => {
         if (isMounted) {
           setShareUrl(url);
@@ -70,7 +72,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, user, logs, products]);
+  }, [isOpen, user, logs, products, experiences]);
 
   if (!isOpen) return null;
 
