@@ -16,7 +16,8 @@ import { AvatarModal } from "./components/AvatarModal";
 import { OffersView } from "./components/OffersView";
 import { ProductModal } from "./components/ProductModal";
 import { ShareDeckModal } from "./components/ShareDeckModal";
-import { 
+import { fetchCloudUserState, ensureAuthenticatedUser } from "./utils/cloudState";
+import { initializeStateFromCloud,
   STORAGE_KEYS,
   getStoredLogs, 
   saveLogs, 
@@ -193,6 +194,20 @@ export default function App() {
     setInbox(getStoredInbox());
     setJobOffers(getStoredJobOffers());
     setProducts(getStoredProducts());
+
+    // Server-First initial load directly from Firestore via Cloud Functions
+    ensureAuthenticatedUser().then(() => {
+      fetchCloudUserState().then((cloudData) => {
+        if (cloudData) {
+          initializeStateFromCloud(cloudData);
+          if (cloudData.experiences) setExperiences(cloudData.experiences);
+          if (cloudData.logs) setLogs(cloudData.logs);
+          if (cloudData.user) setUser(cloudData.user);
+          if (cloudData.jobOffers) setJobOffers(cloudData.jobOffers);
+          if (cloudData.products) setProducts(cloudData.products);
+        }
+      });
+    });
 
     // If local logs is empty but user is logged in (e.g. wiped browser cache), auto restore from cloud
     if (currentUser?.email && storedLogs.length === 0) {

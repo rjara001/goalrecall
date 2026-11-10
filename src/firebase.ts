@@ -5,6 +5,8 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInAnonymously,
+  onAuthStateChanged,
   signOut as firebaseSignOut,
   connectAuthEmulator,
   Auth,
@@ -67,5 +69,7 @@ export {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  signInAnonymously,
+  onAuthStateChanged,
   firebaseSignOut,
 };

@@ -497,3 +497,83 @@ Devuelve estrictamente un JSON válido conforme al schema.`;
     }
   }
 );
+
+export const apiUserData = onRequest(
+  {
+    cors: true,
+    maxInstances: 10,
+    timeoutSeconds: 30,
+    memory: "256MiB",
+  },
+  async (req, res) => {
+    // 1. Validate Firebase Auth
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({
+        error: "Acceso no autorizado. Se requiere inicio de sesión con Firebase Auth.",
+      });
+      return;
+    }
+
+    const idToken = authHeader.split("Bearer ")[1].trim();
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (authErr) {
+      res.status(401).json({
+        error: "Token de autenticación inválido o expirado.",
+      });
+      return;
+    }
+
+    const userId = decodedToken.uid;
+    const db = admin.firestore();
+    const userDocRef = db.collection("users").doc(userId).collection("state").doc("main");
+
+    try {
+      if (req.method === "GET") {
+        const snap = await userDocRef.get();
+        if (!snap.exists) {
+          res.json({
+            success: true,
+            exists: false,
+            data: null,
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          exists: true,
+          data: snap.data(),
+        });
+        return;
+      }
+
+      if (req.method === "POST") {
+        const payload = req.body || {};
+        const stateToSave = {
+          ...payload,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await userDocRef.set(stateToSave, { merge: true });
+
+        res.json({
+          success: true,
+          message: "Estado de usuario guardado exitosamente en Firestore.",
+          updatedAt: new Date().toISOString(),
+        });
+        return;
+      }
+
+      res.status(405).json({ error: `Método ${req.method} no permitido.` });
+    } catch (dbErr: any) {
+      console.error("Error interactuando con Firestore:", dbErr);
+      res.status(500).json({
+        error: "Error interno al acceder a la base de datos Firestore.",
+        details: dbErr?.message,
+      });
+    }
+  }
+);

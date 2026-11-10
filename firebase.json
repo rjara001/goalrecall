@@ -32,6 +32,10 @@
         "function": "apiExtractCv"
       },
       {
+        "source": "/api/user/**",
+        "function": "apiUserData"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
