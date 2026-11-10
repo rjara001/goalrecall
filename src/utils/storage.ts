@@ -9,6 +9,7 @@ import {
   JobOffer,
   Product
 } from "../types";
+import { saveCloudUserState, UserCloudState } from "./cloudState";
 
 export const STORAGE_KEYS = {
   LOGS: "captains_logs_v1",
@@ -24,6 +25,26 @@ export const STORAGE_KEYS = {
 };
 
 export const INITIAL_EXPERIENCES: WorkExperience[] = [];
+
+// --- Strict Server-First In-Memory Storage (Zero localStorage business persistence) ---
+let inMemoryExperiences: WorkExperience[] = [];
+let inMemoryLogs: LogEntry[] = [];
+let inMemoryUser: UserProfile | null = null;
+let inMemoryCv: ExtractedCvData | null = null;
+let inMemoryInbox: VisitorMessage[] = [];
+let inMemoryJobOffers: JobOffer[] = [];
+let inMemoryProducts: Product[] = [];
+let inMemoryCustomAccounts: CustomAccount[] = [];
+
+export const initializeStateFromCloud = (cloudData: Partial<UserCloudState>): void => {
+  if (cloudData.user !== undefined) inMemoryUser = cloudData.user;
+  if (cloudData.storedCv !== undefined) inMemoryCv = cloudData.storedCv;
+  if (Array.isArray(cloudData.experiences)) inMemoryExperiences = cloudData.experiences;
+  if (Array.isArray(cloudData.logs)) inMemoryLogs = cloudData.logs;
+  if (Array.isArray(cloudData.jobOffers)) inMemoryJobOffers = cloudData.jobOffers;
+  if (Array.isArray(cloudData.products)) inMemoryProducts = cloudData.products;
+};
+
 
 export const DEFAULT_USERS: UserProfile[] = [];
 
@@ -242,37 +263,12 @@ export const INITIAL_INBOX: VisitorMessage[] = [];
 // --- Work Experiences Utilities ---
 
 export const getStoredExperiences = (_userId?: string): WorkExperience[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.EXPERIENCES);
-    if (!raw) {
-      return [];
-    }
-    const parsed: WorkExperience[] = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(
-      (e) =>
-        !DUMMY_EXP_IDS.has(e.id) &&
-        !e.company?.includes("Mercado Libre") &&
-        !e.company?.includes("Stripe Platform") &&
-        !e.company?.includes("ClientX") &&
-        !e.company?.includes("Internal Core")
-    );
-  } catch (e) {
-    console.error("Error reading experiences from localStorage", e);
-    return [];
-  }
+  return inMemoryExperiences;
 };
 
 export const saveExperiences = (experiences: WorkExperience[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(experiences));
-    triggerCloudSync();
-  } catch (e) {
-    console.error("Error saving experiences to localStorage", e);
-  }
+  inMemoryExperiences = experiences;
+  triggerCloudSync();
 };
 
 export const addExperience = (
@@ -358,64 +354,12 @@ export const getLogsForExperience = (experienceId: string): LogEntry[] => {
 // --- Storage Utilities (Logs) ---
 
 export const getStoredLogs = (): LogEntry[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
-    if (!raw) {
-      return [];
-    }
-    const parsed: LogEntry[] = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-
-    // Filter any dummy logs
-    const nonDummy = parsed.filter(
-      (l) =>
-        !DUMMY_LOG_IDS.has(l.id) &&
-        l.client !== "ClientX" &&
-        !l.title?.includes("Migrated checkout payment flow") &&
-        !l.title?.includes("inventory decrement during flash sales") &&
-        !l.title?.includes("settlement microservices") &&
-        !l.title?.includes("anomaly detection pipeline") &&
-        !l.title?.includes("zero-downtime hot reload") &&
-        !l.title?.includes("monolithic controller") &&
-        !l.title?.includes("local LLMs")
-    );
-
-    // Ensure all logs have experienceId (Migration to Dual Model)
-    const experiences = getStoredExperiences();
-    let migrated = false;
-    const updated = nonDummy.map((log) => {
-      if (!log.experienceId) {
-        migrated = true;
-        // Find matching experience by company/client
-        const matched = experiences.find(
-          (e) =>
-            e.company.toLowerCase().includes(log.client.toLowerCase()) ||
-            log.client.toLowerCase().includes(e.company.toLowerCase())
-        );
-        const targetExpId = matched ? matched.id : (experiences.find((e) => e.isPersonalProjects)?.id || experiences[0]?.id || "exp-personal");
-        return { ...log, experienceId: targetExpId };
-      }
-      return log;
-    });
-
-    if (migrated || nonDummy.length !== parsed.length) {
-      saveLogs(updated);
-    }
-
-    return updated;
-  } catch (e) {
-    console.error("Error reading logs from localStorage", e);
-    return [];
-  }
+  return inMemoryLogs;
 };
 
 export const saveLogs = (logs: LogEntry[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(logs));
-    triggerCloudSync();
-  } catch (e) {
-    console.error("Error saving logs to localStorage", e);
-  }
+  inMemoryLogs = logs;
+  triggerCloudSync();
 };
 
 export const addLog = (
@@ -485,39 +429,11 @@ export const hashPassword = (pwd: string): string => {
 };
 
 export const getStoredCustomAccounts = (): CustomAccount[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CUSTOM_ACCOUNTS);
-    if (!raw) {
-      const seedAccount: CustomAccount = {
-        id: "usr-alex-morgan",
-        name: "Alex Morgan",
-        email: "alex.morgan@ejemplo.com",
-        passwordHash: hashPassword("admin123"),
-        title: "",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-        bio: "",
-        location: "",
-        github: "",
-        linkedin: "",
-        skills: [],
-        createdAt: Date.now(),
-      };
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify([seedAccount]));
-      return [seedAccount];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
-  }
+  return inMemoryCustomAccounts;
 };
 
 export const saveStoredCustomAccounts = (accounts: CustomAccount[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_ACCOUNTS, JSON.stringify(accounts));
-  } catch (e) {
-    console.error("Error saving custom accounts:", e);
-  }
+  inMemoryCustomAccounts = accounts;
 };
 
 export const registerCustomAccount = (params: {
@@ -708,29 +624,15 @@ export const deleteCustomUser = (_userId: string): { updatedList: UserProfile[];
 };
 
 export const getStoredUser = (): UserProfile | null => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.USER);
-    if (!raw) {
-      return null;
-    }
-    const u: UserProfile = JSON.parse(raw);
-    if (u && !u.username && (u.name || u.email)) {
-      u.username = generateDefaultUsername(u.name || "user", u.email);
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(u));
-    }
-    return u;
-  } catch (e) {
-    return null;
+  if (inMemoryUser && !inMemoryUser.username && (inMemoryUser.name || inMemoryUser.email)) {
+    inMemoryUser.username = generateDefaultUsername(inMemoryUser.name || "user", inMemoryUser.email);
   }
+  return inMemoryUser;
 };
 
 export const saveUser = (user: UserProfile | null): void => {
-  if (!user) {
-    localStorage.removeItem(STORAGE_KEYS.USER);
-  } else {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-    triggerCloudSync();
-  }
+  inMemoryUser = user;
+  triggerCloudSync();
 };
 
 export const updateUserAvatar = (newAvatarUrl: string): UserProfile | null => {
@@ -773,24 +675,12 @@ export const updateUserAvatar = (newAvatarUrl: string): UserProfile | null => {
 // --- Inbox Utilities ---
 
 export const getStoredInbox = (): VisitorMessage[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.INBOX);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.INBOX, JSON.stringify(INITIAL_INBOX));
-      return INITIAL_INBOX;
-    }
-    return JSON.parse(raw);
-  } catch (e) {
-    return INITIAL_INBOX;
-  }
+  return inMemoryInbox;
 };
 
 export const saveInbox = (messages: VisitorMessage[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.INBOX, JSON.stringify(messages));
-  } catch (e) {
-    console.error("Error saving inbox messages", e);
-  }
+  inMemoryInbox = messages;
+  triggerCloudSync();
 };
 
 export const addVisitorMessage = (
@@ -872,46 +762,18 @@ export const resetToDemoData = (): void => {
   localStorage.removeItem(STORAGE_KEYS.JOB_OFFERS);
 };
 
-export const getStoredCv = (userId?: string): ExtractedCvData | null => {
-  try {
-    const key = userId ? `${STORAGE_KEYS.CV_DATA}_${userId}` : STORAGE_KEYS.CV_DATA;
-    const item = localStorage.getItem(key);
-    if (!item && userId) {
-      // fallback to global key
-      const fallback = localStorage.getItem(STORAGE_KEYS.CV_DATA);
-      return fallback ? JSON.parse(fallback) : null;
-    }
-    return item ? JSON.parse(item) : null;
-  } catch (e) {
-    console.error("Error reading stored CV:", e);
-    return null;
-  }
+export const getStoredCv = (_userId?: string): ExtractedCvData | null => {
+  return inMemoryCv;
 };
 
-export const saveStoredCv = (cvData: ExtractedCvData, userId?: string): void => {
-  try {
-    const key = userId ? `${STORAGE_KEYS.CV_DATA}_${userId}` : STORAGE_KEYS.CV_DATA;
-    localStorage.setItem(key, JSON.stringify(cvData));
-    localStorage.setItem(STORAGE_KEYS.CV_DATA, JSON.stringify(cvData));
-  } catch (e) {
-    console.error("Error saving stored CV:", e);
-  }
+export const saveStoredCv = (cvData: ExtractedCvData, _userId?: string): void => {
+  inMemoryCv = cvData;
+  triggerCloudSync();
 };
 
 export const clearStoredCv = (): void => {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.CV_DATA);
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && (k.startsWith(STORAGE_KEYS.CV_DATA) || k.startsWith("captains_stored_cv"))) {
-        keysToRemove.push(k);
-      }
-    }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
-  } catch (e) {
-    console.error("Error clearing stored CV:", e);
-  }
+  inMemoryCv = null;
+  triggerCloudSync();
 };
 
 export const clearSessionData = (): void => {
@@ -1127,27 +989,12 @@ Requisitos:
 ];
 
 export const getStoredJobOffers = (): JobOffer[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.JOB_OFFERS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.JOB_OFFERS, JSON.stringify(INITIAL_JOB_OFFERS));
-      return INITIAL_JOB_OFFERS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_JOB_OFFERS;
-  } catch (e) {
-    console.error("Error reading stored job offers:", e);
-    return INITIAL_JOB_OFFERS;
-  }
+  return inMemoryJobOffers;
 };
 
 export const saveJobOffers = (offers: JobOffer[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.JOB_OFFERS, JSON.stringify(offers));
-    triggerCloudSync();
-  } catch (e) {
-    console.error("Error saving job offers:", e);
-  }
+  inMemoryJobOffers = offers;
+  triggerCloudSync();
 };
 
 export const addJobOffer = (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">): JobOffer => {
@@ -1209,27 +1056,12 @@ export const INITIAL_PRODUCTS: Product[] = [
 ];
 
 export const getStoredProducts = (): Product[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-      return INITIAL_PRODUCTS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_PRODUCTS;
-  } catch (e) {
-    console.error("Error reading stored products:", e);
-    return INITIAL_PRODUCTS;
-  }
+  return inMemoryProducts;
 };
 
 export const saveProducts = (products: Product[]): void => {
-  try {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-    triggerCloudSync();
-  } catch (e) {
-    console.error("Error saving products:", e);
-  }
+  inMemoryProducts = products;
+  triggerCloudSync();
 };
 
 export const addProduct = (product: Omit<Product, "id" | "createdAt">): Product => {
@@ -1311,42 +1143,28 @@ export const triggerCloudSync = (immediate = false): void => {
 
   const performSync = async () => {
     try {
-      const user = getStoredUser();
-      const userKey = user?.email?.trim() || (user?.isCustom ? user?.id : "");
-      if (!userKey || userKey === "usr-guest") return;
-
+      const user = inMemoryUser;
       const dataSnapshot = {
-        logs: getStoredLogs(),
-        experiences: getStoredExperiences(),
-        inbox: getStoredInbox(),
-        jobOffers: getStoredJobOffers(),
-        products: getStoredProducts(),
+        logs: inMemoryLogs,
+        experiences: inMemoryExperiences,
+        storedCv: inMemoryCv,
+        inbox: inMemoryInbox,
+        jobOffers: inMemoryJobOffers,
+        products: inMemoryProducts,
         user,
       };
 
       const currentHash = computePayloadHash(dataSnapshot);
-      // Dirty checking: Skip network call if payload didn't change (Preserves 20,000/day Firestore quota)
       if (lastSyncedHash === currentHash) {
         return;
       }
 
-      const payload = {
-        version: "captains_log_v1",
-        exportedAt: new Date().toISOString(),
-        ...dataSnapshot,
-      };
-
-      const res = await fetch("/api/cloud-sync/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userKey, payload }),
-      });
-
-      if (res.ok) {
+      const saved = await saveCloudUserState(dataSnapshot);
+      if (saved) {
         lastSyncedHash = currentHash;
       }
     } catch (err) {
-      console.warn("Background cloud sync notice:", err);
+      console.warn("Server-First Cloud state sync error:", err);
     }
   };
 
