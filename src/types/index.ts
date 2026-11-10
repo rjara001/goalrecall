@@ -39,6 +39,7 @@ export interface WorkExperience {
   bullets?: string[]; // real textual bullets extracted from CV
   technologies?: string[]; // primary tech stack
   isPersonalProjects?: boolean; // true if this is the personal projects container
+  isPublic?: boolean; // Visibility in Public Deck & Showcase
   createdAt: number;
   updatedAt: number;
 }

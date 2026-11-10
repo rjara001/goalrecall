@@ -123,6 +123,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [sharedDeck, setSharedDeck] = useState<{
     userProfile: UserProfile;
+    experiences?: WorkExperience[];
     logs: LogEntry[];
     products: Product[];
   } | null>(null);
@@ -266,6 +267,31 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Auto-sync public showcase whenever username is claimed or updated
+  const syncPublicShowcaseIfHandleSet = (
+    u: UserProfile | null,
+    currentLogs: LogEntry[],
+    currentProducts: Product[],
+    currentExps: WorkExperience[]
+  ) => {
+    if (!u || !u.username) return;
+    const cleanUsername = u.username.trim().toLowerCase();
+    if (!cleanUsername) return;
+
+    fetch("/api/public/claim-username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: cleanUsername,
+        userKey: u.id || u.email || "usr-current",
+        userProfile: u,
+        logs: currentLogs,
+        products: currentProducts,
+        experiences: currentExps,
+      }),
+    }).catch((e) => console.error("Silent claim-username sync error:", e));
+  };
+
   // Helper to load showcase from custom username route /u/:username
   const loadPublicShowcaseByUsername = async (targetUsername: string) => {
     const clean = targetUsername.toLowerCase().trim();
@@ -280,8 +306,11 @@ export default function App() {
     ) {
       const localLogs = getStoredLogs();
       const localProducts = getStoredProducts();
+      const localExps = getStoredExperiences();
+      const publicExpIds = new Set(localLogs.filter((l) => l.isPublic).map((l) => l.experienceId).filter(Boolean));
       setSharedDeck({
         userProfile: localUser,
+        experiences: localExps.filter((e) => e.isPublic !== false || publicExpIds.has(e.id)),
         logs: localLogs.filter((l) => l.isPublic),
         products: localProducts.filter((p) => p.isPublic !== false),
       });
@@ -301,6 +330,7 @@ export default function App() {
         if (data && data.success && data.userProfile) {
           setSharedDeck({
             userProfile: data.userProfile,
+            experiences: data.experiences || [],
             logs: data.logs || [],
             products: data.products || [],
           });
@@ -415,42 +445,50 @@ export default function App() {
 
   // Log Actions
   const handleSaveLog = (entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => {
+    let nextLogs: LogEntry[] = [];
     if (editingLog) {
       const updated: LogEntry = {
         ...editingLog,
         ...entryData,
       };
       updateLog(updated);
-      setLogs(getStoredLogs());
+      nextLogs = getStoredLogs();
+      setLogs(nextLogs);
       setEditingLog(null);
       showToast(t.toasts.logSaved);
     } else {
       const created = addLog(entryData);
-      setLogs(getStoredLogs());
+      nextLogs = getStoredLogs();
+      setLogs(nextLogs);
       if (created.isPublic) {
         showToast(t.toasts.logToggledPublic);
       } else {
         showToast(t.toasts.logToggledPrivate);
       }
     }
+    syncPublicShowcaseIfHandleSet(user, nextLogs, products, experiences);
   };
 
   const handleTogglePublic = (id: string) => {
     const updated = toggleLogPublic(id);
     if (updated) {
-      setLogs(getStoredLogs());
+      const nextLogs = getStoredLogs();
+      setLogs(nextLogs);
       if (updated.isPublic) {
         showToast(t.toasts.logToggledPublic);
       } else {
         showToast(t.toasts.logToggledPrivate);
       }
+      syncPublicShowcaseIfHandleSet(user, nextLogs, products, experiences);
     }
   };
 
   const handleDeleteLog = (id: string) => {
     deleteLog(id);
-    setLogs(getStoredLogs());
+    const nextLogs = getStoredLogs();
+    setLogs(nextLogs);
     showToast(t.toasts.logDeleted, "info");
+    syncPublicShowcaseIfHandleSet(user, nextLogs, products, experiences);
   };
 
   const handleDuplicateLog = (entry: LogEntry) => {
@@ -551,17 +589,23 @@ export default function App() {
       showToast(`${t.toasts.experienceSaved}: ${expData.company}`);
     }
 
-    setExperiences(getStoredExperiences());
-    setLogs(getStoredLogs());
+    const updatedExps = getStoredExperiences();
+    const updatedLogs = getStoredLogs();
+    setExperiences(updatedExps);
+    setLogs(updatedLogs);
     setIsExperienceModalOpen(false);
     setEditingExperience(null);
+    syncPublicShowcaseIfHandleSet(user, updatedLogs, products, updatedExps);
   };
 
   const handleDeleteExperience = (id: string) => {
     deleteExperience(id);
-    setExperiences(getStoredExperiences());
-    setLogs(getStoredLogs()); // Logs re-linked to personal projects
+    const updatedExps = getStoredExperiences();
+    const updatedLogs = getStoredLogs();
+    setExperiences(updatedExps);
+    setLogs(updatedLogs); // Logs re-linked to personal projects
     showToast(t.toasts.experienceDeleted, "info");
+    syncPublicShowcaseIfHandleSet(user, updatedLogs, products, updatedExps);
   };
 
   const handleOpenAddLogToExperience = (experienceId: string) => {
@@ -756,20 +800,7 @@ export default function App() {
   const handleUpdateProfile = (updated: UserProfile) => {
     saveUser(updated);
     setUser(updated);
-    if (updated.username) {
-      // Automatically register the handle on the backend index so /u/:username works right away
-      fetch("/api/public/claim-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: updated.username,
-          userKey: updated.id || updated.email || "usr-current",
-          userProfile: updated,
-          logs,
-          products,
-        }),
-      }).catch((e) => console.error("Silent claim-username sync error:", e));
-    }
+    syncPublicShowcaseIfHandleSet(updated, logs, products, experiences);
     showToast(t.toasts.profileUpdated, "success");
   };
 
@@ -1065,6 +1096,7 @@ export default function App() {
           ) : (
             <PublicDeck
               logs={sharedDeck ? sharedDeck.logs : logs}
+              experiences={sharedDeck ? (sharedDeck.experiences || []) : experiences}
               products={sharedDeck ? sharedDeck.products : products}
               userProfile={sharedDeck ? sharedDeck.userProfile : (user || INITIAL_USER)}
               onSendVisitorMessage={handleSendVisitorMessage}
@@ -1244,6 +1276,7 @@ export default function App() {
           user={user}
           logs={logs}
           products={products}
+          experiences={experiences}
         />
       )}
 

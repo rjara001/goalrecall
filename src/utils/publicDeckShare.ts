@@ -1,4 +1,4 @@
-import { LogEntry, Product, UserProfile } from "../types";
+import { LogEntry, Product, UserProfile, WorkExperience } from "../types";
 
 export interface SharedDeckPayload {
   version: "1.0";
@@ -14,6 +14,19 @@ export interface SharedDeckPayload {
     e?: string; // email (optional for contact)
     soc?: UserProfile["socialLinks"];
   };
+  exp?: Array<{
+    id: string;
+    c: string; // company
+    r: string; // role
+    sd: string; // startDate
+    ed?: string; // endDate
+    cur?: boolean; // isCurrent
+    loc?: string; // location
+    sum?: string; // summary
+    b?: string[]; // bullets
+    tech?: string[]; // technologies
+    pp?: boolean; // isPersonalProjects
+  }>;
   l: Array<{
     id: string;
     c: string; // company / client
@@ -27,6 +40,7 @@ export interface SharedDeckPayload {
     h?: string; // how applied
     desc?: string; // description
     tg?: string[]; // tags
+    expId?: string; // experienceId
   }>;
   p?: Array<{
     id: string;
@@ -116,10 +130,13 @@ async function decompressString(encoded: string): Promise<string> {
 export function buildSharedDeckPayload(
   user: UserProfile,
   logs: LogEntry[],
-  products: Product[] = []
+  products: Product[] = [],
+  experiences: WorkExperience[] = []
 ): SharedDeckPayload {
   const publicLogs = logs.filter((l) => l.isPublic);
   const publicProducts = products.filter((p) => p.isPublic !== false);
+  const publicExpIds = new Set(publicLogs.map((l) => l.experienceId).filter(Boolean));
+  const publicExperiences = experiences.filter((e) => e.isPublic !== false || publicExpIds.has(e.id));
 
   return {
     version: "1.0",
@@ -135,6 +152,19 @@ export function buildSharedDeckPayload(
       e: user.email,
       soc: user.socialLinks,
     },
+    exp: publicExperiences.map((e) => ({
+      id: e.id,
+      c: e.company,
+      r: e.role,
+      sd: e.startDate,
+      ed: e.endDate,
+      cur: e.isCurrent,
+      loc: e.location,
+      sum: e.summary,
+      b: e.bullets,
+      tech: e.technologies,
+      pp: e.isPersonalProjects,
+    })),
     l: publicLogs.map((log) => ({
       id: log.id,
       c: log.client,
@@ -148,6 +178,7 @@ export function buildSharedDeckPayload(
       h: log.howApplied,
       desc: log.description,
       tg: log.tags,
+      expId: log.experienceId,
     })),
     p: publicProducts.map((prod) => ({
       id: prod.id,
@@ -170,9 +201,10 @@ export function buildSharedDeckPayload(
 export async function generatePublicDeckShareUrl(
   user: UserProfile,
   logs: LogEntry[],
-  products: Product[] = []
+  products: Product[] = [],
+  experiences: WorkExperience[] = []
 ): Promise<string> {
-  const payload = buildSharedDeckPayload(user, logs, products);
+  const payload = buildSharedDeckPayload(user, logs, products, experiences);
   const jsonStr = JSON.stringify(payload);
   const encoded = await compressString(jsonStr);
 
@@ -185,6 +217,7 @@ export async function generatePublicDeckShareUrl(
  */
 export async function parseSharedDeckFromUrl(): Promise<{
   userProfile: UserProfile;
+  experiences: WorkExperience[];
   logs: LogEntry[];
   products: Product[];
 } | null> {
@@ -239,6 +272,23 @@ export async function parseSharedDeckFromUrl(): Promise<{
       createdAt: Date.now(),
     };
 
+    const experiences: WorkExperience[] = (parsed.exp || []).map((e) => ({
+      id: e.id,
+      company: e.c,
+      role: e.r,
+      startDate: e.sd,
+      endDate: e.ed,
+      isCurrent: e.cur,
+      location: e.loc,
+      summary: e.sum,
+      bullets: e.b,
+      technologies: e.tech,
+      isPersonalProjects: e.pp,
+      isPublic: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }));
+
     const logs: LogEntry[] = parsed.l.map((item) => ({
       id: item.id,
       client: item.c,
@@ -252,6 +302,7 @@ export async function parseSharedDeckFromUrl(): Promise<{
       howApplied: item.h,
       description: item.desc,
       tags: item.tg || [],
+      experienceId: item.expId,
       isPublic: true, // by definition, all items in shared deck are public
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -274,7 +325,7 @@ export async function parseSharedDeckFromUrl(): Promise<{
       updatedAt: new Date().toISOString(),
     }));
 
-    return { userProfile, logs, products };
+    return { userProfile, experiences, logs, products };
   } catch (err) {
     console.error("Failed to parse shared deck from URL:", err);
     return null;

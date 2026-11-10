@@ -30,7 +30,7 @@ import {
   Palette,
   Share2
 } from "lucide-react";
-import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product } from "../types";
+import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product, WorkExperience } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
 import { ProductCard } from "./ProductCard";
 import { ShareDeckModal } from "./ShareDeckModal";
@@ -38,6 +38,7 @@ import { useI18n } from "../i18n";
 
 interface PublicDeckProps {
   logs: LogEntry[];
+  experiences?: WorkExperience[];
   products?: Product[];
   userProfile: UserProfile;
   onSendVisitorMessage: (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => void;
@@ -53,6 +54,7 @@ interface PublicDeckProps {
 
 export const PublicDeck: React.FC<PublicDeckProps> = ({
   logs,
+  experiences = [],
   products = [],
   userProfile,
   onSendVisitorMessage,
@@ -85,7 +87,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
     return products.filter((p) => p.isPublic !== false);
   }, [products, isOwner, ownerViewMode]);
 
-  const [activeTab, setActiveTab] = useState<"achievements" | "products">("achievements");
+  const publicExperiences = useMemo(() => {
+    if (isOwner && ownerViewMode === "all_owner_audit") {
+      return experiences;
+    }
+    const publicExpIds = new Set(publicLogs.map((l) => l.experienceId).filter(Boolean));
+    return experiences.filter((e) => e.isPublic !== false || publicExpIds.has(e.id));
+  }, [experiences, publicLogs, isOwner, ownerViewMode]);
+
+  const [activeTab, setActiveTab] = useState<"achievements" | "experiences" | "products">("achievements");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [selectedTech, setSelectedTech] = useState<string>("all");
@@ -483,9 +493,25 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 }`}
               >
                 <span className="text-amber-400">★</span>
-                <span>Logros y Experiencia</span>
+                <span>Logros STAR</span>
                 <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-400 border border-slate-700/60">
                   {publicLogs.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("experiences")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === "experiences"
+                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span className="text-blue-400">🏢</span>
+                <span>Experiencia Laboral</span>
+                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-blue-400 border border-slate-700/60">
+                  {publicExperiences.length}
                 </span>
               </button>
 
@@ -507,7 +533,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
             </div>
 
             {/* Right side filter based on active tab */}
-            {activeTab === "achievements" ? (
+            {activeTab === "achievements" && (
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -518,7 +544,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-            ) : (
+            )}
+
+            {activeTab === "experiences" && (
+              <div className="text-[11px] font-mono text-slate-400">
+                {publicExperiences.length} trayectoria{publicExperiences.length === 1 ? "" : "s"} verificada{publicExperiences.length === 1 ? "" : "s"}
+              </div>
+            )}
+
+            {activeTab === "products" && (
               <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                 <select
                   value={selectedTech}
@@ -741,7 +775,135 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
             </>
           )}
 
-          {/* Tab 2: Products & Showcase */}
+          {/* Tab 2: Public Work Experiences (Timeline de Trayectoria) */}
+          {activeTab === "experiences" && (
+            <div className="space-y-6">
+              {publicExperiences.length === 0 ? (
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 space-y-2">
+                  <Building className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-300">
+                    No hay experiencias laborales públicas disponibles
+                  </p>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    Las posiciones y empresas marcadas como públicas o asociadas a logros públicos se exhiben en este timeline con sus viñetas y métricas.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {publicExperiences.map((exp) => {
+                    const linkedLogs = publicLogs.filter((l) => l.experienceId === exp.id);
+                    return (
+                      <div
+                        key={exp.id}
+                        className="p-6 rounded-2xl border border-slate-800 bg-slate-900/70 hover:border-slate-700 transition-all space-y-4"
+                      >
+                        {/* Company & Role Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-bold text-white tracking-tight">
+                                {exp.company}
+                              </h3>
+                              {exp.isCurrent && (
+                                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+                                  Actual
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-semibold text-cyan-300">
+                              {exp.role || "Especialista / Ingeniero"}
+                            </p>
+                          </div>
+
+                          <div className="text-right sm:text-right">
+                            <span className="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 inline-block">
+                              📅 {exp.startDate || "—"} {exp.endDate ? `– ${exp.endDate}` : exp.isCurrent ? "– Actualidad" : ""}
+                            </span>
+                            {exp.location && (
+                              <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 sm:justify-end">
+                                <MapPin className="w-3 h-3" />
+                                <span>{exp.location}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Summary / Context */}
+                        {exp.summary && (
+                          <p className="text-xs text-slate-300 leading-relaxed italic bg-slate-950/40 p-3 rounded-xl border border-slate-800/60">
+                            "{exp.summary}"
+                          </p>
+                        )}
+
+                        {/* Technologies badges */}
+                        {exp.technologies && exp.technologies.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {exp.technologies.map((tech) => (
+                              <span
+                                key={tech}
+                                className="text-[10px] font-mono px-2 py-0.5 bg-slate-800/80 text-cyan-300 border border-slate-700/50 rounded-md"
+                              >
+                                {tech}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Public Achievements under this experience */}
+                        {linkedLogs.length > 0 && (
+                          <div className="space-y-2 pt-2">
+                            <span className="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider block">
+                              Logros Verificados en {exp.company} ({linkedLogs.length})
+                            </span>
+                            <div className="space-y-2">
+                              {linkedLogs.map((log) => (
+                                <div
+                                  key={log.id}
+                                  className="p-3 bg-slate-950/80 border border-emerald-950 rounded-xl space-y-1.5"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <h4 className="text-xs font-semibold text-white leading-snug">
+                                      {log.title}
+                                    </h4>
+                                    <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                      {log.category}
+                                    </span>
+                                  </div>
+                                  {log.impact && (
+                                    <p className="text-xs text-emerald-300 font-mono">
+                                      ⚡ {log.impact}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Original Bullets from CV if present */}
+                        {exp.bullets && exp.bullets.length > 0 && linkedLogs.length === 0 && (
+                          <div className="space-y-1.5 pt-2">
+                            <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                              Responsabilidades & Entregables
+                            </span>
+                            <ul className="space-y-1 text-xs text-slate-300 list-disc list-inside">
+                              {exp.bullets.map((b, bIdx) => (
+                                <li key={bIdx} className="leading-relaxed">
+                                  {b}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 3: Products & Showcase */}
           {activeTab === "products" && (
             <div className="space-y-6">
               {filteredPublicProducts.length === 0 ? (
