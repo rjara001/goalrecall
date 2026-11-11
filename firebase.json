@@ -40,6 +40,10 @@
         "function": "apiPublicShowcase"
       },
       {
+        "source": "/api/public/delete-showcase",
+        "function": "apiPublicShowcase"
+      },
+      {
         "source": "/api/public/u/:username",
         "function": "apiPublicShowcase"
       },

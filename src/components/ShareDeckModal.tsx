@@ -11,10 +11,14 @@ import {
   Lock, 
   Linkedin, 
   MessageSquare,
-  Bot
+  Bot,
+  Trash2,
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 import { LogEntry, Product, UserProfile } from "../types";
 import { generatePublicDeckShareUrl } from "../utils/publicDeckShare";
+import { saveUser, triggerCloudSync } from "../utils/storage";
 
 interface ShareDeckModalProps {
   isOpen: boolean;
@@ -22,6 +26,7 @@ interface ShareDeckModalProps {
   user: UserProfile;
   logs: LogEntry[];
   products: Product[];
+  onShowcaseStatusChange?: (isActive: boolean) => void;
 }
 
 export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
@@ -30,6 +35,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   user,
   logs,
   products,
+  onShowcaseStatusChange,
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
   const [cleanHandleUrl, setCleanHandleUrl] = useState<string>("");
@@ -38,18 +44,27 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [isGenerating, setIsGenerating] = useState(true);
 
+  // Showcase link existence state
+  const [isLinkCreated, setIsLinkCreated] = useState<boolean>(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(true);
+  const [isOperating, setIsOperating] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+
   const publicLogs = logs.filter((l) => l.isPublic);
   const privateLogsCount = logs.filter((l) => !l.isPublic).length;
   const publicProducts = products.filter((p) => p.isPublic !== false);
+
+  const userHandle = user.username || (user.email ? user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "") : "usuario");
 
   useEffect(() => {
     if (!isOpen) return;
 
     let isMounted = true;
     setIsGenerating(true);
+    setIsCheckingStatus(true);
+    setShowDeleteConfirm(false);
 
     const origin = typeof window !== "undefined" ? window.location.origin : "https://goalrecall.com";
-    const userHandle = user.username || (user.email ? user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "") : "usuario");
     setCleanHandleUrl(`${origin}/u/${userHandle}`);
 
     generatePublicDeckShareUrl(user, logs, products)
@@ -67,10 +82,25 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
         }
       });
 
+    // Check if showcase already exists
+    fetch(`/api/public/u/${encodeURIComponent(userHandle)}`)
+      .then((res) => {
+        if (isMounted) {
+          setIsLinkCreated(res.ok);
+          setIsCheckingStatus(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsLinkCreated(false);
+          setIsCheckingStatus(false);
+        }
+      });
+
     return () => {
       isMounted = false;
     };
-  }, [isOpen, user, logs, products]);
+  }, [isOpen, user, logs, products, userHandle]);
 
   if (!isOpen) return null;
 
@@ -108,6 +138,63 @@ ${user.name || "Usuario"}`;
   const handleOpenPreview = () => {
     if (!shareUrl) return;
     window.open(shareUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCreateLink = async () => {
+    setIsOperating(true);
+    try {
+      const updatedUser: UserProfile = {
+        ...user,
+        username: userHandle,
+      };
+      saveUser(updatedUser);
+      triggerCloudSync(true);
+
+      const res = await fetch("/api/public/claim-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: userHandle,
+          userKey: user.id || user.email || "usr-current",
+          userProfile: updatedUser,
+          logs: publicLogs,
+          products: publicProducts,
+        }),
+      });
+
+      if (res.ok) {
+        setIsLinkCreated(true);
+        if (onShowcaseStatusChange) onShowcaseStatusChange(true);
+      }
+    } catch (err) {
+      console.error("Error creating showcase link:", err);
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  const handleDeleteLink = async () => {
+    setIsOperating(true);
+    try {
+      const res = await fetch("/api/public/delete-showcase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: userHandle,
+          userKey: user.id || user.email,
+        }),
+      });
+
+      if (res.ok) {
+        setIsLinkCreated(false);
+        setShowDeleteConfirm(false);
+        if (onShowcaseStatusChange) onShowcaseStatusChange(false);
+      }
+    } catch (err) {
+      console.error("Error deleting showcase link:", err);
+    } finally {
+      setIsOperating(false);
+    }
   };
 
   return (
@@ -150,16 +237,20 @@ ${user.name || "Usuario"}`;
         <div className="p-5 sm:p-6 space-y-6 overflow-y-auto">
           
           {/* 1. Clean Direct URL Box (/u/:username) */}
-          <div className="space-y-2 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-cyan-950/40 border border-emerald-500/30">
-            <label className="text-xs font-bold text-white flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-emerald-300">
+          <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-cyan-950/40 border border-emerald-500/30">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white flex items-center gap-1.5 text-emerald-300">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Enlace Directo de Usuario (Recomendado)</span>
+              </label>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                isLinkCreated
+                  ? "bg-emerald-950 text-emerald-300 border-emerald-800/80"
+                  : "bg-amber-950/80 text-amber-300 border-amber-800/60"
+              }`}>
+                {isCheckingStatus ? "Verificando..." : isLinkCreated ? "Activo & Público" : "No Publicado"}
               </span>
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/60">
-                Limpio & Corto
-              </span>
-            </label>
+            </div>
 
             <div className="flex flex-col sm:flex-row items-stretch gap-2">
               <div className="relative flex-1">
@@ -168,41 +259,119 @@ ${user.name || "Usuario"}`;
                   readOnly
                   value={cleanHandleUrl}
                   onClick={(e) => (e.target as HTMLInputElement).select()}
-                  className="w-full bg-slate-950 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500 selection:bg-emerald-900 selection:text-white truncate font-bold"
+                  className={`w-full bg-slate-950 border rounded-xl px-3.5 py-2.5 text-xs font-mono focus:outline-none selection:bg-emerald-900 selection:text-white truncate font-bold ${
+                    isLinkCreated ? "border-emerald-500/40 text-emerald-300" : "border-slate-800 text-slate-400"
+                  }`}
                 />
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleCopyCleanLink}
-                  className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  {copiedCleanLink ? (
-                    <>
-                      <Check className="w-4 h-4 stroke-[2.5]" />
-                      <span>¡Copiado!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      <span>Copiar Link</span>
-                    </>
-                  )}
-                </button>
+                {isCheckingStatus ? (
+                  <div className="px-4 py-2.5 bg-slate-900 text-slate-400 text-xs rounded-xl flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Cargando</span>
+                  </div>
+                ) : !isLinkCreated ? (
+                  /* Botón Crear Link si no existe */
+                  <button
+                    type="button"
+                    disabled={isOperating}
+                    onClick={handleCreateLink}
+                    className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                  >
+                    {isOperating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Publicando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Crear Link</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  /* Botón Copiar Link + Abrir + Eliminar si existe */
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopyCleanLink}
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      {copiedCleanLink ? (
+                        <>
+                          <Check className="w-4 h-4 stroke-[2.5]" />
+                          <span>¡Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>Copiar Link</span>
+                        </>
+                      )}
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => window.open(cleanHandleUrl, "_blank", "noopener,noreferrer")}
-                  title="Abrir vitrina pública en nueva pestaña"
-                  className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white rounded-xl text-xs transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => window.open(cleanHandleUrl, "_blank", "noopener,noreferrer")}
+                      title="Abrir vitrina pública en nueva pestaña"
+                      className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white rounded-xl text-xs transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isOperating}
+                      onClick={() => setShowDeleteConfirm(true)}
+                      title="Eliminar / despublicar enlace de vitrina"
+                      className="p-2.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 hover:text-rose-100 rounded-xl text-xs transition-colors flex items-center justify-center"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
+
+            {/* Confirmation Box for Deletion */}
+            {showDeleteConfirm && (
+              <div className="p-3.5 bg-rose-950/70 border border-rose-800/80 rounded-xl text-xs space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2 text-rose-300 font-bold">
+                  <AlertTriangle className="w-4 h-4 text-rose-400" />
+                  <span>¿Despublicar vitrina pública?</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  El enlace <strong className="text-white font-mono">{cleanHandleUrl}</strong> dejará de ser accesible para reclutadores. Tus logros en la Bóveda Privada seguirán intactos.
+                </p>
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-[11px] rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isOperating}
+                    onClick={handleDeleteLink}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    {isOperating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    <span>Sí, Eliminar Link</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-400">
-              Quien abra este enlace verá únicamente tus logros y productos públicos en <strong>goalrecall/u/{user.username || "usuario"}</strong>.
+              {isLinkCreated ? (
+                <span>Quien abra este enlace verá únicamente tus logros y productos públicos en <strong>goalrecall/u/{userHandle}</strong>.</span>
+              ) : (
+                <span>Tu enlace aún no está publicado. Haz clic en <strong>Crear Link</strong> para activar tu vitrina pública interactiva.</span>
+              )}
             </p>
           </div>
 

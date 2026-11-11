@@ -665,7 +665,28 @@ export const apiPublicShowcase = onRequest(
     try {
       const db = admin.firestore();
 
-      // Handle claim-username route if called through apiPublicShowcase rewrite
+      // Handle delete-showcase route
+      if (req.path.includes("delete-showcase") && (req.method === "POST" || req.method === "DELETE")) {
+        const { username, userKey } = req.body || {};
+        if (!username) {
+          res.status(400).json({ error: "username es requerido." });
+          return;
+        }
+        const clean = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        const showcaseRef = db.collection("publicShowcases").doc(clean);
+        await showcaseRef.delete();
+
+        // Also update state/main if userKey is provided to mark showcaseInactive or update user
+        if (userKey) {
+          const userDocRef = db.collection("users").doc(userKey).collection("state").doc("main");
+          await userDocRef.set({ isShowcaseActive: false }, { merge: true });
+        }
+
+        res.json({ success: true, message: "Vitrina pública eliminada correctamente." });
+        return;
+      }
+
+      // Handle claim-username / create-showcase route
       if (req.path.includes("claim-username") && req.method === "POST") {
         const { username, userKey, userProfile, logs, products } = req.body || {};
         if (!username || !userKey) {
@@ -711,6 +732,19 @@ export const apiPublicShowcase = onRequest(
           },
           { merge: true }
         );
+
+        // Also ensure users/{userId}/state/main has this user object persisted
+        if (userKey) {
+          const userDocRef = db.collection("users").doc(userKey).collection("state").doc("main");
+          await userDocRef.set(
+            {
+              user: safeUserProfile,
+              isShowcaseActive: true,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
 
         res.json({ success: true, username: clean, userKey });
         return;

@@ -1600,6 +1600,36 @@ function generateUsernameSuggestions(username: string, existingIndex: Record<str
   return candidates.filter((c) => !RESERVED_USERNAMES.has(c) && !existingIndex[c]).slice(0, 3);
 }
 
+// Endpoint to delete/unpublish a showcase
+app.post("/api/public/delete-showcase", async (req, res) => {
+  try {
+    const { username, userKey } = req.body || {};
+    if (!username) {
+      return res.status(400).json({ error: "username is required." });
+    }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    try {
+      const admin = await import("firebase-admin");
+      if (!admin.apps.length) {
+        admin.initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "goalrecall-bb4d0" });
+      }
+      const db = admin.firestore();
+      await db.collection("publicShowcases").doc(cleanUsername).delete();
+    } catch {}
+
+    const index = getUsernameIndex();
+    delete index[cleanUsername];
+    try {
+      fs.writeFileSync(USERNAME_INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+    } catch {}
+
+    return res.json({ success: true, message: "Showcase deleted." });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to delete showcase." });
+  }
+});
+
 // Endpoint to register/claim a username without a full backup
 app.post("/api/public/claim-username", (req, res) => {
   try {
