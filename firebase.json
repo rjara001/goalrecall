@@ -40,8 +40,12 @@
         "function": "apiPublicShowcase"
       },
       {
-        "source": "/u/**",
+        "source": "/api/public/**",
         "function": "apiPublicShowcase"
+      },
+      {
+        "source": "/u/**",
+        "destination": "/index.html"
       },
       {
         "source": "**",

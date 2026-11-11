@@ -1781,15 +1781,29 @@ app.post("/api/cloud-sync/save", (req, res) => {
   }
 });
 
-// Public Showcase Resolver: /api/public/u/:username
+// Public Showcase Resolver: /api/public/u/:username and wildcard fallback
 // Strictly returns ONLY public logs, public products, and public user profile
-app.get("/api/public/u/:username", (req, res) => {
+app.get(["/api/public/u/:username", "/api/public/u/*"], (req, res) => {
   try {
-    const rawUsername = req.params.username?.trim();
+    let rawUsername = (
+      req.params.username ||
+      (req.params as any)[0] ||
+      (req.query.username as string) ||
+      ""
+    ).toString().trim();
+
     if (!rawUsername) {
+      const cleanUrl = (req.url || req.path || "").split("?")[0].replace(/\/+$/, "");
+      const parts = cleanUrl.split("/").filter(Boolean);
+      if (parts.length > 0) {
+        rawUsername = parts[parts.length - 1];
+      }
+    }
+
+    if (!rawUsername || rawUsername === "u") {
       return res.status(400).json({ error: "Username is required." });
     }
-    const cleanUsername = rawUsername.toLowerCase();
+    const cleanUsername = rawUsername.toLowerCase().replace(/^u\//, "").replace(/[^a-z0-9_-]/g, "");
     const index = getUsernameIndex();
     let targetUserKey = index[cleanUsername];
 

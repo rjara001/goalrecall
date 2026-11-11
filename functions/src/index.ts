@@ -562,6 +562,49 @@ export const apiUserData = onRequest(
 
         await userDocRef.set(stateToSave, { merge: true });
 
+        // If payload includes user profile with a username, sync publicShowcases collection
+        const rawUsername = payload.user?.username?.toString().trim();
+        if (rawUsername) {
+          const cleanUsername = rawUsername.toLowerCase().replace(/^u\//, "").replace(/[^a-z0-9_-]/g, "");
+          if (cleanUsername) {
+            try {
+              const rawUser = payload.user || {};
+              const publicLogs = (payload.logs || []).filter((l: any) => l.isPublic === true);
+              const publicProducts = (payload.products || []).filter((p: any) => p.isPublic !== false);
+
+              const safeUserProfile = {
+                id: rawUser.id || userId,
+                username: cleanUsername,
+                name: rawUser.name || "Profesional Técnico",
+                title: rawUser.title || "",
+                bio: rawUser.bio || "",
+                avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                location: rawUser.location || "",
+                github: rawUser.socialLinks?.github || rawUser.github || "",
+                linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin || "",
+                socialLinks: rawUser.socialLinks || {},
+                availabilityStatus: rawUser.availabilityStatus,
+                skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+                email: rawUser.email || "",
+                authProvider: "custom",
+                isDemoUser: false,
+                isCustom: true,
+                createdAt: rawUser.createdAt || Date.now(),
+              };
+
+              await db.collection("publicShowcases").doc(cleanUsername).set({
+                userProfile: safeUserProfile,
+                logs: publicLogs,
+                products: publicProducts,
+                userId,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+            } catch (showcaseErr) {
+              console.warn("Error updating publicShowcases doc:", showcaseErr);
+            }
+          }
+        }
+
         res.json({
           success: true,
           message: "Estado de usuario guardado exitosamente en Firestore.",
@@ -585,20 +628,139 @@ export const apiPublicShowcase = onRequest(
   {
     cors: true,
     invoker: "public",
-maxInstances: 10,
+    maxInstances: 10,
     timeoutSeconds: 60,
     memory: "256MiB",
   },
   // @ts-ignore
-  (req, res) => {
+  async (req, res) => {
     try {
-      const rawUsername = (req.params.username || "").toString().trim();
+      // Robust username extraction from req.params, req.url, req.path, or query params
+      let rawUsername = (
+        (req.params && (req.params.username || (req.params as any)[0])) ||
+        (req.query && (req.query.username as string)) ||
+        ""
+      ).toString().trim();
+
       if (!rawUsername) {
+        const rawUrl = req.url || req.path || req.originalUrl || "";
+        const cleanUrl = rawUrl.split("?")[0].replace(/\/+$/, "");
+        const parts = cleanUrl.split("/").filter(Boolean);
+        if (parts.length > 0) {
+          rawUsername = parts[parts.length - 1];
+        }
+      }
+
+      // If still empty or is generic endpoint keyword
+      if (!rawUsername || rawUsername === "apiPublicShowcase" || rawUsername === "u") {
         return res.status(400).json({ error: "Username is required." });
       }
-      const cleanUsername = rawUsername.toLowerCase();
-      let userKey;
-      // Try username index first
+
+      const cleanUsername = rawUsername.toLowerCase().replace(/^u\//, "").replace(/[^a-z0-9_-]/g, "");
+      if (!cleanUsername) {
+        return res.status(400).json({ error: "Username is required." });
+      }
+
+      const db = admin.firestore();
+
+      // 1. Direct check in publicShowcases/{username} collection (Zero-Cost Firestore read: 1 document read)
+      try {
+        const showcaseDoc = await db.collection("publicShowcases").doc(cleanUsername).get();
+        if (showcaseDoc.exists) {
+          const data = showcaseDoc.data() || {};
+          const rawUser = data.userProfile || {};
+          const publicLogs = (data.logs || []).filter((l: any) => l.isPublic === true);
+          const publicProducts = (data.products || []).filter((p: any) => p.isPublic !== false);
+
+          const safeUserProfile = {
+            id: rawUser.id || `usr-${cleanUsername}`,
+            username: rawUser.username || cleanUsername,
+            name: rawUser.name || "Profesional Técnico",
+            title: rawUser.title || "",
+            bio: rawUser.bio || "",
+            avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+            location: rawUser.location || "",
+            github: rawUser.socialLinks?.github || rawUser.github || "",
+            linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin || "",
+            socialLinks: rawUser.socialLinks || {},
+            availabilityStatus: rawUser.availabilityStatus,
+            skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+            email: rawUser.email || "",
+            authProvider: "custom",
+            isDemoUser: false,
+            isCustom: true,
+            createdAt: rawUser.createdAt || Date.now(),
+          };
+
+          return res.json({
+            success: true,
+            userProfile: safeUserProfile,
+            logs: publicLogs,
+            products: publicProducts,
+          });
+        }
+      } catch (firestoreErr) {
+        console.warn("Firestore publicShowcases lookup warn:", firestoreErr);
+      }
+
+      // 2. Query Firestore collectionGroup for user state where user.username matches
+      try {
+        const matchingQuery = await db.collectionGroup("state")
+          .where("user.username", "==", cleanUsername)
+          .limit(1)
+          .get();
+
+        if (!matchingQuery.empty) {
+          const docData = matchingQuery.docs[0].data();
+          const rawUser = docData.user || {};
+          const publicLogs = (docData.logs || []).filter((l: any) => l.isPublic === true);
+          const publicProducts = (docData.products || []).filter((p: any) => p.isPublic !== false);
+
+          const safeUserProfile = {
+            id: rawUser.id || `usr-${cleanUsername}`,
+            username: rawUser.username || cleanUsername,
+            name: rawUser.name || "Profesional Técnico",
+            title: rawUser.title || "",
+            bio: rawUser.bio || "",
+            avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+            location: rawUser.location || "",
+            github: rawUser.socialLinks?.github || rawUser.github || "",
+            linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin || "",
+            socialLinks: rawUser.socialLinks || {},
+            availabilityStatus: rawUser.availabilityStatus,
+            skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+            email: rawUser.email || "",
+            authProvider: "custom",
+            isDemoUser: false,
+            isCustom: true,
+            createdAt: rawUser.createdAt || Date.now(),
+          };
+
+          // Also populate publicShowcases cache document for fast future access
+          try {
+            await db.collection("publicShowcases").doc(cleanUsername).set({
+              userProfile: safeUserProfile,
+              logs: publicLogs,
+              products: publicProducts,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          } catch {
+            // non-fatal
+          }
+
+          return res.json({
+            success: true,
+            userProfile: safeUserProfile,
+            logs: publicLogs,
+            products: publicProducts,
+          });
+        }
+      } catch (queryErr) {
+        console.warn("Firestore state query warn:", queryErr);
+      }
+
+      // 3. Fallback: local sync files (development & backwards compatibility)
+      let userKey: string | undefined;
       try {
         const indexPath = path.resolve("./username_index.json");
         if (fs.existsSync(indexPath)) {
@@ -608,75 +770,77 @@ maxInstances: 10,
       } catch {
         // ignore
       }
-      // If not in index, scan cloud_sync files
+
       if (!userKey) {
         try {
           const syncDir = path.resolve("./.firebase/functions/");
-          const files = fs.readdirSync(syncDir).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
-          for (const file of files) {
-            try {
-              const content = JSON.parse(fs.readFileSync(path.resolve(syncDir, file), "utf-8"));
-              const user = content?.payload?.user;
-              const uUsername = (user?.username || "").toLowerCase();
-              const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
-              const uId = (user?.id || "").toLowerCase();
-              if (uUsername === cleanUsername ||
-                  uEmailPrefix === cleanUsername ||
-                  uId === cleanUsername ||
-                  content?.userKey?.toLowerCase() === cleanUsername) {
-                userKey = content?.userKey;
-                // Update username index
-                try {
-                  const indexPath = path.resolve("./username_index.json");
-                  let index: Record<string, string> = {};
-                  if (fs.existsSync(indexPath)) {
-                    index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-                  }
-                  if (user?.username) {
-                    index[user.username.toLowerCase()] = content?.userKey || "";
-                    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
-                  }
-                } catch {
-                  // ignore
+          if (fs.existsSync(syncDir)) {
+            const files = fs.readdirSync(syncDir).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+            for (const file of files) {
+              try {
+                const content = JSON.parse(fs.readFileSync(path.resolve(syncDir, file), "utf-8"));
+                const user = content?.payload?.user;
+                const uUsername = (user?.username || "").toLowerCase();
+                const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
+                const uId = (user?.id || "").toLowerCase();
+                if (uUsername === cleanUsername ||
+                    uEmailPrefix === cleanUsername ||
+                    uId === cleanUsername ||
+                    content?.userKey?.toLowerCase() === cleanUsername) {
+                  userKey = content?.userKey;
+                  break;
                 }
-                break;
+              } catch {
+                // ignore
               }
-            } catch {
-              // ignore parsing error for single corrupt file
             }
           }
         } catch {
           // ignore
         }
       }
-      if (!userKey) {
-        return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
+
+      if (userKey) {
+        const CLOUD_SYNC_DIR = path.resolve("./.firebase/functions");
+        const syncFilePath = path.resolve(CLOUD_SYNC_DIR, `user_${userKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}.json`);
+        if (fs.existsSync(syncFilePath)) {
+          const fileContent = fs.readFileSync(syncFilePath, "utf-8");
+          const parsed = JSON.parse(fileContent);
+
+          const publicLogs = (parsed.payload?.logs || []).filter((l: any) => l.isPublic === true);
+          const publicProducts = (parsed.payload?.products || []).filter((p: any) => p.isPublic !== false);
+          const rawUser = parsed.payload?.user || {};
+
+          const safeUserProfile = {
+            id: rawUser.id || `usr-${cleanUsername}`,
+            username: rawUser.username || cleanUsername,
+            name: rawUser.name || "Profesional Técnico",
+            title: rawUser.title || "",
+            bio: rawUser.bio || "",
+            avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+            location: rawUser.location || "",
+            github: rawUser.socialLinks?.github || rawUser.github || "",
+            linkedin: rawUser.socialLinks?.linkedin || rawUser.linkedin || "",
+            socialLinks: rawUser.socialLinks || {},
+            availabilityStatus: rawUser.availabilityStatus,
+            skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+            email: rawUser.email || "",
+            authProvider: "custom",
+            isDemoUser: false,
+            isCustom: true,
+            createdAt: rawUser.createdAt || Date.now(),
+          };
+
+          return res.json({
+            success: true,
+            userProfile: safeUserProfile,
+            logs: publicLogs,
+            products: publicProducts,
+          });
+        }
       }
-      // Load the user's cloud sync file
-      const CLOUD_SYNC_DIR = path.resolve("./.firebase/functions");
-      const syncFilePath = path.resolve(CLOUD_SYNC_DIR, `user_${userKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}.json`);
 
-      if (!fs.existsSync(syncFilePath)) {
-        return res.status(404).json({ error: "Vitrina pública no encontrada." });
-      }
-
-      const fileContent = fs.readFileSync(syncFilePath, "utf-8");
-      const parsed = JSON.parse(fileContent);
-
-      // Filter to only public logs and products
-      const publicLogs = (parsed.payload?.logs || []).filter((l: any) => l.isPublic);
-      const publicProducts = (parsed.payload?.products || []).filter((p: any) => p.isPublic !== false);
-
-      // Build the response
-      const userNameDisplay = cleanUsername.replace(/^u\//, "") || "Profesional Técnico";
-      const userProfile = parsed.payload?.user || { username: cleanUsername, name: userNameDisplay };
-
-      return res.json({
-        success: true,
-        userProfile,
-        logs: publicLogs,
-        products: publicProducts,
-      });
+      return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
     } catch (err: any) {
       console.error("Error en apiPublicShowcase:", err);
       res.status(500).json({ error: "Error interno del servidor." });
