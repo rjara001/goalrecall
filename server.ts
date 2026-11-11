@@ -1651,6 +1651,48 @@ app.post("/api/public/claim-username", (req, res) => {
   }
 });
 
+// Endpoint to delete a public showcase
+app.post("/api/public/delete-showcase", (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) {
+      return res.status(400).json({ error: "Username is required." });
+    }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    // 1. Remove from username index
+    const index = getUsernameIndex();
+    delete index[cleanUsername];
+    setUsernameIndex(cleanUsername, Object.keys(index).find(k => k.toLowerCase() === cleanUsername) || "");
+
+    // 2. Remove sync file if exists
+    // The sync file is at .firebase/functions/user_{userKey}.json
+    // We need to find and delete it
+    const syncDir = path.resolve("./.firebase/functions/");
+    if (fs.existsSync(syncDir)) {
+      const files = fs.readdirSync(syncDir).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+      for (const file of files) {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.resolve(syncDir, file), "utf-8"));
+          const user = content?.payload?.user;
+          const uUsername = (user?.username || "").toLowerCase();
+          if (uUsername === cleanUsername) {
+            fs.unlinkSync(path.resolve(syncDir, file));
+            break;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    return res.json({ success: true, message: "Vitrina pública eliminada exitosamente." });
+  } catch (err: any) {
+    console.error("Error deleting showcase:", err);
+    return res.status(500).json({ error: "Error al eliminar la vitrina pública." });
+  }
+});
+
 // Endpoint to check if username is available
 app.get("/api/public/check-username/:username", (req, res) => {
   try {
