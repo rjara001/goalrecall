@@ -49,7 +49,7 @@
       },
       {
         "source": "/u/**",
-        "function": "apiPublicShowcase"
+        "destination": "/index.html"
       },
       {
         "source": "**",
