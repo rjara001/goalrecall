@@ -1198,9 +1198,11 @@ export const restoreFromCloudIfEmpty = async (userKey: string): Promise<boolean>
       }
       if (payload.user) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(payload.user));
+        initializeStateFromCloud(payload);
       }
       if (Array.isArray(payload.experiences) && payload.experiences.length > 0) {
         localStorage.setItem(STORAGE_KEYS.EXPERIENCES, JSON.stringify(payload.experiences));
+        initializeStateFromCloud(payload);
       }
       if (Array.isArray(payload.inbox)) {
         localStorage.setItem(STORAGE_KEYS.INBOX, JSON.stringify(payload.inbox));

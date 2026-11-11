@@ -5,9 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    define: {
-      APP_VERSION: JSON.stringify('0.3.2'),
-      __APP_VERSION__: JSON.stringify('0.3.2'),
+define: {
+      APP_VERSION: JSON.stringify('0.5.0'),
+      __APP_VERSION__: JSON.stringify('0.5.0'),
     },
     plugins: [react(), tailwindcss()],
     resolve: {

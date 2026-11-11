@@ -80,7 +80,7 @@ export default function App() {
       if (p === "/docs" || h === "#docs" || p.startsWith("/docs")) return "docs";
       if (p === "/features" || h === "#features") return "features";
       if (p === "/offers" || h === "#offers") return "offers";
-      if (p === "/public" || h === "#public") return "public";
+      if (p === "/public" || h === "#public" || h.includes("#deck=")) return "public";
       if (p === "/quarters" || h === "#quarters") return "quarters";
 
       // If root path "/" or empty and an active user exists, redirect directly to quarters
@@ -356,7 +356,8 @@ export default function App() {
       }
 
       // 2. Detect #deck=... or ?deck=...
-      if (h.includes("deck=") || window.location.search.includes("deck=")) {
+      const deckMatch = h.includes("deck=") || window.location.search.includes("deck=");
+      if (deckMatch) {
         parseSharedDeckFromUrl().then((deck) => {
           if (deck) {
             setSharedDeck(deck);

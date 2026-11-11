@@ -36,6 +36,14 @@
         "function": "apiUserData"
       },
       {
+        "source": "/api/public/u/:username",
+        "function": "apiPublicShowcase"
+      },
+      {
+        "source": "/u/**",
+        "function": "apiPublicShowcase"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

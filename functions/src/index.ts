@@ -1,3 +1,5 @@
+import * as path from "path";
+import * as fs from "fs";
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -575,6 +577,109 @@ export const apiUserData = onRequest(
         error: "Error interno al acceder a la base de datos Firestore.",
         details: dbErr?.message,
       });
+    }
+  }
+);
+
+export const apiPublicShowcase = onRequest(
+  {
+    cors: true,
+    invoker: "public",
+maxInstances: 10,
+    timeoutSeconds: 60,
+    memory: "256MiB",
+  },
+  // @ts-ignore
+  (req, res) => {
+    try {
+      const rawUsername = (req.params.username || "").toString().trim();
+      if (!rawUsername) {
+        return res.status(400).json({ error: "Username is required." });
+      }
+      const cleanUsername = rawUsername.toLowerCase();
+      let userKey;
+      // Try username index first
+      try {
+        const indexPath = path.resolve("./username_index.json");
+        if (fs.existsSync(indexPath)) {
+          const index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+          userKey = index[cleanUsername];
+        }
+      } catch {
+        // ignore
+      }
+      // If not in index, scan cloud_sync files
+      if (!userKey) {
+        try {
+          const syncDir = path.resolve("./.firebase/functions/");
+          const files = fs.readdirSync(syncDir).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+          for (const file of files) {
+            try {
+              const content = JSON.parse(fs.readFileSync(path.resolve(syncDir, file), "utf-8"));
+              const user = content?.payload?.user;
+              const uUsername = (user?.username || "").toLowerCase();
+              const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
+              const uId = (user?.id || "").toLowerCase();
+              if (uUsername === cleanUsername ||
+                  uEmailPrefix === cleanUsername ||
+                  uId === cleanUsername ||
+                  content?.userKey?.toLowerCase() === cleanUsername) {
+                userKey = content?.userKey;
+                // Update username index
+                try {
+                  const indexPath = path.resolve("./username_index.json");
+                  let index: Record<string, string> = {};
+                  if (fs.existsSync(indexPath)) {
+                    index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+                  }
+                  if (user?.username) {
+                    index[user.username.toLowerCase()] = content?.userKey || "";
+                    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+                  }
+                } catch {
+                  // ignore
+                }
+                break;
+              }
+            } catch {
+              // ignore parsing error for single corrupt file
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+      if (!userKey) {
+        return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
+      }
+      // Load the user's cloud sync file
+      const CLOUD_SYNC_DIR = path.resolve("./.firebase/functions");
+      const syncFilePath = path.resolve(CLOUD_SYNC_DIR, `user_${userKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}.json`);
+
+      if (!fs.existsSync(syncFilePath)) {
+        return res.status(404).json({ error: "Vitrina pública no encontrada." });
+      }
+
+      const fileContent = fs.readFileSync(syncFilePath, "utf-8");
+      const parsed = JSON.parse(fileContent);
+
+      // Filter to only public logs and products
+      const publicLogs = (parsed.payload?.logs || []).filter((l: any) => l.isPublic);
+      const publicProducts = (parsed.payload?.products || []).filter((p: any) => p.isPublic !== false);
+
+      // Build the response
+      const userNameDisplay = cleanUsername.replace(/^u\//, "") || "Profesional Técnico";
+      const userProfile = parsed.payload?.user || { username: cleanUsername, name: userNameDisplay };
+
+      return res.json({
+        success: true,
+        userProfile,
+        logs: publicLogs,
+        products: publicProducts,
+      });
+    } catch (err: any) {
+      console.error("Error en apiPublicShowcase:", err);
+      res.status(500).json({ error: "Error interno del servidor." });
     }
   }
 );
