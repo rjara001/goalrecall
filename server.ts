@@ -1631,7 +1631,7 @@ app.post("/api/public/delete-showcase", async (req, res) => {
 });
 
 // Endpoint to register/claim a username without a full backup
-app.post("/api/public/claim-username", (req, res) => {
+app.post("/api/public/claim-username", async (req, res) => {
   try {
     const { username, userKey, userProfile, logs, products } = req.body;
     if (!username || !userKey) {
@@ -1642,35 +1642,71 @@ app.post("/api/public/claim-username", (req, res) => {
       return res.status(400).json({ error: "Palabra reservada del sistema." });
     }
 
-    const index = getUsernameIndex();
-    const existingOwner = index[cleanUsername];
-    if (existingOwner && existingOwner.toLowerCase() !== userKey.trim().toLowerCase()) {
-      return res.status(409).json({ error: "Username already taken." });
+    const allLogs = Array.isArray(logs) ? logs : [];
+    const allProducts = Array.isArray(products) ? products : [];
+    const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+    const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+    const rawUser = userProfile || {};
+    const safeUserProfile = {
+      id: rawUser.id || userKey,
+      username: cleanUsername,
+      name: rawUser.name || "Profesional Técnico",
+      title: rawUser.title || "",
+      bio: rawUser.bio || "",
+      avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      location: rawUser.location || "",
+      github: rawUser.github || rawUser.socialLinks?.github || "",
+      linkedin: rawUser.linkedin || rawUser.socialLinks?.linkedin || "",
+      socialLinks: rawUser.socialLinks || {},
+      availabilityStatus: rawUser.availabilityStatus,
+      skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+      email: rawUser.email || "",
+      authProvider: rawUser.authProvider || "custom",
+      createdAt: rawUser.createdAt || Date.now(),
+    };
+
+    // 1. Sync directly to Firestore if available
+    try {
+      const admin = await import("firebase-admin");
+      if (!admin.apps.length) {
+        admin.initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "goalrecall-bb4d0" });
+      }
+      const db = admin.firestore();
+      await db.collection("publicShowcases").doc(cleanUsername).set({
+        userId: userKey,
+        username: cleanUsername,
+        userProfile: safeUserProfile,
+        logs: publicLogs,
+        products: publicProducts,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Persist in users/{userId}/state/main
+      await db.collection("users").doc(userKey).collection("state").doc("main").set({
+        user: safeUserProfile,
+        isShowcaseActive: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (dbErr) {
+      console.warn("Server.ts Firestore claim sync warn:", dbErr);
     }
 
-    // Update index
+    const index = getUsernameIndex();
     setUsernameIndex(cleanUsername, userKey);
 
-    // Also update sync file if userProfile or payload is provided
+    // Also update sync file for local persistence
     const filePath = getSyncFilePath(userKey);
     let record: any = { userKey, updatedAt: Date.now(), payload: {} };
     if (fs.existsSync(filePath)) {
       try {
         record = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      } catch {
-        // start fresh record
-      }
+      } catch {}
     }
     if (!record.payload) record.payload = {};
-    if (userProfile) {
-      record.payload.user = { ...(record.payload.user || {}), ...userProfile, username: cleanUsername };
-    }
-    if (Array.isArray(logs)) {
-      record.payload.logs = logs;
-    }
-    if (Array.isArray(products)) {
-      record.payload.products = products;
-    }
+    record.payload.user = safeUserProfile;
+    record.payload.logs = logs;
+    record.payload.products = products;
     record.updatedAt = Date.now();
     fs.writeFileSync(filePath, JSON.stringify(record, null, 2), "utf-8");
 
