@@ -37,7 +37,9 @@ let inMemoryProducts: Product[] = [];
 let inMemoryCustomAccounts: CustomAccount[] = [];
 
 export const initializeStateFromCloud = (cloudData: Partial<UserCloudState>): void => {
-  if (cloudData.user !== undefined) inMemoryUser = cloudData.user;
+  if (cloudData.user) {
+    inMemoryUser = inMemoryUser ? { ...inMemoryUser, ...cloudData.user } : cloudData.user;
+  }
   if (cloudData.storedCv !== undefined) inMemoryCv = cloudData.storedCv;
   if (Array.isArray(cloudData.experiences)) inMemoryExperiences = cloudData.experiences;
   if (Array.isArray(cloudData.logs)) inMemoryLogs = cloudData.logs;
@@ -1143,7 +1145,38 @@ export const triggerCloudSync = (immediate = false): void => {
 
   const performSync = async () => {
     try {
-      const user = inMemoryUser;
+      // Ensure user is never null or lacking a username if a session exists
+      let user = inMemoryUser || getStoredUser();
+      if (!user) {
+        // Fallback to active stored custom account or default user profile with clean handle
+        const accounts = getStoredCustomAccounts();
+        if (accounts.length > 0) {
+          const acc = accounts[0];
+          user = {
+            id: acc.id,
+            username: acc.username || "usuario",
+            name: acc.name,
+            email: acc.email,
+            avatar: acc.avatar,
+            title: acc.title,
+            bio: acc.bio || "",
+            location: acc.location || "Remoto",
+            github: acc.github,
+            linkedin: acc.linkedin,
+            skills: acc.skills || [],
+            authProvider: "custom",
+            isCustom: true,
+            createdAt: acc.createdAt,
+          };
+          inMemoryUser = user;
+        }
+      }
+
+      if (user && !user.username) {
+        user.username = user.name ? sanitizeUsername(user.name) : "usuario";
+        if (user.username.length < 3) user.username = "usuario";
+      }
+
       const dataSnapshot = {
         logs: inMemoryLogs,
         experiences: inMemoryExperiences,
@@ -1151,7 +1184,7 @@ export const triggerCloudSync = (immediate = false): void => {
         inbox: inMemoryInbox,
         jobOffers: inMemoryJobOffers,
         products: inMemoryProducts,
-        user,
+        user: user || inMemoryUser,
       };
 
       const currentHash = computePayloadHash(dataSnapshot);

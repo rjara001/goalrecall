@@ -228,14 +228,19 @@ export default function App() {
         .then((result) => {
           if (result && result.user) {
             const fbUser = result.user;
-            const userHandle = fbUser.email
-              ? fbUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "")
-              : "";
+            const userHandle = (
+              fbUser.email?.split("@")[0] ||
+              fbUser.displayName ||
+              fbUser.uid.substring(0, 8)
+            )
+              .toLowerCase()
+              .replace(/[^a-z0-9_-]/g, "");
+
             const googleUserProfile: UserProfile = {
               ...INITIAL_USER,
               id: "google-" + fbUser.uid,
-              username: userHandle || undefined,
-              name: fbUser.displayName || fbUser.email?.split("@")[0] || "Google User",
+              username: userHandle.length >= 3 ? userHandle : `user_${fbUser.uid.substring(0, 6)}`,
+              name: fbUser.displayName || fbUser.email?.split("@")[0] || "Usuario",
               email: fbUser.email || "",
               avatar: fbUser.photoURL || INITIAL_USER.avatar,
               title: "",
@@ -705,9 +710,16 @@ export default function App() {
         if (cloudData.jobOffers) setJobOffers(cloudData.jobOffers);
         if (cloudData.products) setProducts(cloudData.products);
         if (cloudData.user) {
-          const merged = { ...newUser, ...cloudData.user };
+          const merged = {
+            ...newUser,
+            ...cloudData.user,
+            username: cloudData.user.username || newUser.username,
+          };
           setUser(merged);
           saveUser(merged);
+        } else {
+          // If cloudData didn't have user, ensure newUser is saved to cloud with handle
+          saveUser(newUser);
         }
         showToast(t.toasts.dataRestored, "success");
       } else if (newUser.email) {

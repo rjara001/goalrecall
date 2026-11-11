@@ -36,6 +36,10 @@
         "function": "apiUserData"
       },
       {
+        "source": "/api/public/claim-username",
+        "function": "apiPublicShowcase"
+      },
+      {
         "source": "/api/public/u/:username",
         "function": "apiPublicShowcase"
       },
