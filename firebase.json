@@ -40,7 +40,7 @@
         "function": "apiPublicShowcase"
       },
       {
-        "source": "/api/public/**",
+        "source": "/u/:username",
         "function": "apiPublicShowcase"
       },
       {
