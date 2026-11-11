@@ -1600,6 +1600,36 @@ function generateUsernameSuggestions(username: string, existingIndex: Record<str
   return candidates.filter((c) => !RESERVED_USERNAMES.has(c) && !existingIndex[c]).slice(0, 3);
 }
 
+// Endpoint to delete/unpublish a showcase
+app.post("/api/public/delete-showcase", async (req, res) => {
+  try {
+    const { username, userKey } = req.body || {};
+    if (!username) {
+      return res.status(400).json({ error: "username is required." });
+    }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    try {
+      const admin = await import("firebase-admin");
+      if (!admin.apps.length) {
+        admin.initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "goalrecall-bb4d0" });
+      }
+      const db = admin.firestore();
+      await db.collection("publicShowcases").doc(cleanUsername).delete();
+    } catch {}
+
+    const index = getUsernameIndex();
+    delete index[cleanUsername];
+    try {
+      fs.writeFileSync(USERNAME_INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+    } catch {}
+
+    return res.json({ success: true, message: "Showcase deleted." });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to delete showcase." });
+  }
+});
+
 // Endpoint to register/claim a username without a full backup
 app.post("/api/public/claim-username", (req, res) => {
   try {
@@ -1783,41 +1813,65 @@ app.post("/api/cloud-sync/save", (req, res) => {
 
 // Public Showcase Resolver: /api/public/u/:username
 // Strictly returns ONLY public logs, public products, and public user profile
-app.get("/api/public/u/:username", (req, res) => {
+app.get("/api/public/u/:username", async (req, res) => {
   try {
     const rawUsername = req.params.username?.trim();
     if (!rawUsername) {
       return res.status(400).json({ error: "Username is required." });
     }
-    const cleanUsername = rawUsername.toLowerCase();
+    const cleanUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+
+    // 1. Check if Firestore emulator/credentials are present to query publicShowcases directly
+    try {
+      const admin = await import("firebase-admin");
+      if (!admin.apps.length) {
+        admin.initializeApp({ projectId: process.env.VITE_FIREBASE_PROJECT_ID || "goalrecall-bb4d0" });
+      }
+      const db = admin.firestore();
+      const showcaseSnap = await db.collection("publicShowcases").doc(cleanUsername).get();
+      if (showcaseSnap.exists) {
+        const data = showcaseSnap.data() || {};
+        return res.json({
+          success: true,
+          userProfile: data.userProfile || { username: cleanUsername, name: cleanUsername },
+          logs: Array.isArray(data.logs) ? data.logs : [],
+          products: Array.isArray(data.products) ? data.products : [],
+        });
+      }
+    } catch {
+      // If Firestore not connected locally, fallback gracefully to local synced files
+    }
+
     const index = getUsernameIndex();
     let targetUserKey = index[cleanUsername];
 
     // If not in index, scan available cloud_sync files to match username or email prefix
     if (!targetUserKey) {
-      const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
-      for (const file of files) {
-        try {
-          const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
-          const user = content?.payload?.user;
-          const uUsername = (user?.username || "").toLowerCase();
-          const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
-          const uId = (user?.id || "").toLowerCase();
+      if (fs.existsSync(CLOUD_SYNC_DIR)) {
+        const files = fs.readdirSync(CLOUD_SYNC_DIR).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
+        for (const file of files) {
+          try {
+            const content = JSON.parse(fs.readFileSync(path.resolve(CLOUD_SYNC_DIR, file), "utf-8"));
+            const user = content?.payload?.user;
+            const uUsername = (user?.username || "").toLowerCase();
+            const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
+            const uId = (user?.id || "").toLowerCase();
 
-          if (
-            uUsername === cleanUsername ||
-            uEmailPrefix === cleanUsername ||
-            uId === cleanUsername ||
-            content.userKey.toLowerCase() === cleanUsername
-          ) {
-            targetUserKey = content.userKey;
-            if (user?.username) {
-              setUsernameIndex(user.username, content.userKey);
+            if (
+              uUsername === cleanUsername ||
+              uEmailPrefix === cleanUsername ||
+              uId === cleanUsername ||
+              content.userKey.toLowerCase() === cleanUsername
+            ) {
+              targetUserKey = content.userKey;
+              if (user?.username) {
+                setUsernameIndex(user.username, content.userKey);
+              }
+              break;
             }
-            break;
+          } catch {
+            // ignore parsing error for single corrupt file
           }
-        } catch {
-          // ignore parsing error for single corrupt file
         }
       }
     }

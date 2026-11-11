@@ -1,5 +1,3 @@
-import * as path from "path";
-import * as fs from "fs";
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -555,16 +553,90 @@ export const apiUserData = onRequest(
 
       if (req.method === "POST") {
         const payload = req.body || {};
+
+        // Fetch existing snapshot to prevent overwriting user if missing in payload
+        const existingSnap = await userDocRef.get();
+        const existingData = existingSnap.exists ? existingSnap.data() || {} : {};
+
+        let userToSave = payload.user || existingData.user || null;
+
+        // If user is null or missing, initialize clean base user from auth token
+        if (!userToSave) {
+          userToSave = {
+            id: userId,
+            username: `user_${userId.substring(0, 6)}`,
+            name: decodedToken.name || "Usuario",
+            email: decodedToken.email || "",
+            createdAt: Date.now(),
+          };
+        } else if (!userToSave.username || typeof userToSave.username !== "string" || userToSave.username.trim().length === 0) {
+          // If username is missing, fallback to existing username or handle based on userId
+          const existingUsername = existingData.user?.username;
+          userToSave.username = existingUsername || `user_${userId.substring(0, 6)}`;
+        }
+
+        // Clean handle
+        const cleanUsername = (userToSave.username || "").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        userToSave.username = cleanUsername;
+
         const stateToSave = {
           ...payload,
+          user: userToSave,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
 
+        // Write to state/main
         await userDocRef.set(stateToSave, { merge: true });
+
+        // Atomic/immediate sync to publicShowcases collection in Firestore
+        if (cleanUsername) {
+          const publicShowcaseRef = db.collection("publicShowcases").doc(cleanUsername);
+
+          const allLogs = Array.isArray(payload.logs)
+            ? payload.logs
+            : (Array.isArray(existingData.logs) ? existingData.logs : []);
+          const allProducts = Array.isArray(payload.products)
+            ? payload.products
+            : (Array.isArray(existingData.products) ? existingData.products : []);
+
+          const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+          const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+          const safeUserProfile = {
+            id: userToSave.id || userId,
+            username: cleanUsername,
+            name: userToSave.name || "Profesional Técnico",
+            title: userToSave.title || "",
+            bio: userToSave.bio || "",
+            avatar: userToSave.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+            location: userToSave.location || "",
+            github: userToSave.github || userToSave.socialLinks?.github || "",
+            linkedin: userToSave.linkedin || userToSave.socialLinks?.linkedin || "",
+            socialLinks: userToSave.socialLinks || {},
+            availabilityStatus: userToSave.availabilityStatus,
+            skills: Array.isArray(userToSave.skills) ? userToSave.skills : [],
+            email: userToSave.email || "",
+            authProvider: userToSave.authProvider || "custom",
+            createdAt: userToSave.createdAt || Date.now(),
+          };
+
+          await publicShowcaseRef.set(
+            {
+              userId: userId,
+              username: cleanUsername,
+              userProfile: safeUserProfile,
+              logs: publicLogs,
+              products: publicProducts,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
 
         res.json({
           success: true,
-          message: "Estado de usuario guardado exitosamente en Firestore.",
+          message: "Estado de usuario y vitrina pública guardados exitosamente en Firestore.",
+          username: cleanUsername,
           updatedAt: new Date().toISOString(),
         });
         return;
@@ -585,101 +657,184 @@ export const apiPublicShowcase = onRequest(
   {
     cors: true,
     invoker: "public",
-maxInstances: 10,
-    timeoutSeconds: 60,
+    maxInstances: 10,
+    timeoutSeconds: 30,
     memory: "256MiB",
   },
-  // @ts-ignore
-  (req, res) => {
+  async (req, res) => {
     try {
-      const rawUsername = (req.params.username || "").toString().trim();
+      const db = admin.firestore();
+
+      // Handle delete-showcase route
+      if (req.path.includes("delete-showcase") && (req.method === "POST" || req.method === "DELETE")) {
+        const { username, userKey } = req.body || {};
+        if (!username) {
+          res.status(400).json({ error: "username es requerido." });
+          return;
+        }
+        const clean = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        const showcaseRef = db.collection("publicShowcases").doc(clean);
+        await showcaseRef.delete();
+
+        // Also update state/main if userKey is provided to mark showcaseInactive or update user
+        if (userKey) {
+          const userDocRef = db.collection("users").doc(userKey).collection("state").doc("main");
+          await userDocRef.set({ isShowcaseActive: false }, { merge: true });
+        }
+
+        res.json({ success: true, message: "Vitrina pública eliminada correctamente." });
+        return;
+      }
+
+      // Handle claim-username / create-showcase route
+      if (req.path.includes("claim-username") && req.method === "POST") {
+        const { username, userKey, userProfile, logs, products } = req.body || {};
+        if (!username || !userKey) {
+          res.status(400).json({ error: "username y userKey son requeridos." });
+          return;
+        }
+
+        const clean = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        const publicShowcaseRef = db.collection("publicShowcases").doc(clean);
+
+        const allLogs = Array.isArray(logs) ? logs : [];
+        const allProducts = Array.isArray(products) ? products : [];
+        const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+        const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+        const rawUser = userProfile || {};
+        const safeUserProfile = {
+          id: rawUser.id || userKey,
+          username: clean,
+          name: rawUser.name || "Profesional Técnico",
+          title: rawUser.title || "",
+          bio: rawUser.bio || "",
+          avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+          location: rawUser.location || "",
+          github: rawUser.github || rawUser.socialLinks?.github || "",
+          linkedin: rawUser.linkedin || rawUser.socialLinks?.linkedin || "",
+          socialLinks: rawUser.socialLinks || {},
+          availabilityStatus: rawUser.availabilityStatus,
+          skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+          email: rawUser.email || "",
+          authProvider: rawUser.authProvider || "custom",
+          createdAt: rawUser.createdAt || Date.now(),
+        };
+
+        await publicShowcaseRef.set(
+          {
+            userId: userKey,
+            username: clean,
+            userProfile: safeUserProfile,
+            logs: publicLogs,
+            products: publicProducts,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        // Also ensure users/{userId}/state/main has this user object persisted
+        if (userKey) {
+          const userDocRef = db.collection("users").doc(userKey).collection("state").doc("main");
+          await userDocRef.set(
+            {
+              user: safeUserProfile,
+              isShowcaseActive: true,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+
+        res.json({ success: true, username: clean, userKey });
+        return;
+      }
+
+      // Handle both express path params, query params, or URL subpath
+      let rawUsername = (req.params.username || req.query.username || "").toString().trim();
       if (!rawUsername) {
-        return res.status(400).json({ error: "Username is required." });
-      }
-      const cleanUsername = rawUsername.toLowerCase();
-      let userKey;
-      // Try username index first
-      try {
-        const indexPath = path.resolve("./username_index.json");
-        if (fs.existsSync(indexPath)) {
-          const index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-          userKey = index[cleanUsername];
-        }
-      } catch {
-        // ignore
-      }
-      // If not in index, scan cloud_sync files
-      if (!userKey) {
-        try {
-          const syncDir = path.resolve("./.firebase/functions/");
-          const files = fs.readdirSync(syncDir).filter((f) => f.startsWith("user_") && f.endsWith(".json"));
-          for (const file of files) {
-            try {
-              const content = JSON.parse(fs.readFileSync(path.resolve(syncDir, file), "utf-8"));
-              const user = content?.payload?.user;
-              const uUsername = (user?.username || "").toLowerCase();
-              const uEmailPrefix = (user?.email || "").split("@")[0].toLowerCase();
-              const uId = (user?.id || "").toLowerCase();
-              if (uUsername === cleanUsername ||
-                  uEmailPrefix === cleanUsername ||
-                  uId === cleanUsername ||
-                  content?.userKey?.toLowerCase() === cleanUsername) {
-                userKey = content?.userKey;
-                // Update username index
-                try {
-                  const indexPath = path.resolve("./username_index.json");
-                  let index: Record<string, string> = {};
-                  if (fs.existsSync(indexPath)) {
-                    index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
-                  }
-                  if (user?.username) {
-                    index[user.username.toLowerCase()] = content?.userKey || "";
-                    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
-                  }
-                } catch {
-                  // ignore
-                }
-                break;
-              }
-            } catch {
-              // ignore parsing error for single corrupt file
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (!userKey) {
-        return res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
-      }
-      // Load the user's cloud sync file
-      const CLOUD_SYNC_DIR = path.resolve("./.firebase/functions");
-      const syncFilePath = path.resolve(CLOUD_SYNC_DIR, `user_${userKey.replace(/[^a-zA-Z0-9@._-]/g, "_")}.json`);
-
-      if (!fs.existsSync(syncFilePath)) {
-        return res.status(404).json({ error: "Vitrina pública no encontrada." });
+        const urlParts = req.path.split("/").filter(Boolean);
+        rawUsername = urlParts[urlParts.length - 1] || "";
       }
 
-      const fileContent = fs.readFileSync(syncFilePath, "utf-8");
-      const parsed = JSON.parse(fileContent);
+      if (!rawUsername || rawUsername === "claim-username") {
+        res.status(400).json({ error: "El nombre de usuario es requerido." });
+        return;
+      }
 
-      // Filter to only public logs and products
-      const publicLogs = (parsed.payload?.logs || []).filter((l: any) => l.isPublic);
-      const publicProducts = (parsed.payload?.products || []).filter((p: any) => p.isPublic !== false);
+      const cleanUsername = rawUsername.toLowerCase().replace(/[^a-z0-9_-]/g, "");
 
-      // Build the response
-      const userNameDisplay = cleanUsername.replace(/^u\//, "") || "Profesional Técnico";
-      const userProfile = parsed.payload?.user || { username: cleanUsername, name: userNameDisplay };
+      // Query Firestore publicShowcases collection directly
+      const showcaseDoc = await db.collection("publicShowcases").doc(cleanUsername).get();
 
-      return res.json({
-        success: true,
-        userProfile,
-        logs: publicLogs,
-        products: publicProducts,
-      });
+      if (showcaseDoc.exists) {
+        const data = showcaseDoc.data() || {};
+        res.json({
+          success: true,
+          userProfile: data.userProfile || { username: cleanUsername, name: cleanUsername },
+          logs: Array.isArray(data.logs) ? data.logs : [],
+          products: Array.isArray(data.products) ? data.products : [],
+        });
+        return;
+      }
+
+      // Fallback: Query by user.username across all users/{userId}/state/main if not yet synced in publicShowcases
+      const userQuerySnap = await db
+        .collectionGroup("state")
+        .where("user.username", "==", cleanUsername)
+        .limit(1)
+        .get();
+
+      if (!userQuerySnap.empty) {
+        const docData = userQuerySnap.docs[0].data() || {};
+        const rawUser = docData.user || {};
+        const allLogs = Array.isArray(docData.logs) ? docData.logs : [];
+        const allProducts = Array.isArray(docData.products) ? docData.products : [];
+
+        const publicLogs = allLogs.filter((l: any) => l.isPublic === true);
+        const publicProducts = allProducts.filter((p: any) => p.isPublic !== false);
+
+        const safeUserProfile = {
+          id: rawUser.id || userQuerySnap.docs[0].ref.parent.parent?.id || `usr-${cleanUsername}`,
+          username: cleanUsername,
+          name: rawUser.name || "Profesional Técnico",
+          title: rawUser.title || "",
+          bio: rawUser.bio || "",
+          avatar: rawUser.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+          location: rawUser.location || "",
+          github: rawUser.github || rawUser.socialLinks?.github || "",
+          linkedin: rawUser.linkedin || rawUser.socialLinks?.linkedin || "",
+          socialLinks: rawUser.socialLinks || {},
+          availabilityStatus: rawUser.availabilityStatus,
+          skills: Array.isArray(rawUser.skills) ? rawUser.skills : [],
+          email: rawUser.email || "",
+          authProvider: rawUser.authProvider || "custom",
+          createdAt: rawUser.createdAt || Date.now(),
+        };
+
+        // Cache into publicShowcases for fast future lookups
+        await db.collection("publicShowcases").doc(cleanUsername).set({
+          userId: safeUserProfile.id,
+          username: cleanUsername,
+          userProfile: safeUserProfile,
+          logs: publicLogs,
+          products: publicProducts,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        res.json({
+          success: true,
+          userProfile: safeUserProfile,
+          logs: publicLogs,
+          products: publicProducts,
+        });
+        return;
+      }
+
+      res.status(404).json({ error: "Vitrina pública no encontrada para este usuario." });
     } catch (err: any) {
       console.error("Error en apiPublicShowcase:", err);
-      res.status(500).json({ error: "Error interno del servidor." });
+      res.status(500).json({ error: "Error interno del servidor.", details: err?.message });
     }
   }
 );
