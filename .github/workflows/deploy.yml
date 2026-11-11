@@ -13,6 +13,10 @@ jobs:
   test_and_deploy:
     name: Test, Build & Deploy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     env:
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GOALRECALL_BB4D0 }}
     steps:

@@ -12,6 +12,10 @@ jobs:
   test_and_preview:
     name: Test, Build & Preview
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
