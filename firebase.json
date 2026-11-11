@@ -40,10 +40,6 @@
         "function": "apiPublicShowcase"
       },
       {
-        "source": "/u/:username",
-        "function": "apiPublicShowcase"
-      },
-      {
         "source": "/u/**",
         "destination": "/index.html"
       },
