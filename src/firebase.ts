@@ -42,7 +42,7 @@ if (typeof window !== "undefined") {
       // Use emulators if configured (avoid glimmind/myfeedin/tabito default ports)
       const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_HOST;
       const emulatorPort = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_PORT;
-      if (emulatorHost && emulatorPort && import.meta.env.EMULATOR === "true") {
+      if (emulatorHost && emulatorPort && import.meta.env.VITE_EMULATOR === "true") {
         connectAuthEmulator(auth, `http://${emulatorHost}:${emulatorPort}`);
         console.log(`[Firebase] Using Auth emulator on http://${emulatorHost}:${emulatorPort}`);
       }
