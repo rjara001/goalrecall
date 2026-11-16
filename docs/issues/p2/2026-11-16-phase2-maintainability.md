@@ -26,8 +26,9 @@ Tras completar la Fase 0 (Quality Gates) y la Fase 1 (`src/features/cv-upload/`)
 ---
 
 ## Criterios de Aceptación Globales de Phase 2
-- [ ] `npm run lint` (`tsc --noEmit`) pasa con 0 errores
-- [ ] `npm test` (`bun test`) pasa con 0 errores incluyendo nuevas suites de backend y storage
-- [ ] `npm run build` (`vite build`) pasa con Exit Code 0
-- [ ] `server.ts` < 90 líneas y cero lógica duplicada de `localCvExtractor.ts`
-- [ ] `src/utils/storage.ts` dividido por dominio manteniendo compatibilidad total de API pública
+- [x] `npm run lint` (`tsc --noEmit`) pasa con 0 errores
+- [x] `npm test` (`bun test`) pasa con 0 errores incluyendo nuevas suites de backend, storage y hooks de `App`
+- [x] `npm run build` (`vite build`) pasa con Exit Code 0
+- [x] `server.ts` < 90 líneas y cero lógica duplicada de `localCvExtractor.ts`
+- [x] `src/utils/storage.ts` dividido por dominio manteniendo compatibilidad total de API pública
+- [x] `src/App.tsx` < 450 líneas con enrutamiento, modales y estado de workspace desacoplados en hooks
