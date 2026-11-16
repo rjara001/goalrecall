@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const portArgIdx = process.argv.indexOf("--port");
 const cliPort = portArgIdx !== -1 ? Number(process.argv[portArgIdx + 1]) : NaN;
-const PORT = Number.isFinite(cliPort) ? cliPort : Number(process.env.PORT) || 3000;
+const PORT = Number.isFinite(cliPort) ? cliPort : Number(process.env.PORT) || 3010;
 
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));

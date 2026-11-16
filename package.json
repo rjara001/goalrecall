@@ -13,7 +13,11 @@
     "lint": "tsc --noEmit",
     "lint:functions": "tsc --noEmit -p functions/tsconfig.json",
     "test": "bun test",
-    "emulators": "firebase emulators:start --only auth,firestore",
+    "emulators": "node scripts/preflight-ports.mjs auth firestore hub logging && firebase emulators:start --only auth,firestore",
+    "emulators:all": "node scripts/preflight-ports.mjs auth firestore functions ui hub logging && firebase emulators:start --only auth,firestore,functions,ui",
+    "emulators:autoclean": "node scripts/preflight-ports.mjs --auto-clean auth firestore hub logging && firebase emulators:start --only auth,firestore",
+    "emulators:all:autoclean": "node scripts/preflight-ports.mjs --auto-clean auth firestore functions ui hub logging && firebase emulators:start --only auth,firestore,functions,ui",
+    "check:ports": "node scripts/check-ports.mjs",
     "kill-emulators": "pkill -f 'cloud-firestore-emulator' && pkill -f 'firebase emulators:start' && sleep 2 && echo 'Emulator processes killed'"
   },
   "dependencies": {
