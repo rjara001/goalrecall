@@ -356,4 +356,6 @@ export interface Product {
   relatedAchievementIds?: string[]; // IDs de Logros XYZ asociados
 }
 
+export * from "./cv";
+
 

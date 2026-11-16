@@ -1,40 +1,27 @@
-# Ticket 1.6: Re-cableado y Reducción del God Component
+# Ticket 1.6: Re-cableado en `src/features/cv-upload/` y Reducción del Contenedor
 
 ## Contexto y Objetivo
-El componente `CvUploadModal.tsx` es actualmente un "god component" de 1,831 líneas que mezca UI, lógica de negocio, gestión de estado, y servicios. El sexto y último paso de la refactorización es reescribir `CvUploadModal.tsx` para que actúe exclusivamente como contenedor visual y orquestador liviano, reduciéndolo a menos de 300 líneas.
+Re-ensamblar `CvUploadModal` como un contenedor visual delgado (< 200 líneas) dentro del vertical slice `src/features/cv-upload/`, exponiendo una API pública limpia a través de `src/features/cv-upload/index.ts` y manteniendo compatibilidad en `src/components/CvUploadModal.tsx`.
 
-## Impacto técnico
-- Archivos afectados: `src/components/CvUploadModal.tsx`, `src/features/cv-upload/hooks/useCvUpload.ts`, `src/features/cv-upload/components/*.tsx`
-- Componentes creados en ticket 1.5: `CvDropzone.tsx`, `CvProcessingState.tsx`, `CvReviewForm.tsx`, `CvPendingFieldEditor.tsx`, `CvProPlanModal.tsx`
-- Hook creado en ticket 1.4: `useCvUpload`
+## Impacto Técnico
+- Nuevo: `src/features/cv-upload/components/CvUploadModal.tsx` (< 200 líneas)
+- Nuevo: `src/features/cv-upload/index.ts` (barrel export del feature slice)
+- Modificado: `src/components/CvUploadModal.tsx` (re-export limpio desde `../features/cv-upload` para compatibilidad con imports existentes)
 
-## Plan de pasos detallado
+## Plan de Pasos Detallado
+1. Mover el contenedor final a `src/features/cv-upload/components/CvUploadModal.tsx`:
+   - Consumir únicamente `useCvUpload(...)`.
+   - Renderizar según `phase` (`CvDropzone`, `CvProcessingState`, `CvCompletenessBar` + tab activa), `CvPendingFieldEditor` y `ProUpgradeModal`.
+   - Mantener solo header, modal shell y footer.
+2. Crear `src/features/cv-upload/index.ts` exportando `CvUploadModal` y tipos públicos del feature.
+3. Dejar `src/components/CvUploadModal.tsx` como re-export (`export { CvUploadModal } from "../features/cv-upload";`).
+4. Validación integral:
+   - `npm run lint` (`tsc --noEmit`) — 0 errores
+   - `npm test` (`bun test`) — 100% verde
+   - `npm run build` (`vite build`) — Exit Code 0
+   - Verificación en navegador del flujo completo (PDF de muestra `demo-cv.pdf`, texto pegado, edición de campo pendiente, selección de viñetas y guardado en bitácora/perfil).
 
-### Paso 1: Reescribir `src/components/CvUploadModal.tsx`
-1. Eliminar todas las definiciones de estado y funciones locales
-2. Consumir el hook `useCvUpload` para obtener estados y métodos
-3. Renderizar los subcomponentes de la carpeta `src/features/cv-upload/components/`:
-   - `CvDropzone` para la vista de upload
-   - `CvProcessingState` para la vista de procesamiento
-   - `CvReviewForm` para la vista de revisión
-   - `CvPendingFieldEditor` para el modal de edición
-   - `CvProPlanModal` para el modal de Plan Pro
-4. Mantener solo el contenedor principal (header, body, footer) y la lógica de apertura/cierre
-
-### Paso 2: Verificar compilación y build
-1. Ejecutar `npx tsc --noEmit` - debe pasar con 0 errores
-2. Ejecutar `npx vite build` - debe completar con éxito (Exit Code 0)
-
-### Paso 3: Verificar funcionalidad
-1. Flujo de subida de archivo (PDF, DOCX, TXT) funciona igual que antes
-2. Flujo de pegado de texto funciona igual que antes
-3. Flujo de edición de campos pendientes funciona igual que antes
-4. Flujo de guardado y aplicación a bitácora funciona igual que antes
-5. Modal de Plan Pro funciona igual que antes
-
-## Criterios de aceptación
-- [ ] `CvUploadModal.tsx` tiene menos de 300 líneas
-- [ ] `npx tsc --noEmit` pasa con cero errores
-- [ ] `npx vite build` completo con éxito (Exit Code 0)
-- [ ] El flujo completo de subida de CV funciona exactamente igual que antes de la refactorización
-- [ ] No se introdujeron anti-patrones de la sección ➍ de AGENTS.md
+## Criterios de Aceptación
+- [ ] `src/features/cv-upload/components/CvUploadModal.tsx` tiene < 200 líneas
+- [ ] `npm run lint`, `npm test` y `npm run build` pasan con Exit Code 0
+- [ ] Cero regresiones funcionales en el flujo de carga de CV y actualización de bitácora/perfil

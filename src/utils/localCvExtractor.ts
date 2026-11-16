@@ -1,31 +1,17 @@
-import { ExtractedCvData, CvExperience, CvEducation, CvCertification, CvProject, CvLanguage, CvPendingField, LogCategory } from "../types";
+import {
+  ExtractedCvData,
+  CvExperience,
+  CvEducation,
+  CvCertification,
+  CvProject,
+  CvLanguage,
+  CvPendingField,
+  LogCategory,
+  ExtractedAchievementItem,
+  LocalExtractionResult,
+} from "../types";
 
-export interface ExtractedAchievementItem {
-  id: string;
-  client: string;
-  project: string;
-  title: string;
-  description: string;
-  impact: string;
-  whatWasSought?: string;
-  whyImportant?: string;
-  howApplied?: string;
-  category: string;
-  tags: string[];
-  xyzScore: number;
-  metricHighlight?: string;
-}
-
-export interface LocalExtractionResult {
-  cvData: ExtractedCvData;
-  achievements: ExtractedAchievementItem[];
-  pendingFields: CvPendingField[];
-  completedCount: number;
-  totalChecks: number;
-  completenessScore: number;
-  engine: string;
-  fileName: string;
-}
+export type { ExtractedAchievementItem, LocalExtractionResult };
 
 export function extractCvDataLocally(rawText: string, fileName?: string): LocalExtractionResult {
   const safeFileName = fileName || "Documento";
