@@ -6,7 +6,7 @@ import * as path from "path";
 
 describe("DOCX Text Extractor", () => {
   it("extracts raw text accurately from a valid DOCX file", async () => {
-    const docxPath = path.resolve(process.cwd(), "Career_OS_Plan_Maestro.docx");
+    const docxPath = path.resolve(process.cwd(), "docs", "Career_OS_Plan_Maestro.docx");
     const buffer = fs.readFileSync(docxPath);
 
     const extractedText = await extractDocxText(buffer);
@@ -18,7 +18,7 @@ describe("DOCX Text Extractor", () => {
   });
 
   it("handles Uint8Array input gracefully", async () => {
-    const docxPath = path.resolve(process.cwd(), "Career_OS_Plan_Maestro.docx");
+    const docxPath = path.resolve(process.cwd(), "docs", "Career_OS_Plan_Maestro.docx");
     const buffer = fs.readFileSync(docxPath);
     const uint8 = new Uint8Array(buffer);
 
@@ -29,7 +29,7 @@ describe("DOCX Text Extractor", () => {
   });
 
   it("can pass extracted DOCX text into localCvExtractor without errors", async () => {
-    const docxPath = path.resolve(process.cwd(), "Career_OS_Plan_Maestro.docx");
+    const docxPath = path.resolve(process.cwd(), "docs", "Career_OS_Plan_Maestro.docx");
     const buffer = fs.readFileSync(docxPath);
     const extractedText = await extractDocxText(buffer);
 

@@ -1,5 +1,14 @@
 import { auth, signInAnonymously } from "../firebase";
-import { UserProfile, WorkExperience, LogEntry, JobOffer, Product, ExtractedCvData } from "../types";
+import {
+  CareerGoal,
+  ExtractedCvData,
+  JobOffer,
+  LogEntry,
+  Product,
+  TechnicalCertification,
+  UserProfile,
+  WorkExperience,
+} from "../types";
 
 export interface UserCloudState {
   user: UserProfile | null;
@@ -8,6 +17,8 @@ export interface UserCloudState {
   logs: LogEntry[];
   jobOffers?: JobOffer[];
   products?: Product[];
+  certifications?: TechnicalCertification[];
+  careerGoals?: CareerGoal[];
   updatedAt?: string;
 }
 

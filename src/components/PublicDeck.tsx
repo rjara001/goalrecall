@@ -28,17 +28,24 @@ import {
   Plus,
   Minus,
   Palette,
-  Share2
+  Share2,
+  Award,
+  ExternalLink,
+  Pencil,
+  Trash2,
+  EyeOff
 } from "lucide-react";
-import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product } from "../types";
+import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product, TechnicalCertification } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
 import { ProductCard } from "./ProductCard";
 import { ShareDeckModal } from "./ShareDeckModal";
+import { getCertificationValidityStatus } from "../utils/storage/certificationsStorage";
 import { useI18n } from "../i18n";
 
 interface PublicDeckProps {
   logs: LogEntry[];
   products?: Product[];
+  certifications?: TechnicalCertification[];
   userProfile: UserProfile;
   onSendVisitorMessage: (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => void;
   onBackToLanding?: () => void;
@@ -49,11 +56,19 @@ interface PublicDeckProps {
   onEditProduct?: (product: Product) => void;
   onDeleteProduct?: (id: string) => void;
   onToggleProductPublic?: (id: string) => void;
+  onOpenNewCertification?: () => void;
+  onEditCertification?: (cert: TechnicalCertification) => void;
+  onDeleteCertification?: (id: string) => void;
+  onToggleCertificationPublic?: (id: string) => void;
 }
+
+const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_CERTIFICATIONS: TechnicalCertification[] = [];
 
 export const PublicDeck: React.FC<PublicDeckProps> = ({
   logs,
-  products = [],
+  products = EMPTY_PRODUCTS,
+  certifications = EMPTY_CERTIFICATIONS,
   userProfile,
   onSendVisitorMessage,
   onBackToLanding,
@@ -64,6 +79,10 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   onEditProduct,
   onDeleteProduct,
   onToggleProductPublic,
+  onOpenNewCertification,
+  onEditCertification,
+  onDeleteCertification,
+  onToggleCertificationPublic,
 }) => {
   const { t } = useI18n();
 
@@ -85,7 +104,14 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
     return products.filter((p) => p.isPublic !== false);
   }, [products, isOwner, ownerViewMode]);
 
-  const [activeTab, setActiveTab] = useState<"achievements" | "products">("achievements");
+  const publicCertifications = useMemo(() => {
+    if (isOwner && ownerViewMode === "all_owner_audit") {
+      return certifications;
+    }
+    return certifications.filter((c) => c.isPublic !== false);
+  }, [certifications, isOwner, ownerViewMode]);
+
+  const [activeTab, setActiveTab] = useState<"achievements" | "products" | "certifications">("achievements");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [selectedTech, setSelectedTech] = useState<string>("all");
@@ -344,13 +370,15 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                 {userProfile.title}
               </p>
 
-              <p className="text-xs text-slate-400 flex items-center gap-1.5">
+              <p className="text-xs text-slate-400 flex flex-wrap items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-500" />
                 <span>{userProfile.location}</span>
                 <span className="text-slate-600">·</span>
-                <span className="font-mono text-emerald-400">{publicLogs.length} logros</span>
+                <span className="font-mono tabular-nums text-emerald-400">{publicLogs.length} logros</span>
                 <span className="text-slate-600">·</span>
-                <span className="font-mono text-cyan-400">{publicProducts.length} productos</span>
+                <span className="font-mono tabular-nums text-cyan-400">{publicProducts.length} productos</span>
+                <span className="text-slate-600">·</span>
+                <span className="font-mono tabular-nums text-amber-400">{publicCertifications.length} certificaciones</span>
               </p>
             </div>
           </div>
@@ -471,20 +499,20 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
         <div className="lg:col-span-7 space-y-6">
           
           {/* Navigation Tabs (As requested in user ASCII diagram) */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-1.5 p-1 bg-[#080C14] border border-slate-800 rounded-xl">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-sm">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#080C14] border border-slate-800 rounded-xl">
               <button
                 type="button"
                 onClick={() => setActiveTab("achievements")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-all ${
                   activeTab === "achievements"
                     ? "bg-slate-800 text-white shadow-sm border border-slate-700"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 <span className="text-amber-400">★</span>
-                <span>Logros y Experiencia</span>
-                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-400 border border-slate-700/60">
+                <span>Logros</span>
+                <span className="font-mono tabular-nums text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-emerald-400 border border-slate-700/60">
                   {publicLogs.length}
                 </span>
               </button>
@@ -492,16 +520,32 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab("products")}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-all ${
                   activeTab === "products"
                     ? "bg-slate-800 text-white shadow-sm border border-slate-700"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                <span className="text-emerald-400">🚀</span>
-                <span>Productos & Showcase</span>
-                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700/60">
+                <Rocket className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Productos</span>
+                <span className="font-mono tabular-nums text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-slate-700/60">
                   {publicProducts.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("certifications")}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-all ${
+                  activeTab === "certifications"
+                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Award className="w-3.5 h-3.5 text-amber-400" />
+                <span>Certificaciones</span>
+                <span className="font-mono tabular-nums text-[11px] px-1.5 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-700/60">
+                  {publicCertifications.length}
                 </span>
               </button>
             </div>
@@ -518,7 +562,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-            ) : (
+            ) : activeTab === "products" ? (
               <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                 <select
                   value={selectedTech}
@@ -535,10 +579,23 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   <button
                     type="button"
                     onClick={onOpenNewProduct}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs transition-colors shrink-0"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg text-xs whitespace-nowrap transition-colors shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Nuevo Producto</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {isOwner && onOpenNewCertification && (
+                  <button
+                    type="button"
+                    onClick={onOpenNewCertification}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs whitespace-nowrap transition-colors shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Nueva Certificación</span>
                   </button>
                 )}
               </div>
@@ -791,6 +848,165 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
               )}
             </div>
           )}
+          {/* Tab 3: Technical Certifications & Credentials */}
+          {activeTab === "certifications" && (
+            <div className="space-y-4">
+              {publicCertifications.length === 0 ? (
+                <div className="p-12 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/20 space-y-3">
+                  <Award className="w-9 h-9 text-amber-400/70 mx-auto" />
+                  <p className="text-sm font-semibold text-slate-300">
+                    No hay certificaciones técnicas visibles en la vitrina
+                  </p>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Las credenciales oficiales AWS, Google Cloud, CNCF o especializaciones públicas aparecen aquí con enlace directo de verificación.
+                  </p>
+                  {isOwner && onOpenNewCertification && (
+                    <button
+                      type="button"
+                      onClick={onOpenNewCertification}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Agregar Primera Certificación</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {publicCertifications.map((cert) => {
+                    const validity = getCertificationValidityStatus(cert.expirationDate);
+                    const validityLabel =
+                      validity === "expired"
+                        ? "Vencida"
+                        : validity === "expiring_soon"
+                        ? "Por renovar"
+                        : validity === "no_expiration"
+                        ? "Permanente"
+                        : "Vigente";
+                    return (
+                      <div
+                        key={cert.id}
+                        className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900/90 transition-colors space-y-3"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="text-amber-300 font-semibold">{cert.issuer}</span>
+                              <span className="text-slate-600">·</span>
+                              <span className="font-mono tabular-nums text-slate-400">
+                                {cert.issueDate}
+                                {cert.expirationDate ? ` → ${cert.expirationDate}` : ""}
+                              </span>
+                              <span className="text-slate-600">·</span>
+                              <span
+                                className={`font-mono text-[11px] ${
+                                  validity === "expired"
+                                    ? "text-rose-400"
+                                    : validity === "expiring_soon"
+                                    ? "text-amber-300"
+                                    : "text-emerald-400"
+                                }`}
+                              >
+                                {validityLabel}
+                              </span>
+                            </div>
+
+                            <h3 className="text-base font-bold text-white leading-snug">
+                              {cert.name}
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isOwner && ownerViewMode === "all_owner_audit" && (
+                              <span
+                                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                                  cert.isPublic
+                                    ? "text-emerald-300 border-emerald-800/60 bg-emerald-950/60"
+                                    : "text-amber-300 border-amber-800/60 bg-amber-950/60"
+                                }`}
+                              >
+                                {cert.isPublic ? "Pública" : "Privada"}
+                              </span>
+                            )}
+                            {isOwner && onToggleCertificationPublic && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleCertificationPublic(cert.id)}
+                                title={cert.isPublic ? "Ocultar" : "Publicar"}
+                                className="p-1.5 text-slate-400 hover:text-emerald-300 rounded-lg hover:bg-slate-800 transition-colors"
+                              >
+                                {cert.isPublic ? (
+                                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                            {isOwner && onEditCertification && (
+                              <button
+                                type="button"
+                                onClick={() => onEditCertification(cert)}
+                                title="Editar"
+                                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {isOwner && onDeleteCertification && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteCertification(cert.id)}
+                                title="Eliminar"
+                                className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {cert.summary && (
+                          <p className="text-xs text-slate-300 leading-relaxed">{cert.summary}</p>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <div className="text-[11px] font-mono text-slate-400 flex flex-wrap items-center gap-2">
+                            {cert.credentialId && (
+                              <span className="tabular-nums text-slate-300">
+                                Credencial: {cert.credentialId}
+                              </span>
+                            )}
+                            {cert.skills && cert.skills.length > 0 && (
+                              <>
+                                {cert.credentialId && <span className="text-slate-600">·</span>}
+                                <span>{cert.skills.join(" · ")}</span>
+                              </>
+                            )}
+                          </div>
+
+                          {cert.credentialUrl && (
+                            <a
+                              href={
+                                cert.credentialUrl.startsWith("http")
+                                  ? cert.credentialUrl
+                                  : `https://${cert.credentialUrl}`
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold whitespace-nowrap transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Validar en emisor</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column: First Mate AI Agent & Leave Note Form (5 Cols) */}
@@ -897,6 +1113,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
         user={userProfile}
         logs={logs}
         products={products}
+        certifications={certifications}
       />
     </div>
   );

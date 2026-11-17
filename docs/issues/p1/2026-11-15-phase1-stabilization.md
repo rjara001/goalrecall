@@ -1,48 +1,43 @@
-# Plan: Phase 1 - Critical Stabilization (Build Green)
+# Plan: Phase 1 - Stabilization, Tooling & Maintainability Architecture
 
-## Contexto y Objetivo
-Corregir errores OxC/TS que bloquean el build y asegurar que todos los componentes UI están bajo 500 líneas. El proyecto tiene errores de compilación que impiden `npx tsc --noEmit` y `npx vite build` en verde.
+## Contexto y Diagnóstico Real del Repositorio
+Este documento consolida la revisión de arquitectura sobre el estado real del código (`main` @ `41db619+`) con el objetivo central de **mejorar la mantenibilidad de la aplicación**:
 
-## Impacto técnico
-- Archivos afectados: `src/components/CvUploadModal.tsx` (1,831 líneas - god component), `src/utils/localCvExtractor.ts` (818 líneas), `src/utils/pdfExtractor.ts`, `src/utils/docxExtractor.ts`
-- Errores TS detectados en análisis de código: posibles problemas de tipado en `CvUploadModal.tsx` (uso de `any` en payloads, castings inexistentes)
-- UI components: `CvUploadModal.tsx` supera 500 líneas (1,831), `localCvExtractor.ts` es utilitario no-componente (818 líneas es aceptable)
-- Validación previa: `docs/issues/done/2026-11-13-refactoring-plan-four-phases.md` ya identificó esta necesidad
+- **Estado real de compilación y quality gates:**
+  - `vite build` compila en verde (`Exit Code 0`), pero `vite.config.ts` hardcodea `'0.7.1'` mientras `package.json` está en `0.7.5`.
+  - `npx tsc --noEmit` falla actualmente **únicamente en `functions/src/*.ts`** porque el `tsconfig.json` raíz no excluye `functions/` (que tiene su propio `tsconfig.json` y `node_modules`).
+  - Existen suites de tests (`src/utils/*.test.ts`) usando `bun:test`, pero no existe script `"test"` en `package.json` ni verificación automatizada de `lint` + `test` en `.github/workflows/preview.yml`.
+- **Deuda estructural real (archivos > 500 líneas):**
+  - `server.ts` (2,092 líneas), `src/components/CvUploadModal.tsx` (1,831), `src/App.tsx` (1,406), `TimelineView.tsx` (1,323), `SettingsBackupModal.tsx` (1,270), `src/utils/storage.ts` (1,256), `LandingPage.tsx` (1,252), `QuickLogModal.tsx` (1,153), `AuthModal.tsx` (1,116), entre otros (16 componentes UI superan las 500 líneas).
+- **Punto de partida de Fase 1:**
+  - Se sanea primero la base de tooling/CI (**Ticket 1.0**) para tener `tsc --noEmit`, `bun test` y `vite build` en verde como guardrails reales.
+  - Se ejecuta la refactorización vertical del módulo piloto más complejo (`cv-upload`, **Tickets 1.1 – 1.6**) estableciendo el patrón arquitectónico reproducible para Fase 2 (`server.ts`, `App.tsx`, `TimelineView.tsx`, `storage.ts`).
 
-## Plan de pasos detallado
+---
 
-### Fase 1A: Verificación inicial de compilación
-1. Ejecutar `npx tsc --noEmit` para obtener lista exacta de errores
-2. Ejecutar `npx vite build` para verificar errores de build
-3. Documentar errors encontrados
+## Mapa de Tickets y Orden de Ejecución
 
-### Fase 1B: Fix errores TS en CvUploadModal.tsx
-1. Revisar uso de `any` en `payload` (líneas ~316, ~404, ~450)
-2. Revisar castings de tipos en `extractedBullets.map` (línea ~522)
-3. Revisar `handleUpdateContactField` typing (línea ~641)
-4. Verificar imports de `../types` estén completos
+### Fase 0 (Prerrequisito — Quality Gates)
+- **Ticket 1.0 (`2026-11-16-ticket-00-tooling-and-quality-gates.md`):** Excluir `functions` de root `tsconfig.json`, añadir `"lint:functions"` y `"test": "bun test"` en `package.json`, sincronizar versión en `vite.config.ts`, y habilitar `lint` + `test` en `.github/workflows/preview.yml`.
 
-### Fase 1C: Fix errores en utilitarios
-1. `src/utils/localCvExtractor.ts` - verificar tipos de retorno
-2. `src/utils/pdfExtractor.ts` - verificar `pdfjsLib` types
-3. `src/utils/docxExtractor.ts` - verificar `mammoth` types
+### Fase 1 (Vertical Slice Piloto: `src/features/cv-upload/`)
+1. **Ticket 1.1 (`2026-11-15-ticket-01-cv-types.md`):** Contrato estricto en `src/types/cv.ts` (eliminar `any`, usar `LogCategory`, mover `ExtractedAchievementItem` y `LocalExtractionResult` desde `localCvExtractor.ts` sin ciclos, añadir `CvFallbackReason`, re-exportar en `src/types/index.ts`).
+2. **Ticket 1.2 (`2026-11-15-ticket-02-cv-parser-service.md`):** Servicio puro `cvFileParser.ts` + `constants.ts` (límite consistente de 2 MB y 15,000 chars en archivo y texto, evitar enviar `fileBase64` redundante cuando ya hay texto válido, rechazar `.doc` binario con mensaje claro, y unit tests).
+3. **Ticket 1.3 (`2026-11-15-ticket-03-cv-ai-service.md`):** Servicio HTTP puro `cvAiExtractor.ts` (sin dependencias directas a `firebase` ni `storage.ts`, con `AbortController` timeout, `fallbackReason` explícito, y unit tests con `fetch` mockeado).
+4. **Ticket 1.4 (`2026-11-15-ticket-04-use-cv-upload-hook.md`):** Mapper puro de dominio `cvImportMapper.ts` (con unit tests) + máquina de estados explícita en `useCvUpload.ts` + extracción de `SAMPLE_CV_TEXT` a `data/sampleCv.ts`, manteniendo `App.tsx` como única fuente de verdad de persistencia/sync.
+5. **Ticket 1.5 (`2026-11-15-ticket-05-cv-ui-subcomponents.md`):** Subcomponentes realmente < 150 líneas dividiendo `CvReviewForm` por pestaña (`CvCompletenessBar`, `CvPendingTab`, `CvRadiographyTab`, `CvBulletsTab`), eliminando prop drilling innecesario y extrayendo `ProUpgradeModal` compartido conectado a `useI18n()` y `AuthContext.upgradeToPro`.
+6. **Ticket 1.6 (`2026-11-15-ticket-06-cv-modal-rewire.md`):** Mover `CvUploadModal.tsx` dentro de `src/features/cv-upload/components/` (< 200 líneas) con barrel `src/features/cv-upload/index.ts` (y re-export compatible en `src/components/CvUploadModal.tsx`), validado con `lint`, `test` y `build`.
 
-### Fase 1D: Validación final
-1. `npx tsc --noEmit` pasa con 0 errores
-2. `npx vite build` exitoso (Exit Code 0)
-3. Verificar que no se introdujeron regressiones en funcionalidad existente
+### Fase 2 (Roadmap de Mantenibilidad Post-P1)
+- Modularización de `server.ts` (2,092 líneas) por rutas y servicios (`routes/cv`, `routes/public`, `routes/sync`, `routes/products`, `services/gemini`).
+- Desacoplamiento de `src/App.tsx` (1,406 líneas) en hooks de enrutamiento y estado de workspace.
+- División por dominio de `src/utils/storage.ts` (1,256 líneas) y componentes UI grandes (`TimelineView`, `SettingsBackupModal`, `QuickLogModal`, `AuthModal`).
 
-## Criterios de aceptación
-- [ ] `npx tsc --noEmit` pasa con cero errores
-- [ ] `npx vite build` completo con éxito
-- [ ] No hay regresiones en flujos de CV upload (extraer, editar, guardar)
-- [ ] El archivo `CvUploadModal.tsx` sigue siendo funcionalmente idéntico (solo se corrigen errores de tipado)
+---
 
-## Paso 2: Espera de Aprobación Explícita
-Mostrar este plan y esperar luz verde antes de tocar código de producción.
-
-## Paso 3: Implementación
-Implementar siguiendo reglas técnicas Vite+GCP+Firestore. Al finalizar, mover archivo a `docs/issues/done/`.
-
-## Paso 4: Aprobación final
-Presentar resumen y pasos de prueba. Issue cerrado con aprobación del usuario.
+## Criterios de Aceptación Globales de Phase 1
+- [x] `npm run lint` (`tsc --noEmit`) pasa con 0 errores
+- [x] `npm test` (`bun test`) pasa con 0 errores incluyendo los nuevos tests de `cvFileParser`, `cvAiExtractor` y `cvImportMapper`
+- [x] `npm run build` (`vite build`) pasa con Exit Code 0
+- [x] `CvUploadModal.tsx` < 200 líneas y todos los subcomponentes < 150 líneas
+- [x] Cero regresiones funcionales en carga PDF/DOCX/TXT, texto pegado, auditoría de campos pendientes, extracción local/IA y guardado en bitácora/perfil

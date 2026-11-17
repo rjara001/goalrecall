@@ -1,51 +1,33 @@
-# Ticket 1.5: Subcomponentes de Interfaz de Usuario
+# Ticket 1.5: Subcomponentes UI Granulares (< 150 líneas) y Modal Pro Compartido
 
 ## Contexto y Objetivo
-El componente `CvUploadModal.tsx` contiene toda la lógica de renderizado en un único archivo de 1,831 líneas, incluyendo tres vistas principales (upload, processing, review) y un modal secundario de edición de campos pendientes. El quinto paso de la refactorización es dividir las vistas internas del modal en componentes pequeños y enfocados (menos de 150 líneas cada uno).
+La vista interna de `CvUploadModal.tsx` contiene ~950 líneas de JSX repartidas en upload, animación de carga, revisión de 3 pestañas complejas (~470 líneas), editor inline y un modal de Plan Pro con ternarios inline en 6 idiomas desconectado del flujo real de Stripe (`AuthContext.upgradeToPro`).
 
-## Impacto técnico
-- Archivos afectados: `src/components/CvUploadModal.tsx`, nuevos componentes en `src/features/cv-upload/components/`
-- Vistas identificadas en CvUploadModal.tsx:
-  - Upload/Ingestion screen (líneas 873-1115)
-  - Processing animation (líneas 1117-1138)
-  - Review/Audit checklist (líneas 1140-1608)
-  - Quick in-line filling modal (líneas 1642-1705)
-  - Pro Plan/Waitlist modal (líneas 1707-1828)
+Para cumplir genuinamente la regla de **< 150 líneas por subcomponente** sin prop drilling innecesario:
+1. La pantalla de revisión debe dividirse por pestaña en componentes enfocados.
+2. El modal de Plan Pro debe extraerse como componente compartido (`src/components/ProUpgradeModal.tsx`) usando `useI18n()` en lugar de ternarios de 6 idiomas inline y conectado a `upgradeToPro` cuando Stripe esté disponible (manteniendo fallback a waitlist).
 
-## Plan de pasos detallado
+## Impacto Técnico
+- Nuevos componentes en `src/features/cv-upload/components/`:
+  - `CvDropzone.tsx` (< 150 líneas) — tabs Archivo/Texto, dropzone, muestra rápida y errores
+  - `CvSamplePdfCard.tsx` (< 100 líneas) — tarjeta de PDF de demostración `demo-cv.pdf`
+  - `CvQuotaBanner.tsx` (< 100 líneas) — banner cuando se agota la cuota mensual gratuita
+  - `CvProcessingState.tsx` (< 60 líneas) — animación y paso actual de procesamiento
+  - `CvCompletenessBar.tsx` (< 100 líneas) — barra de completitud y selector de pestañas de revisión
+  - `CvPendingTab.tsx` (< 120 líneas) — checklist de campos pendientes por completar
+  - `CvRadiographyTab.tsx` (< 150 líneas) — edición de contacto, resumen, skills, experiencias, educación, certificaciones y proyectos
+  - `CvBulletsTab.tsx` (< 150 líneas) — lista de logros XYZ seleccionables y editables
+  - `CvPendingFieldEditor.tsx` (< 100 líneas) — modal inline de rellenado de campo pendiente
+- Nuevo componente compartido: `src/components/ProUpgradeModal.tsx` (< 150 líneas)
 
-### Paso 1: Crear `src/features/cv-upload/components/CvDropzone.tsx`
-1. Extraer la vista de subida de archivos (líneas 873-1115):
-   - Tabs de método (archivo / texto)
-   - Dropzone de arrastre
-   - Card de PDF de demostración
-   - Banner de cuota agotada
-   - Mensajes de error
-2. Props: `onFileSelect`, `onPasteText`, `onLoadSamplePdf`, `activeTab`, `onTabChange`, `pastedCvText`, `onPastedTextChange`, `quotaExhausted`, `errorMessage`, `onRunLocalExtractor`, `onShowProModal`, `aiUsage`, `isLoadingSamplePdf`
+## Plan de Pasos Detallado
+1. Extraer los subcomponentes de ingestión (`CvDropzone`, `CvSamplePdfCard`, `CvQuotaBanner`) y procesamiento (`CvProcessingState`).
+2. Dividir la vista de revisión en `CvCompletenessBar`, `CvPendingTab`, `CvRadiographyTab`, `CvBulletsTab` (eliminando el prop-drilling de props de `CvPendingFieldEditor` que no le correspondían).
+3. Extraer `CvPendingFieldEditor.tsx`.
+4. Extraer `src/components/ProUpgradeModal.tsx` limpiando los ternarios de 6 idiomas mediante `useI18n()` e integrando `useAuth().upgradeToPro` junto con el fallback de lista de espera (`saveProWaitlistEmail`).
 
-### Paso 2: Crear `src/features/cv-upload/components/CvProcessingState.tsx`
-1. Extraer la animación de procesamiento (líneas 1117-1138)
-2. Props: `processingStep`, `isProcessing`
-
-### Paso 3: Crear `src/features/cv-upload/components/CvReviewForm.tsx`
-1. Extraer la vista de revisión (líneas 1140-1608):
-   - Barra de completitud y auditoría
-   - Sub-tabs (pendientes, radiografía, viñetas)
-   - Checklist de campos pendientes
-   - Radiografía completa del CV
-   - Lista de viñetas para importar
-2. Props: `extractedCv`, `pendingFields`, `completenessScore`, `extractedBullets`, `reviewTab`, `onReviewTabChange`, `onUpdateContactField`, `onToggleSelectBullet`, `onToggleSelectAll`, `onRemoveBullet`, `onOpenFillPending`, `onSaveFilledField`, `activeFieldEditing`, `quickFieldValue`, `onQuickFieldValueChange`
-
-### Paso 4: Crear `src/features/cv-upload/components/CvPendingFieldEditor.tsx`
-1. Extraer el modal de edición de campos pendientes (líneas 1642-1705)
-2. Props: `activeFieldEditing`, `quickFieldValue`, `onQuickFieldValueChange`, `onSave`, `onClose`
-
-### Paso 5: Crear `src/features/cv-upload/components/CvProPlanModal.tsx`
-1. Extraer el modal de Plan Pro (líneas 1707-1828)
-2. Props: `showProModal`, `onClose`, `proEmail`, `onProEmailChange`, `proEmailSaved`, `onSaveProEmail`, `language`
-
-## Criterios de aceptación
-- [ ] Cada subcomponente recibe props tipadas estrictamente
-- [ ] Cada subcomponente tiene menos de 150 líneas
-- [ ] Diseño responsivo y consistente con la UI existente
-- [ ] `npx tsc --noEmit` pasa en verde
+## Criterios de Aceptación
+- [x] Todos los subcomponentes nuevos tienen < 150 líneas
+- [x] Cero ternarios multilenguaje hardcoded en `ProUpgradeModal.tsx` (usa `useI18n()`)
+- [x] Cero prop-drilling de estado de modales hermanos en las pestañas de revisión
+- [x] `npm run lint` y `npm run build` en verde

@@ -1,13 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+
 export default defineConfig(() => {
   return {
-define: {
-      APP_VERSION: JSON.stringify('0.7.1'),
-      __APP_VERSION__: JSON.stringify('0.7.1'),
+    define: {
+      APP_VERSION: JSON.stringify(pkg.version),
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
     plugins: [react(), tailwindcss()],
     resolve: {

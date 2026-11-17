@@ -140,6 +140,27 @@ export interface CustomAccount {
   createdAt: number;
 }
 
+export type InboxItemKind = "visitor_message" | "git_pr" | "gitlab_mr" | "jira_issue";
+
+export interface InboxAchievementDraft {
+  title: string;
+  client: string;
+  project: string;
+  category: LogCategory;
+  impact: string;
+  whatWasSought?: string;
+  whyImportant?: string;
+  howApplied?: string;
+  description?: string;
+  tags: string[];
+  starDraft?: {
+    situation: string;
+    task: string;
+    action: string;
+    result: string;
+  };
+}
+
 export interface VisitorMessage {
   id: string;
   name: string;
@@ -149,6 +170,12 @@ export interface VisitorMessage {
   date: string;
   read: boolean;
   replied: boolean;
+  sourceType?: InboxItemKind;
+  sourceRef?: string;
+  sourceUrl?: string;
+  repositoryOrProject?: string;
+  achievementDraft?: InboxAchievementDraft;
+  convertedLogId?: string;
 }
 
 export interface FilterState {
@@ -355,5 +382,56 @@ export interface Product {
   badge?: string;                // Ej: "SaaS / Propio", "Open Source", "MVP"
   relatedAchievementIds?: string[]; // IDs de Logros XYZ asociados
 }
+
+export interface TechnicalCertification {
+  id: string;
+  userId?: string;
+  name: string;
+  issuer: string;
+  issueDate: string;
+  expirationDate?: string;
+  credentialId?: string;
+  credentialUrl?: string;
+  skills: string[];
+  badgeImage?: string;
+  summary?: string;
+  isPublic: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type CareerGoalCategory =
+  | "certification"
+  | "study"
+  | "academic"
+  | "target_company"
+  | "role_elevation"
+  | "open_source";
+
+export type CareerGoalStatus = "backlog" | "in_progress" | "achieved";
+
+export interface CareerGoalActionItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface CareerGoal {
+  id: string;
+  userId?: string;
+  title: string;
+  category: CareerGoalCategory;
+  targetDate?: string;
+  status: CareerGoalStatus;
+  whyImportant?: string;
+  actionItems?: CareerGoalActionItem[];
+  notes?: string;
+  achievedDate?: string;
+  linkedCertificationId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export * from "./cv";
 
 

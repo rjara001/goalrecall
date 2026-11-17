@@ -1,4 +1,4 @@
-import { LogEntry, Product, UserProfile } from "../types";
+import { LogEntry, Product, TechnicalCertification, UserProfile } from "../types";
 
 export interface SharedDeckPayload {
   version: "1.0";
@@ -39,6 +39,17 @@ export interface SharedDeckPayload {
     iu?: string; // imageUrl
     bl?: string; // badgeLabel
     achIds?: string[]; // relatedAchievementIds
+  }>;
+  c?: Array<{
+    id: string;
+    n: string; // name
+    is: string; // issuer
+    d: string; // issueDate
+    ed?: string; // expirationDate
+    cid?: string; // credentialId
+    cu?: string; // credentialUrl
+    sk?: string[]; // skills
+    sm?: string; // summary
   }>;
 }
 
@@ -116,10 +127,12 @@ async function decompressString(encoded: string): Promise<string> {
 export function buildSharedDeckPayload(
   user: UserProfile,
   logs: LogEntry[],
-  products: Product[] = []
+  products: Product[] = [],
+  certifications: TechnicalCertification[] = []
 ): SharedDeckPayload {
   const publicLogs = logs.filter((l) => l.isPublic);
   const publicProducts = products.filter((p) => p.isPublic !== false);
+  const publicCerts = certifications.filter((c) => c.isPublic !== false);
 
   return {
     version: "1.0",
@@ -161,6 +174,17 @@ export function buildSharedDeckPayload(
       bl: prod.badge,
       achIds: prod.relatedAchievementIds,
     })),
+    c: publicCerts.map((cert) => ({
+      id: cert.id,
+      n: cert.name,
+      is: cert.issuer,
+      d: cert.issueDate,
+      ed: cert.expirationDate,
+      cid: cert.credentialId,
+      cu: cert.credentialUrl,
+      sk: cert.skills,
+      sm: cert.summary,
+    })),
   };
 }
 
@@ -170,9 +194,10 @@ export function buildSharedDeckPayload(
 export async function generatePublicDeckShareUrl(
   user: UserProfile,
   logs: LogEntry[],
-  products: Product[] = []
+  products: Product[] = [],
+  certifications: TechnicalCertification[] = []
 ): Promise<string> {
-  const payload = buildSharedDeckPayload(user, logs, products);
+  const payload = buildSharedDeckPayload(user, logs, products, certifications);
   const jsonStr = JSON.stringify(payload);
   const encoded = await compressString(jsonStr);
 
@@ -187,6 +212,7 @@ export async function parseSharedDeckFromUrl(): Promise<{
   userProfile: UserProfile;
   logs: LogEntry[];
   products: Product[];
+  certifications: TechnicalCertification[];
 } | null> {
   if (typeof window === "undefined") return null;
 
@@ -274,7 +300,22 @@ export async function parseSharedDeckFromUrl(): Promise<{
       updatedAt: new Date().toISOString(),
     }));
 
-    return { userProfile, logs, products };
+    const certifications: TechnicalCertification[] = (parsed.c || []).map((cert) => ({
+      id: cert.id,
+      name: cert.n,
+      issuer: cert.is,
+      issueDate: cert.d,
+      expirationDate: cert.ed,
+      credentialId: cert.cid,
+      credentialUrl: cert.cu,
+      skills: cert.sk || [],
+      summary: cert.sm,
+      isPublic: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }));
+
+    return { userProfile, logs, products, certifications };
   } catch (err) {
     console.error("Failed to parse shared deck from URL:", err);
     return null;

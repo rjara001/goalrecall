@@ -1,37 +1,37 @@
-# Ticket 1.4: Custom Hook de Orquestación (`useCvUpload`)
+# Ticket 1.4: Mapper Puro de Dominio (`cvImportMapper`) y Hook `useCvUpload`
 
 ## Contexto y Objetivo
-El componente `CvUploadModal.tsx` gestiona todo el estado del flujo de CV (15+ estados `useState`) y la lógica de negocio (procesamiento, extracción, edición, guardado). El cuarto paso de la refactorización es centralizar este estado y lógica en un hook reutilizable `src/features/cv-upload/hooks/useCvUpload.ts`, dejando el componente como contenedor visual puro.
+`CvUploadModal.tsx` gestiona ~20 `useState` independientes (permitiendo estados imposibles entre carga, error, cuota y revisión) y mezcla dentro de `handleSaveAndApply` (líneas 668–799) lógica de negocio pesada que escribe directamente a `localStorage` (`saveStoredCv`, `saveExperiences`) por fuera de `App.tsx`.
 
-## Impacto técnico
-- Archivos afectados: `src/components/CvUploadModal.tsx`, `src/features/cv-upload/services/cvFileParser.ts`, `src/features/cv-upload/services/cvAiExtractor.ts`, `src/utils/storage.ts`
-- Estados en CvUploadModal.tsx (líneas 186-224): `activeTab`, `reviewTab`, `selectedFile`, `pastedCvText`, `isDragging`, `isProcessing`, `processingStep`, `errorMessage`, `extractedCv`, `pendingFields`, `completenessScore`, `extractedBullets`, `extractionEngine`, `activeFieldEditing`, `quickFieldValue`, `aiUsage`, `quotaExhausted`, `pendingPayload`, `showProModal`, `proEmail`, `proEmailSaved`, `isLoadingSamplePdf`
+Para mejorar la mantenibilidad real:
+1. La transformación de un CV extraído a `{ updatedUser, updatedExperiences, newLogs }` debe ser una **función pura de dominio** (`cvImportMapper.ts`), fácil de testear sin DOM ni `localStorage`.
+2. El estado del flujo en `useCvUpload.ts` debe modelarse con una **fase explícita** (`phase: "upload" | "processing" | "quota_exceeded" | "review"`).
+3. `SAMPLE_CV_TEXT` (78 líneas hardcoded) debe salir del componente UI hacia `data/sampleCv.ts`.
 
-## Plan de pasos detallado
+## Impacto Técnico
+- Nuevo: `src/features/cv-upload/data/sampleCv.ts`
+- Nuevo: `src/features/cv-upload/services/cvImportMapper.ts`
+- Nuevo: `src/features/cv-upload/services/cvImportMapper.test.ts`
+- Nuevo: `src/features/cv-upload/hooks/useCvUpload.ts`
+- Modificado: `src/components/CvUploadModal.tsx`
 
-### Paso 1: Crear `src/features/cv-upload/hooks/useCvUpload.ts`
-1. Definir interfaz `UseCvUploadReturn` con todos los estados y métodos expuestos
-2. Implementar el hook con los siguientes métodos:
-   - `handleFileSelect(file: File)` - orchestrar validación + extracción + IA
-   - `handlePasteText(text: string, customName?: string)` - mismo flujo para texto pegado
-   - `handleRunLocalExtractor()` - forzar extractor local
-   - `handleSaveFilledField()` - guardar campo editado
-   - `handleUpdateContactField(key, val)` - editar campo de contacto
-   - `toggleSelectBullet(id)` - seleccionar viñeta
-   - `toggleSelectAll(select)` - seleccionar todas
-   - `removeBullet(id)` - eliminar viñeta
-   - `handleSaveAndApply()` - guardar CV y aplicar a bitácora/perfil
-   - `resetState()` - reiniciar todos los estados
-   - `handleOpenFillPending(field)` - abrir editor de campo pendiente
-   - `handleLoadSamplePdf()` - cargar PDF de demostración
+## Plan de Pasos Detallado
+1. **Mover `SAMPLE_CV_TEXT` a `src/features/cv-upload/data/sampleCv.ts`.**
+2. **Crear `src/features/cv-upload/services/cvImportMapper.ts`:**
+   - `mapRawAchievementsToBullets(achievements: ExtractedAchievementItem[]): ExtractedBullet[]`
+   - `computeUpdatedCvField(cv, pendingFields, editing, value)` (actualización inmutable + recálculo de `completenessScore` sin mutar objetos existentes)
+   - `buildWorkspaceImportFromCv({ extractedCv, selectedBullets, existingExperiences, currentUser, sourceFileName })`:
+     - Devuelve `{ updatedUser, updatedExperiences, newLogs }` sin mutar arrays de entrada ni invocar `localStorage`.
+   - Cubrir con unit tests en `cvImportMapper.test.ts` (matching de empresas existentes, creación de nuevas experiencias, vinculación `experienceId` en logs, privacidad `isPublic: false` por defecto).
+3. **Crear `src/features/cv-upload/hooks/useCvUpload.ts`:**
+   - Reemplazar booleanos sueltos por `phase: "upload" | "processing" | "quota_exceeded" | "review"` junto con el estado de edición/revisión.
+   - Orquestar `cvFileParser`, verificación de cuota (`checkCanUseAi`), token de `auth`, `cvAiExtractor` y registro de cuota (`recordAiUsage` solo cuando `usedAi === true`).
+   - Exponer aviso no bloqueante (`fallbackNotice`) cuando aplique `fallbackReason`.
+   - En `handleSaveAndApply`: delegar a `buildWorkspaceImportFromCv`, guardar CV estructurado (`saveStoredCv`), sincronizar experiencias/perfil/logs mediante los callbacks de `App.tsx` y cerrar.
+   - Resincronizar `aiUsage` cuando `isOpen` pase a `true`.
 
-### Paso 2: Actualizar `src/components/CvUploadModal.tsx`
-1. Reemplazar todas las definiciones de `useState` por llamada al hook
-2. Reemplazar todos los `const handleX = ...` por destructuring del hook
-3. El componente debe ser puramente presentacional (sin lógica de negocio)
-
-## Criterios de aceptación
-- [ ] El componente visual ya no gestiona directamente la lógica de negocio ni llamadas asíncronas pesadas
-- [ ] Estado totalmente tipado con `CvExtractionStatus`
-- [ ] El hook es reutilizable (podría usarse en otros contextos)
-- [ ] `npx tsc --noEmit` pasa en verde
+## Criterios de Aceptación
+- [x] `cvImportMapper.ts` es 100% puro e inmutable y pasa sus unit tests en `npm test`
+- [x] `useCvUpload` elimina estados imposibles mediante `phase` explícito
+- [x] `SAMPLE_CV_TEXT` ya no reside en `CvUploadModal.tsx`
+- [x] `npm run lint` y `npm run build` en verde

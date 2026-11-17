@@ -133,8 +133,8 @@ Permite que el perfil y los logros de **Goal Recall** trasciendan la aplicación
 ## 5. Estado de Ejecución & Hoja de Ruta
 
 * [x] **Fase 1 (MVP)**: Bitácora jerárquica (Empresas ➔ Logros), Redes de Empleo con jerarquía (LinkedIn/GitHub prioritarios y acordeón secundario), modal de experiencia enfocado en Misión y Logros, Landing Page con Hero interactivo (Playground Google XYZ), Public Deck y exportación/importación JSON.
-* [ ] **Etapa 2 (Planificada - Registrada)**:
-  - **Paso 1 (Certificaciones)**: Tipos y almacenamiento de `TechnicalCertification`, gestión en Quarters y renderizado de badges en Public Deck.
-  - **Paso 2 (Plan de Carrera & Objetivos)**: Tablero visual de metas (Backlog, In Progress, Achieved) con checklist de hitos y conexión a logros.
-  - **Paso 3 (Inyección GitHub / GitLab)**: Generador de bloque Markdown y badges SVG para GitHub Profile README (`username/username`).
-  - **Paso 4 (Ingesta Automática Git / Jira)**: Sincronización de Pull Requests cerrados e issues de Jira al Inbox para formulación asistida con Google XYZ.
+* [x] **Etapa 2 (Completada)**:
+  - [x] **Paso 1 (Certificaciones)**: Tipos y almacenamiento de `TechnicalCertification`, gestión en Quarters y renderizado de badges en Public Deck.
+  - [x] **Paso 2 (Plan de Carrera & Objetivos)**: Tablero visual de metas (Backlog, In Progress, Achieved) con checklist de hitos y conexión a logros.
+  - [x] **Paso 3 (Inyección GitHub / GitLab)**: Generador de bloque Markdown y badges SVG para GitHub Profile README (`username/username`).
+  - [x] **Paso 4 (Ingesta Automática Git / Jira)**: Sincronización de Pull Requests cerrados, Merge Requests de GitLab e issues de Jira Cloud al Inbox para formulación asistida con Google XYZ y STAR.

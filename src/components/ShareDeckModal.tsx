@@ -14,11 +14,13 @@ import {
   Bot,
   Trash2,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Github
 } from "lucide-react";
-import { LogEntry, Product, UserProfile } from "../types";
+import { LogEntry, Product, TechnicalCertification, UserProfile } from "../types";
 import { generatePublicDeckShareUrl } from "../utils/publicDeckShare";
 import { saveUser, triggerCloudSync } from "../utils/storage";
+import { GitHubProfileExportPanel } from "./share/GitHubProfileExportPanel";
 
 interface ShareDeckModalProps {
   isOpen: boolean;
@@ -26,8 +28,11 @@ interface ShareDeckModalProps {
   user: UserProfile;
   logs: LogEntry[];
   products: Product[];
+  certifications?: TechnicalCertification[];
   onShowcaseStatusChange?: (isActive: boolean) => void;
 }
+
+const EMPTY_CERTIFICATIONS: TechnicalCertification[] = [];
 
 export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   isOpen,
@@ -35,6 +40,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   user,
   logs,
   products,
+  certifications = EMPTY_CERTIFICATIONS,
   onShowcaseStatusChange,
 }) => {
   const [shareUrl, setShareUrl] = useState<string>("");
@@ -49,10 +55,12 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(true);
   const [isOperating, setIsOperating] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [activeShareTab, setActiveShareTab] = useState<"recruiter" | "github">("recruiter");
 
   const publicLogs = logs.filter((l) => l.isPublic);
   const privateLogsCount = logs.filter((l) => !l.isPublic).length;
   const publicProducts = products.filter((p) => p.isPublic !== false);
+  const publicCertifications = certifications.filter((c) => c.isPublic !== false);
 
   const userHandle = user.username || (user.email ? user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "") : "usuario");
 
@@ -67,7 +75,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     const origin = typeof window !== "undefined" ? window.location.origin : "https://goalrecall.com";
     setCleanHandleUrl(`${origin}/u/${userHandle}`);
 
-    generatePublicDeckShareUrl(user, logs, products)
+    generatePublicDeckShareUrl(user, logs, products, certifications)
       .then((url) => {
         if (isMounted) {
           setShareUrl(url);
@@ -100,7 +108,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, user, logs, products, userHandle]);
+  }, [isOpen, user, logs, products, certifications, userHandle]);
 
   if (!isOpen) return null;
 
@@ -159,6 +167,7 @@ ${user.name || "Usuario"}`;
           userProfile: updatedUser,
           logs: publicLogs,
           products: publicProducts,
+          certifications: publicCertifications,
         }),
       });
 
@@ -233,8 +242,46 @@ ${user.name || "Usuario"}`;
           </button>
         </div>
 
+        {/* Tab Switcher */}
+        <div className="px-5 sm:px-6 pt-3 pb-2 border-b border-slate-800/80 bg-slate-950/60 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveShareTab("recruiter")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+              activeShareTab === "recruiter"
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Enlace para Recruiter</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveShareTab("github")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+              activeShareTab === "github"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+            }`}
+          >
+            <Github className="w-3.5 h-3.5" />
+            <span>Exportar para GitHub Profile</span>
+          </button>
+        </div>
+
         {/* Content Body */}
         <div className="p-5 sm:p-6 space-y-6 overflow-y-auto">
+          {activeShareTab === "github" ? (
+            <GitHubProfileExportPanel
+              user={user}
+              logs={logs}
+              products={products}
+              certifications={certifications}
+            />
+          ) : (
+            <>
           
           {/* 1. Clean Direct URL Box (/u/:username) */}
           <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-cyan-950/40 border border-emerald-500/30">
@@ -463,9 +510,11 @@ ${user.name || "Usuario"}`;
               <div className="flex items-start gap-2 text-slate-300">
                 <Eye className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-white block">Logros Públicos: {publicLogs.length}</strong>
+                  <strong className="text-white block">
+                    Vitrina Pública: {publicLogs.length} logros · {publicCertifications.length} cert(s)
+                  </strong>
                   <span className="text-[11px] text-slate-400">
-                    Solo los logros con visibilidad pública se incluyen en la vitrina.
+                    Solo los logros, productos y certificaciones públicas se incluyen; tu Plan de Carrera permanece privado.
                   </span>
                 </div>
               </div>
@@ -520,6 +569,8 @@ ${user.name || "Usuario"}`;
               </li>
             </ul>
           </div>
+            </>
+          )}
         </div>
 
         {/* Footer */}

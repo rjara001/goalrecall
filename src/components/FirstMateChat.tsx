@@ -34,7 +34,7 @@ interface FirstMateChatProps {
   publicLogs: LogEntry[];
   publicProducts?: Product[];
   userProfile: UserProfile;
-  activeTab?: "achievements" | "products";
+  activeTab?: "achievements" | "products" | "certifications";
   onSelectLog?: (log: LogEntry) => void;
   onSelectProduct?: (product: Product) => void;
   onOpenLeaveNote: () => void;

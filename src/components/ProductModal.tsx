@@ -71,12 +71,14 @@ const SAMPLE_SCREENSHOTS = [
   "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80",
 ];
 
+const EMPTY_LOGS: LogEntry[] = [];
+
 export const ProductModal: React.FC<ProductModalProps> = ({
   isOpen,
   onClose,
   onSave,
   product,
-  availableLogs = [],
+  availableLogs = EMPTY_LOGS,
 }) => {
   const [title, setTitle] = useState("");
   const [tagline, setTagline] = useState("");

@@ -1,3 +1,5 @@
+> **[ARCHIVADO — OBSOLETO]** Este documento referenciaba archivos inexistentes en la rama `main` (`use-features-view.ts`, `storage-experiences.ts`, `storage-logs.ts`, `use-cv-modal.ts`) y métricas desactualizadas. Reemplazado por `docs/issues/p1/2026-11-15-phase1-stabilization.md` y los Tickets `1.0` a `1.6`.
+
 # Plan: Phase 1 - Critical Stabilization
 
 ## Contexto y Objetivo

@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "lint:functions": "tsc --noEmit -p functions/tsconfig.json",
+    "test": "bun test",
     "emulators": "firebase emulators:start --only auth,firestore",
     "kill-emulators": "pkill -f 'cloud-firestore-emulator' && pkill -f 'firebase emulators:start' && sleep 2 && echo 'Emulator processes killed'"
   },
