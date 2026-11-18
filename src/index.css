@@ -6,10 +6,24 @@
     --font-mono: 'JetBrains Mono', monospace;
   }
   
+  html,
   body {
     font-family: var(--font-sans);
     background-color: #080C14;
     color: #F1F5F9;
+    overflow-x: clip;
+  }
+
+  #root {
+    isolation: isolate;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping,
+  .animate-spin {
+    animation: none !important;
   }
 }
 

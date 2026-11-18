@@ -131,7 +131,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 href={product.liveUrl.startsWith("http") ? product.liveUrl : `https://${product.liveUrl}`}
                 target="_blank"
                 rel="noreferrer"
-                className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950/90 hover:bg-emerald-500 hover:text-slate-950 text-white text-xs font-semibold backdrop-blur border border-slate-700/80 transition-all shadow-md"
+                className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950/95 hover:bg-emerald-500 hover:text-slate-950 text-white text-xs font-semibold border border-slate-700/80 transition-all shadow-md"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Abrir Sitio</span>

@@ -86,13 +86,13 @@ export const LandingHeroPlayground: React.FC<LandingHeroPlaygroundProps> = ({
       : "Cloud Sync Privado (Multi-dispositivo)";
 
   return (
-    <section className="relative pt-4 sm:pt-10 pb-6 text-center lg:text-left">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[380px] bg-gradient-to-tr from-cyan-500/15 via-blue-500/10 to-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+    <section className="relative overflow-hidden pt-4 sm:pt-10 pb-6 text-center lg:text-left">
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[380px] bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.16)_0%,rgba(59,130,246,0.08)_45%,transparent_72%)] pointer-events-none" />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
         <div className="lg:col-span-6 space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs font-mono text-cyan-400 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-cyan-400" />
             <span>{t.landing.badge}</span>
           </div>
 
@@ -145,8 +145,7 @@ export const LandingHeroPlayground: React.FC<LandingHeroPlaygroundProps> = ({
               title="Presiona este botón o usa el atajo ⌘K / Ctrl+K en tu teclado"
             >
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
               </span>
               <span>Presiona</span>
               <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] text-cyan-300 font-bold group-hover:border-cyan-500">
@@ -177,7 +176,7 @@ export const LandingHeroPlayground: React.FC<LandingHeroPlaygroundProps> = ({
           <div className="bg-[#0B101B] border border-cyan-900/50 rounded-2xl p-4 sm:p-5 shadow-2xl shadow-cyan-950/40 space-y-4 font-sans relative overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
                 <span className="text-xs font-mono font-bold text-white tracking-wider">
                   {t.landing.tryLiveBadge}
                 </span>

@@ -468,7 +468,7 @@ export default function App() {
 
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-4 duration-200 ${
+          className={`fixed bottom-6 right-6 z-[80] isolate flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-4 duration-200 ${
             toast.type === "error"
               ? "bg-red-950/95 border-red-700/80"
               : "bg-slate-900 border-slate-700"

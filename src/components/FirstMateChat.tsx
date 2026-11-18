@@ -137,14 +137,14 @@ export const FirstMateChat: React.FC<FirstMateChatProps> = ({
       <div className="px-5 py-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-            <Compass className="w-4 h-4 animate-spin-slow" />
+            <Compass className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xs font-bold text-white tracking-wide">
                 {t.firstMate.title}
               </h3>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
             </div>
             <p className="text-[10px] text-slate-400 font-mono">
               {publicLogs.length} logros · {publicProducts.length} productos

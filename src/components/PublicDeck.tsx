@@ -369,7 +369,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
 
       {/* Hero Header: Executive Profile */}
       <div className="relative overflow-hidden bg-gradient-to-b from-slate-900 via-[#0B111E] to-[#080C14] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.14),transparent_70%)] pointer-events-none" />
 
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">

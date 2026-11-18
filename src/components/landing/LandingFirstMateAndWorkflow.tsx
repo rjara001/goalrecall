@@ -43,7 +43,7 @@ export const LandingFirstMateAndWorkflow: React.FC<LandingFirstMateAndWorkflowPr
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                <Bot className="w-6 h-6 animate-pulse" />
+                <Bot className="w-6 h-6" />
               </div>
               <div>
                 <h4 className="font-bold text-white text-sm flex items-center gap-2">

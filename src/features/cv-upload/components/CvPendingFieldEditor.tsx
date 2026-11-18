@@ -20,7 +20,7 @@ export const CvPendingFieldEditor: React.FC<CvPendingFieldEditorProps> = ({
   if (!activeFieldEditing) return null;
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] isolate flex items-center justify-center p-4 bg-black/80">
       <div
         className="w-full max-w-md bg-slate-900 border border-amber-500/60 rounded-2xl p-5 shadow-2xl space-y-4"
         onClick={(e) => e.stopPropagation()}

@@ -288,7 +288,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
     .filter((l) => l.length > 3).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] isolate flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-in fade-in duration-200">
       <div 
         className="w-full max-w-xl bg-[#0D121F] border border-slate-700/80 rounded-2xl shadow-2xl shadow-cyan-950/20 overflow-hidden flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
@@ -342,7 +342,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             {/* Informative Presentation Banner */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/50 via-slate-900 to-slate-900 border border-cyan-500/40 space-y-2">
               <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm">
-                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
                 <span>{ml.bulletsToCreateHeader}</span>
               </div>
               <p className="text-slate-300 text-xs leading-relaxed">

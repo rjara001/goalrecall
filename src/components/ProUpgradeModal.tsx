@@ -38,7 +38,7 @@ export const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[70] isolate flex items-center justify-center p-4 bg-black/85 animate-in fade-in duration-150">
       <div className="w-full max-w-lg bg-[#0B0F19] border border-purple-500/50 rounded-2xl p-6 shadow-2xl space-y-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">

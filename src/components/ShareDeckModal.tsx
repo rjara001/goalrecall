@@ -208,7 +208,7 @@ ${user.name || "Usuario"}`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] isolate flex items-center justify-center p-4 bg-slate-950/85 animate-in fade-in duration-200">
       <div 
         className="w-full max-w-2xl bg-[#090D16] border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
         role="dialog"
