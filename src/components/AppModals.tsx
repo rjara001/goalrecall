@@ -1,4 +1,5 @@
 import React from "react";
+import { User as FirebaseAuthUser } from "firebase/auth";
 import { QuickLogModal } from "./QuickLogModal";
 import { AuthModal } from "./AuthModal";
 import { SettingsBackupModal } from "./SettingsBackupModal";
@@ -11,61 +12,74 @@ import { ShareDeckModal } from "./ShareDeckModal";
 import { CertificationModal } from "./CertificationModal";
 import { CareerGoalModal } from "./CareerGoalModal";
 import { CertificationPrefillDraft } from "../hooks/useAppModals";
+import { CvSavedResult } from "../features/cv-upload/hooks/useCvUpload";
+import { ParsedBackupBundle } from "../utils/storage/backupStorage";
 import {
+  AiUsageRecord,
   CareerGoal,
   InboxAchievementDraft,
+  JobOffer,
   LogEntry,
   Product,
   TechnicalCertification,
   UserProfile,
+  VisitorMessage,
   WorkExperience,
 } from "../types";
 
 export interface AppModalsProps {
   user: UserProfile | null;
   logs: LogEntry[];
+  experiences: WorkExperience[];
+  inbox: VisitorMessage[];
+  jobOffers: JobOffer[];
   products: Product[];
   certifications: TechnicalCertification[];
+  careerGoals: CareerGoal[];
+  aiQuota: AiUsageRecord | null;
+  onAiQuotaUpdated: (quota: AiUsageRecord) => void;
   isQuickLogOpen: boolean;
   editingLog: LogEntry | null;
   initialExperienceIdForLog?: string;
   initialBulletTextForLog?: string;
   initialDraftForLog?: InboxAchievementDraft | null;
   onCloseQuickLog: () => void;
-  onSaveLog: (entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => void;
+  onSaveLog: (entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onCreateQuickExperience: (
+    expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
+  ) => Promise<WorkExperience>;
   isExperienceModalOpen: boolean;
   editingExperience: WorkExperience | null;
   onCloseExperienceModal: () => void;
   onSaveExperience: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
     newLogBulletsToCreate?: string[]
-  ) => void;
+  ) => Promise<void>;
   isCvUploadOpen: boolean;
   onCloseCvUpload: () => void;
-  onImportBatchLogs: (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => void;
-  onExperiencesUpdated: (updated: WorkExperience[]) => void;
-  onUpdateProfile: (updated: UserProfile) => void;
+  onCvSaved: (result: CvSavedResult) => Promise<void>;
+  onImportBatchLogs: (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => Promise<void>;
+  onUpdateProfile: (updated: UserProfile) => Promise<void>;
   isPasteBulletsOpen: boolean;
   onClosePasteBullets: () => void;
   onOpenCvModal: () => void;
   isAuthOpen: boolean;
   onCloseAuth: () => void;
-  onLogin: (newUser: UserProfile) => Promise<void> | void;
-  onLogout: () => void;
+  onLogin: (fbUser: FirebaseAuthUser) => Promise<void>;
+  onLogout: () => Promise<void> | void;
   onOpenAvatarModal: () => void;
-  onLoginDev: () => void;
   isSettingsOpen: boolean;
   onCloseSettings: () => void;
-  onDataChanged: () => void;
+  onImportBackupData: (bundle: ParsedBackupBundle) => Promise<number>;
   isAvatarModalOpen: boolean;
   onCloseAvatarModal: () => void;
-  onSaveAvatar: (newAvatarUrl: string) => void;
+  onSaveAvatar: (newAvatarUrl: string) => Promise<void>;
   isShareModalOpen: boolean;
   onCloseShareModal: () => void;
   isProductModalOpen: boolean;
   editingProduct: Product | null;
   onCloseProductModal: () => void;
-  onSaveProduct: (productData: any) => void;
+  onSaveProduct: (productData: Omit<Product, "id" | "createdAt"> | Product) => Promise<void>;
   isCertificationModalOpen: boolean;
   editingCertification: TechnicalCertification | null;
   certificationPrefill: CertificationPrefillDraft | null;
@@ -73,20 +87,26 @@ export interface AppModalsProps {
   onSaveCertification: (
     certData: Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt"> | TechnicalCertification,
     sourceGoalId?: string
-  ) => void;
+  ) => Promise<void>;
   isCareerGoalModalOpen: boolean;
   editingCareerGoal: CareerGoal | null;
   onCloseCareerGoalModal: () => void;
   onSaveCareerGoal: (
     goalData: Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal
-  ) => void;
+  ) => Promise<void>;
 }
 
 export const AppModals: React.FC<AppModalsProps> = ({
   user,
   logs,
+  experiences,
+  inbox,
+  jobOffers,
   products,
   certifications,
+  careerGoals,
+  aiQuota,
+  onAiQuotaUpdated,
   isQuickLogOpen,
   editingLog,
   initialExperienceIdForLog,
@@ -94,14 +114,15 @@ export const AppModals: React.FC<AppModalsProps> = ({
   initialDraftForLog,
   onCloseQuickLog,
   onSaveLog,
+  onCreateQuickExperience,
   isExperienceModalOpen,
   editingExperience,
   onCloseExperienceModal,
   onSaveExperience,
   isCvUploadOpen,
   onCloseCvUpload,
+  onCvSaved,
   onImportBatchLogs,
-  onExperiencesUpdated,
   onUpdateProfile,
   isPasteBulletsOpen,
   onClosePasteBullets,
@@ -111,10 +132,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
   onLogin,
   onLogout,
   onOpenAvatarModal,
-  onLoginDev,
   isSettingsOpen,
   onCloseSettings,
-  onDataChanged,
+  onImportBackupData,
   isAvatarModalOpen,
   onCloseAvatarModal,
   onSaveAvatar,
@@ -140,7 +160,9 @@ export const AppModals: React.FC<AppModalsProps> = ({
         isOpen={isQuickLogOpen}
         onClose={onCloseQuickLog}
         onSave={onSaveLog}
+        onCreateExperience={onCreateQuickExperience}
         existingLogs={logs}
+        experiences={experiences}
         initialData={editingLog}
         initialExperienceId={initialExperienceIdForLog}
         initialBulletText={initialBulletTextForLog}
@@ -158,10 +180,11 @@ export const AppModals: React.FC<AppModalsProps> = ({
       <CvUploadModal
         isOpen={isCvUploadOpen}
         onClose={onCloseCvUpload}
-        onImportLogs={onImportBatchLogs}
-        onExperiencesUpdated={onExperiencesUpdated}
+        existingExperiences={experiences}
         currentUser={user}
-        onUpdateProfile={onUpdateProfile}
+        aiQuota={aiQuota}
+        onAiQuotaUpdated={onAiQuotaUpdated}
+        onCvSaved={onCvSaved}
       />
 
       <PasteBulletsModal
@@ -179,15 +202,24 @@ export const AppModals: React.FC<AppModalsProps> = ({
         onLogout={onLogout}
         onUpdateProfile={onUpdateProfile}
         onOpenAvatarModal={onOpenAvatarModal}
-        onLoginDev={onLoginDev}
       />
 
       <SettingsBackupModal
         isOpen={isSettingsOpen}
         onClose={onCloseSettings}
-        onDataChanged={onDataChanged}
         totalLogs={logs.length}
         currentUser={user}
+        backupState={{
+          user,
+          logs,
+          experiences,
+          inbox,
+          jobOffers,
+          products,
+          certifications,
+          careerGoals,
+        }}
+        onImportBackupData={onImportBackupData}
         onUpdateProfile={onUpdateProfile}
         onOpenAvatarModal={onOpenAvatarModal}
       />

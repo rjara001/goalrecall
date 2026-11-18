@@ -1,28 +1,57 @@
 import React, { useEffect, useState } from "react";
 import { Briefcase, Database, Globe, Share2, X } from "lucide-react";
-import { exportBackupJson, getStoredUser, importBackupJson, saveUser } from "../utils/storage";
-import { EmploymentSocialLinks, UserProfile } from "../types";
+import {
+  buildBackupExportJson,
+  parseBackupJson,
+  ParsedBackupBundle,
+} from "../utils/storage/backupStorage";
+import { checkUsernameAvailabilityFirestore } from "../utils/firestore/repository";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
+import {
+  CareerGoal,
+  EmploymentSocialLinks,
+  JobOffer,
+  LogEntry,
+  Product,
+  TechnicalCertification,
+  UserProfile,
+  VisitorMessage,
+  WorkExperience,
+} from "../types";
 import { useI18n } from "../i18n";
 import { SETTINGS_TEXTS } from "./settings/settingsLocales";
 import { SettingsSocialTab } from "./settings/SettingsSocialTab";
 import { SettingsBackupTab } from "./settings/SettingsBackupTab";
 import { SettingsLanguageTab } from "./settings/SettingsLanguageTab";
 
+interface SettingsBackupState {
+  user: UserProfile | null;
+  logs: LogEntry[];
+  experiences: WorkExperience[];
+  inbox: VisitorMessage[];
+  jobOffers: JobOffer[];
+  products: Product[];
+  certifications: TechnicalCertification[];
+  careerGoals: CareerGoal[];
+}
+
 interface SettingsBackupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDataChanged: () => void;
   totalLogs: number;
   currentUser?: UserProfile | null;
-  onUpdateProfile?: (updated: UserProfile) => void;
+  backupState: SettingsBackupState;
+  onImportBackupData?: (bundle: ParsedBackupBundle) => Promise<number>;
+  onUpdateProfile?: (updated: UserProfile) => Promise<void> | void;
   onOpenAvatarModal?: () => void;
 }
 
 export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
   isOpen,
   onClose,
-  onDataChanged,
   currentUser,
+  backupState,
+  onImportBackupData,
   onUpdateProfile,
   onOpenAvatarModal,
 }) => {
@@ -31,7 +60,10 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
 
   const [activeTab, setActiveTab] = useState<"social" | "backup" | "language">("social");
   const [importStatus, setImportStatus] = useState<{ success: boolean; msg: string } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSavingSocial, setIsSavingSocial] = useState(false);
+  const [socialSaveError, setSocialSaveError] = useState<string | null>(null);
   const [isOtherNetworksOpen, setIsOtherNetworksOpen] = useState(false);
 
   const [links, setLinks] = useState<EmploymentSocialLinks>({
@@ -59,26 +91,26 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const activeUser = currentUser || getStoredUser();
-      if (activeUser) {
+      if (currentUser) {
         setLinks({
-          linkedin: activeUser.socialLinks?.linkedin || activeUser.linkedin || "",
-          github: activeUser.socialLinks?.github || activeUser.github || "",
-          portfolio: activeUser.socialLinks?.portfolio || "",
-          behance: activeUser.socialLinks?.behance || "",
-          leetcode: activeUser.socialLinks?.leetcode || "",
-          wellfound: activeUser.socialLinks?.wellfound || "",
-          stackoverflow: activeUser.socialLinks?.stackoverflow || "",
-          techBlog: activeUser.socialLinks?.techBlog || "",
-          twitter: activeUser.socialLinks?.twitter || "",
+          linkedin: currentUser.socialLinks?.linkedin || currentUser.linkedin || "",
+          github: currentUser.socialLinks?.github || currentUser.github || "",
+          portfolio: currentUser.socialLinks?.portfolio || "",
+          behance: currentUser.socialLinks?.behance || "",
+          leetcode: currentUser.socialLinks?.leetcode || "",
+          wellfound: currentUser.socialLinks?.wellfound || "",
+          stackoverflow: currentUser.socialLinks?.stackoverflow || "",
+          techBlog: currentUser.socialLinks?.techBlog || "",
+          twitter: currentUser.socialLinks?.twitter || "",
         });
-        if (activeUser.availabilityStatus) {
-          setAvailabilityStatus(activeUser.availabilityStatus);
+        if (currentUser.availabilityStatus) {
+          setAvailabilityStatus(currentUser.availabilityStatus);
         }
-        setUsername(activeUser.username || "");
+        setUsername(currentUser.username || "");
         setUsernameStatus({ checking: false, available: true });
       }
       setSaveSuccess(false);
+      setSocialSaveError(null);
       setImportStatus(null);
     }
   }, [isOpen, currentUser]);
@@ -90,9 +122,8 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
     }
 
     const clean = username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-    const activeUser = currentUser || getStoredUser();
 
-    if (activeUser?.username && activeUser.username.toLowerCase() === clean) {
+    if (currentUser?.username && currentUser.username.toLowerCase() === clean) {
       setUsernameStatus({ checking: false, available: true });
       return;
     }
@@ -106,36 +137,36 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
       return;
     }
 
+    let cancelled = false;
     setUsernameStatus({ checking: true });
     const timer = setTimeout(async () => {
       try {
-        const userKey = activeUser?.email || activeUser?.id || "";
-        const res = await fetch(
-          `/api/public/check-username/${encodeURIComponent(clean)}?userKey=${encodeURIComponent(userKey)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
+        const result = await checkUsernameAvailabilityFirestore(clean, currentUser?.id);
+        if (!cancelled) {
           setUsernameStatus({
             checking: false,
-            available: data.available,
-            reason: data.reason,
-            suggestions: data.suggestions,
+            available: result.available,
+            reason: result.reason,
+            suggestions: result.suggestions,
           });
-        } else {
-          setUsernameStatus({ checking: false, available: true });
         }
       } catch {
-        setUsernameStatus({ checking: false, available: true });
+        if (!cancelled) {
+          setUsernameStatus({ checking: false, available: true });
+        }
       }
     }, 350);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [username, isOpen, currentUser]);
 
   if (!isOpen) return null;
 
   const handleExport = () => {
-    const jsonStr = exportBackupJson();
+    const jsonStr = buildBackupExportJson(backupState);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -150,23 +181,54 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const content = event.target?.result as string;
-      const result = importBackupJson(content);
-      if (result.success) {
-        setImportStatus({ success: true, msg: `${result.count} logs restored.` });
-        onDataChanged();
-      } else {
-        setImportStatus({ success: false, msg: result.error || "Import failed." });
+      const parsed = parseBackupJson(content);
+      if (!parsed.success || !parsed.data) {
+        setImportStatus({ success: false, msg: parsed.error || "Import failed." });
+        return;
+      }
+
+      if (!onImportBackupData) {
+        setImportStatus({
+          success: false,
+          msg: "Debes iniciar sesión con Google para importar respaldos en Firestore.",
+        });
+        return;
+      }
+
+      setIsImporting(true);
+      setImportStatus(null);
+      try {
+        const writtenCount = await onImportBackupData(parsed.data);
+        setImportStatus({
+          success: true,
+          msg: `${parsed.count} logs analizados y ${writtenCount} registros guardados en Firestore.`,
+        });
+      } catch (err) {
+        setImportStatus({
+          success: false,
+          msg: formatFirestoreUiError(err, "No se pudo importar el respaldo en Firestore."),
+        });
+      } finally {
+        setIsImporting(false);
+        e.target.value = "";
       }
     };
     reader.readAsText(file);
   };
 
-  const handleSaveSocialLinks = (e: React.FormEvent) => {
+  const handleSaveSocialLinks = async (e: React.FormEvent) => {
     e.preventDefault();
-    const activeUser = currentUser || getStoredUser();
-    if (!activeUser) return;
+    if (isSavingSocial) return;
+    if (!currentUser) {
+      setSocialSaveError("Debes iniciar sesión con Google para guardar cambios de perfil.");
+      return;
+    }
+    if (usernameStatus.available === false) {
+      setSocialSaveError(usernameStatus.reason || "El handle /u/ elegido no está disponible.");
+      return;
+    }
 
     const cleanLinks: EmploymentSocialLinks = {
       linkedin: links.linkedin?.trim() || "",
@@ -183,22 +245,31 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
     const cleanUsername = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
 
     const updatedUser: UserProfile = {
-      ...activeUser,
-      username: cleanUsername || activeUser.username,
+      ...currentUser,
+      username: cleanUsername || currentUser.username,
       github: cleanLinks.github,
       linkedin: cleanLinks.linkedin,
       socialLinks: cleanLinks,
       availabilityStatus,
     };
 
-    saveUser(updatedUser);
-    if (onUpdateProfile) {
-      onUpdateProfile(updatedUser);
-    }
-    onDataChanged();
+    setIsSavingSocial(true);
+    setSocialSaveError(null);
+    setSaveSuccess(false);
 
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3500);
+    try {
+      if (onUpdateProfile) {
+        await onUpdateProfile(updatedUser);
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3500);
+    } catch (err) {
+      setSocialSaveError(
+        formatFirestoreUiError(err, "No se pudieron guardar los ajustes en Firestore.")
+      );
+    } finally {
+      setIsSavingSocial(false);
+    }
   };
 
   const testLink = (url?: string) => {
@@ -229,8 +300,10 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
             </div>
 
             <button
+              type="button"
+              disabled={isSavingSocial || isImporting}
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
             >
               <X className="w-4 h-4" />
             </button>
@@ -294,6 +367,8 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
               setUsername={setUsername}
               usernameStatus={usernameStatus}
               saveSuccess={saveSuccess}
+              isSaving={isSavingSocial}
+              saveError={socialSaveError}
               isOtherNetworksOpen={isOtherNetworksOpen}
               setIsOtherNetworksOpen={setIsOtherNetworksOpen}
               onSubmit={handleSaveSocialLinks}
@@ -304,6 +379,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
             <SettingsBackupTab
               st={st}
               importStatus={importStatus}
+              isImporting={isImporting}
               onExport={handleExport}
               onFileUpload={handleFileUpload}
             />

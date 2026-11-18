@@ -19,7 +19,13 @@ import {
 } from "lucide-react";
 import { LogEntry, Product, TechnicalCertification, UserProfile } from "../types";
 import { generatePublicDeckShareUrl } from "../utils/publicDeckShare";
-import { saveUser, triggerCloudSync } from "../utils/storage";
+import {
+  deletePublicShowcaseFirestore,
+  getPublicShowcaseFirestore,
+  saveUserProfileFirestore,
+  syncPublicShowcaseFirestore,
+} from "../utils/firestore/repository";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { GitHubProfileExportPanel } from "./share/GitHubProfileExportPanel";
 
 interface ShareDeckModalProps {
@@ -54,6 +60,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
   const [isLinkCreated, setIsLinkCreated] = useState<boolean>(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState<boolean>(true);
   const [isOperating, setIsOperating] = useState<boolean>(false);
+  const [operateError, setOperateError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [activeShareTab, setActiveShareTab] = useState<"recruiter" | "github">("recruiter");
 
@@ -71,6 +78,7 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
     setIsGenerating(true);
     setIsCheckingStatus(true);
     setShowDeleteConfirm(false);
+    setOperateError(null);
 
     const origin = typeof window !== "undefined" ? window.location.origin : "https://goalrecall.com";
     setCleanHandleUrl(`${origin}/u/${userHandle}`);
@@ -90,11 +98,10 @@ export const ShareDeckModal: React.FC<ShareDeckModalProps> = ({
         }
       });
 
-    // Check if showcase already exists
-    fetch(`/api/public/u/${encodeURIComponent(userHandle)}`)
-      .then((res) => {
+    getPublicShowcaseFirestore(userHandle)
+      .then((showcase) => {
         if (isMounted) {
-          setIsLinkCreated(res.ok);
+          setIsLinkCreated(Boolean(showcase));
           setIsCheckingStatus(false);
         }
       })
@@ -150,33 +157,33 @@ ${user.name || "Usuario"}`;
 
   const handleCreateLink = async () => {
     setIsOperating(true);
+    setOperateError(null);
     try {
       const updatedUser: UserProfile = {
         ...user,
         username: userHandle,
       };
-      saveUser(updatedUser);
-      triggerCloudSync(true);
-
-      const res = await fetch("/api/public/claim-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: userHandle,
-          userKey: user.id || user.email || "usr-current",
-          userProfile: updatedUser,
-          logs: publicLogs,
-          products: publicProducts,
-          certifications: publicCertifications,
-        }),
+      if (updatedUser.username !== user.username) {
+        await saveUserProfileFirestore(updatedUser);
+      }
+      const published = await syncPublicShowcaseFirestore({
+        username: userHandle,
+        userProfile: updatedUser,
+        logs,
+        products,
+        certifications,
+        createIfMissing: true,
       });
 
-      if (res.ok) {
+      if (published) {
         setIsLinkCreated(true);
         if (onShowcaseStatusChange) onShowcaseStatusChange(true);
       }
     } catch (err) {
       console.error("Error creating showcase link:", err);
+      setOperateError(
+        formatFirestoreUiError(err, "No se pudo publicar tu vitrina pública en Firestore.")
+      );
     } finally {
       setIsOperating(false);
     }
@@ -184,23 +191,17 @@ ${user.name || "Usuario"}`;
 
   const handleDeleteLink = async () => {
     setIsOperating(true);
+    setOperateError(null);
     try {
-      const res = await fetch("/api/public/delete-showcase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: userHandle,
-          userKey: user.id || user.email,
-        }),
-      });
-
-      if (res.ok) {
-        setIsLinkCreated(false);
-        setShowDeleteConfirm(false);
-        if (onShowcaseStatusChange) onShowcaseStatusChange(false);
-      }
+      await deletePublicShowcaseFirestore(userHandle);
+      setIsLinkCreated(false);
+      setShowDeleteConfirm(false);
+      if (onShowcaseStatusChange) onShowcaseStatusChange(false);
     } catch (err) {
       console.error("Error deleting showcase link:", err);
+      setOperateError(
+        formatFirestoreUiError(err, "No se pudo despublicar la vitrina en Firestore.")
+      );
     } finally {
       setIsOperating(false);
     }
@@ -410,6 +411,16 @@ ${user.name || "Usuario"}`;
                     <span>Sí, Eliminar Link</span>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {operateError && (
+              <div
+                role="alert"
+                className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2"
+              >
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{operateError}</span>
               </div>
             )}
 

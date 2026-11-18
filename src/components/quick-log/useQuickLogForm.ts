@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { InboxAchievementDraft, LogCategory, LogEntry, PresetTemplate } from "../../types";
+import {
+  InboxAchievementDraft,
+  LogCategory,
+  LogEntry,
+  PresetTemplate,
+  WorkExperience,
+} from "../../types";
+import { formatFirestoreUiError } from "../../utils/firestore/errors";
 import {
   DEFAULT_TECH_CATEGORIES,
   DEFAULT_MARKETING_CATEGORIES,
@@ -10,11 +17,15 @@ import {
 interface UseQuickLogFormOptions {
   isOpen: boolean;
   existingLogs: LogEntry[];
+  experiences: WorkExperience[];
   initialData?: LogEntry | null;
   initialExperienceId?: string;
   initialBulletText?: string;
   initialDraft?: InboxAchievementDraft | null;
-  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => void;
+  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onCreateExperience?: (
+    expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
+  ) => Promise<WorkExperience>;
   onClose: () => void;
   titleInputRef: React.RefObject<HTMLTextAreaElement | null>;
 }
@@ -22,11 +33,13 @@ interface UseQuickLogFormOptions {
 export function useQuickLogForm({
   isOpen,
   existingLogs,
+  experiences,
   initialData,
   initialExperienceId,
   initialBulletText,
   initialDraft,
   onSave,
+  onCreateExperience,
   onClose,
   titleInputRef,
 }: UseQuickLogFormOptions) {
@@ -61,7 +74,9 @@ export function useQuickLogForm({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
-  const [experiencesList, setExperiencesList] = useState<any[]>([]);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const existingProjects = useMemo(
     () => Array.from(new Set(existingLogs.map((l) => l.project))).filter(Boolean),
@@ -95,81 +110,93 @@ export function useQuickLogForm({
     setIsDescriptionOpen(false);
     setIsContextVisible(false);
     setIsTemplatesOpen(false);
+    setIsCreatingNewExp(false);
+    setNewExpCompany("");
+    setNewExpRole("");
+    setIsSaving(false);
+    setSaveError(null);
 
-    import("../../utils/storage").then(({ getStoredExperiences }) => {
-      const exps = getStoredExperiences();
-      setExperiencesList(exps);
+    const exps = experiences || [];
 
-      if (initialData) {
-        setTitle(initialData.title);
-        setWhatWasSought(initialData.whatWasSought || "");
-        setWhyImportant(initialData.whyImportant || "");
-        setHowApplied(initialData.howApplied || "");
-        setImpact(initialData.impact || "");
-        setDescription(initialData.description || "");
-        setDate(initialData.date);
-        setExperienceId(initialData.experienceId || exps[0]?.id || "exp-personal");
-        setClient(initialData.client);
-        setProject(initialData.project);
-        setCategory(initialData.category);
-        setTags(initialData.tags || []);
-        setIsPublic(initialData.isPublic);
+    if (initialData) {
+      setTitle(initialData.title);
+      setWhatWasSought(initialData.whatWasSought || "");
+      setWhyImportant(initialData.whyImportant || "");
+      setHowApplied(initialData.howApplied || "");
+      setImpact(initialData.impact || "");
+      setDescription(initialData.description || "");
+      setDate(initialData.date);
+      setExperienceId(initialData.experienceId || exps[0]?.id || "exp-personal");
+      setClient(initialData.client);
+      setProject(initialData.project);
+      setCategory(initialData.category);
+      setTags(initialData.tags || []);
+      setIsPublic(initialData.isPublic);
+    } else {
+      const targetExp = initialExperienceId
+        ? exps.find((e) => e.id === initialExperienceId)
+        : null;
+      const defaultExp = targetExp ||
+        exps[0] || {
+          id: "exp-personal",
+          company: "Proyectos Personales & Consultoría Independiente",
+          technologies: [] as string[],
+        };
+
+      setDate(new Date().toISOString().substring(0, 10));
+      setExperienceId(defaultExp.id);
+      setClient(defaultExp.company);
+      setProject(existingProjects[0] || "Producción");
+      setCategory("Feature ✨");
+
+      if (initialDraft) {
+        setClient(initialDraft.client || defaultExp.company);
+        setProject(initialDraft.project || existingProjects[0] || "Producción");
+        setCategory(initialDraft.category || "Feature ✨");
+        setTitle(initialDraft.title || "");
+        setWhatWasSought(initialDraft.whatWasSought || "");
+        setWhyImportant(initialDraft.whyImportant || "");
+        setHowApplied(initialDraft.howApplied || "");
+        setDescription(initialDraft.description || "");
+        setImpact(initialDraft.impact || "");
+        setTags(initialDraft.tags?.length ? initialDraft.tags : ["#Engineering"]);
+        if (initialDraft.impact) setIsImpactOpen(true);
+      } else if (initialBulletText) {
+        const prefill = buildBulletPrefill(
+          initialBulletText,
+          defaultExp.company,
+          defaultExp.technologies
+        );
+        setTitle(prefill.title);
+        setDescription(prefill.description);
+        setWhatWasSought(prefill.whatWasSought);
+        setWhyImportant(prefill.whyImportant);
+        setHowApplied(prefill.howApplied);
+        setImpact(prefill.impact);
+        setTags(prefill.tags);
       } else {
-        const targetExp = initialExperienceId
-          ? exps.find((e) => e.id === initialExperienceId)
-          : null;
-        const defaultExp = targetExp ||
-          exps[0] || {
-            id: "exp-personal",
-            company: "Proyectos Personales & Consultoría Independiente",
-          };
-
-        setDate(new Date().toISOString().substring(0, 10));
-        setExperienceId(defaultExp.id);
-        setClient(defaultExp.company);
-        setProject(existingProjects[0] || "Producción");
-        setCategory("Feature ✨");
-
-        if (initialDraft) {
-          setClient(initialDraft.client || defaultExp.company);
-          setProject(initialDraft.project || existingProjects[0] || "Producción");
-          setCategory(initialDraft.category || "Feature ✨");
-          setTitle(initialDraft.title || "");
-          setWhatWasSought(initialDraft.whatWasSought || "");
-          setWhyImportant(initialDraft.whyImportant || "");
-          setHowApplied(initialDraft.howApplied || "");
-          setDescription(initialDraft.description || "");
-          setImpact(initialDraft.impact || "");
-          setTags(initialDraft.tags?.length ? initialDraft.tags : ["#Engineering"]);
-          if (initialDraft.impact) setIsImpactOpen(true);
-        } else if (initialBulletText) {
-          const prefill = buildBulletPrefill(
-            initialBulletText,
-            defaultExp.company,
-            defaultExp.technologies
-          );
-          setTitle(prefill.title);
-          setDescription(prefill.description);
-          setWhatWasSought(prefill.whatWasSought);
-          setWhyImportant(prefill.whyImportant);
-          setHowApplied(prefill.howApplied);
-          setImpact(prefill.impact);
-          setTags(prefill.tags);
-        } else {
-          setTitle("");
-          setWhatWasSought("");
-          setWhyImportant("");
-          setHowApplied("");
-          setDescription("");
-          setImpact("");
-          setTags(["#FullStack", "#TypeScript"]);
-        }
-        setIsPublic(false);
+        setTitle("");
+        setWhatWasSought("");
+        setWhyImportant("");
+        setHowApplied("");
+        setDescription("");
+        setImpact("");
+        setTags(["#FullStack", "#TypeScript"]);
       }
+      setIsPublic(false);
+    }
 
-      setTimeout(() => titleInputRef.current?.focus(), 100);
-    });
-  }, [initialData, isOpen, initialExperienceId, initialBulletText, initialDraft]);
+    setTimeout(() => titleInputRef.current?.focus(), 100);
+  }, [
+    initialData,
+    isOpen,
+    initialExperienceId,
+    initialBulletText,
+    initialDraft,
+    experiences,
+    existingProjects,
+    titleInputRef,
+  ]);
 
   const handleAddCustomCategory = () => {
     const clean = customCategoryInput.trim();
@@ -210,46 +237,63 @@ export function useQuickLogForm({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || isSaving) return;
 
-    const finalImpact =
-      impact.trim() || "Completado y verificado en entorno de producción";
-    let targetExpId = experienceId;
-    let targetClient = client;
+    setIsSaving(true);
+    setSaveError(null);
 
-    if (isCreatingNewExp && newExpCompany.trim()) {
-      const { addExperience } = await import("../../utils/storage");
-      const createdExp = addExperience({
-        company: newExpCompany.trim(),
-        role: newExpRole.trim() || "Ingeniero",
-        startDate: new Date().getFullYear().toString(),
-        isCurrent: true,
-        summary: "Experiencia registrada para asignación de logros.",
-        isPersonalProjects: false,
+    try {
+      const finalImpact =
+        impact.trim() || "Completado y verificado en entorno de producción";
+      let targetExpId = experienceId;
+      let targetClient = client;
+
+      if (isCreatingNewExp && newExpCompany.trim()) {
+        if (!onCreateExperience) {
+          throw new Error("No se pudo crear la empresa en Firestore.");
+        }
+        const createdExp = await onCreateExperience({
+          company: newExpCompany.trim(),
+          role: newExpRole.trim() || "Ingeniero",
+          startDate: new Date().getFullYear().toString(),
+          isCurrent: true,
+          summary: "Experiencia registrada para asignación de logros.",
+          isPersonalProjects: false,
+        });
+        targetExpId = createdExp.id;
+        targetClient = createdExp.company;
+      }
+
+      await onSave({
+        date,
+        experienceId: targetExpId,
+        client: targetClient.trim() || "Empresa",
+        project: project.trim() || "General",
+        category,
+        title: title.trim(),
+        whatWasSought: whatWasSought.trim() || undefined,
+        whyImportant: whyImportant.trim() || undefined,
+        howApplied: howApplied.trim() || undefined,
+        description: description.trim() || undefined,
+        impact: finalImpact,
+        tags,
+        isPublic,
       });
-      targetExpId = createdExp.id;
-      targetClient = createdExp.company;
-    }
 
-    onSave({
-      date,
-      experienceId: targetExpId,
-      client: targetClient.trim() || "Empresa",
-      project: project.trim() || "General",
-      category,
-      title: title.trim(),
-      whatWasSought: whatWasSought.trim() || undefined,
-      whyImportant: whyImportant.trim() || undefined,
-      howApplied: howApplied.trim() || undefined,
-      description: description.trim() || undefined,
-      impact: finalImpact,
-      tags,
-      isPublic,
-    });
-    onClose();
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(
+          err,
+          "No se pudo guardar el logro en Firestore. Inténtalo de nuevo."
+        )
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const currentExpObj = experiencesList.find((exp) => exp.id === experienceId);
+  const currentExpObj = (experiences || []).find((exp) => exp.id === experienceId);
   const companyLabel = isCreatingNewExp
     ? newExpCompany || "Nueva Empresa"
     : currentExpObj?.company || client || "Personal";
@@ -306,9 +350,11 @@ export function useQuickLogForm({
     tags,
     isPublic,
     setIsPublic,
-    experiencesList,
+    experiencesList: experiences || [],
     existingProjects,
     companyLabel,
+    isSaving,
+    saveError,
     handleAddCustomCategory,
     applyPreset,
     handleAddTag,

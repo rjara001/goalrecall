@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   X, 
   Camera, 
@@ -9,9 +9,11 @@ import {
   RotateCcw, 
   AlertCircle,
   Eye,
-  UserCheck
+  UserCheck,
+  Loader2
 } from "lucide-react";
 import { compressAndCropAvatar } from "../utils/imageCompressor";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { useI18n } from "../i18n";
 
 interface AvatarModalProps {
@@ -19,7 +21,7 @@ interface AvatarModalProps {
   onClose: () => void;
   currentAvatar: string;
   userName: string;
-  onSaveAvatar: (newAvatarUrl: string) => void;
+  onSaveAvatar: (newAvatarUrl: string) => Promise<void> | void;
 }
 
 const PRESET_AVATARS = [
@@ -192,9 +194,18 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
   const [selectedAvatar, setSelectedAvatar] = useState<string>(currentAvatar);
   const [customUrl, setCustomUrl] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedAvatar(currentAvatar);
+      setErrorMsg(null);
+      setIsSaving(false);
+    }
+  }, [isOpen, currentAvatar]);
 
   if (!isOpen) return null;
 
@@ -254,9 +265,20 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
     setSelectedAvatar(clean);
   };
 
-  const handleSave = () => {
-    onSaveAvatar(selectedAvatar);
-    onClose();
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setErrorMsg(null);
+    try {
+      await onSaveAvatar(selectedAvatar);
+      onClose();
+    } catch (err) {
+      setErrorMsg(
+        formatFirestoreUiError(err, "No se pudo guardar el avatar en Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleResetDefault = () => {
@@ -287,8 +309,10 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
           </div>
 
           <button
+            type="button"
+            disabled={isSaving}
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-4 h-4" />
           </button>
@@ -556,20 +580,25 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/80 flex items-center justify-end gap-3 shrink-0">
           <button
             type="button"
+            disabled={isSaving}
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors"
+            className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-semibold transition-colors disabled:opacity-40"
           >
             {t.common.cancel}
           </button>
 
           <button
             type="button"
-            onClick={handleSave}
-            disabled={isProcessing}
+            onClick={() => void handleSave()}
+            disabled={isProcessing || isSaving}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-400 hover:from-cyan-400 hover:to-cyan-300 text-slate-950 text-xs font-bold shadow-md shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50"
           >
-            <UserCheck className="w-4 h-4" />
-            <span>{t.modals.saveAvatarBtn}</span>
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <UserCheck className="w-4 h-4" />
+            )}
+            <span>{isSaving ? "Guardando..." : t.modals.saveAvatarBtn}</span>
           </button>
         </div>
       </div>

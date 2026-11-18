@@ -1,9 +1,5 @@
-import {
-  CareerGoal,
-  CareerGoalStatus,
-} from "../../types";
-import { STORAGE_KEYS } from "./keys";
-import { notifyCloudSync, workspaceState } from "./workspaceState";
+import { CareerGoal, CareerGoalStatus } from "../../types";
+import { workspaceState } from "./workspaceState";
 
 export const getCareerGoalProgress = (
   goal: Pick<CareerGoal, "actionItems" | "status">
@@ -25,36 +21,11 @@ export const getCareerGoalProgress = (
 };
 
 export const getStoredCareerGoals = (): CareerGoal[] => {
-  if (workspaceState.careerGoals.length > 0) {
-    return workspaceState.careerGoals;
-  }
-  if (typeof localStorage !== "undefined") {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.CAREER_GOALS);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          workspaceState.careerGoals = parsed;
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore invalid storage payload
-    }
-  }
   return workspaceState.careerGoals;
 };
 
 export const saveCareerGoals = (goals: CareerGoal[]): void => {
   workspaceState.careerGoals = goals;
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CAREER_GOALS, JSON.stringify(goals));
-    } catch {
-      // ignore quota failure
-    }
-  }
-  notifyCloudSync();
 };
 
 export const addCareerGoal = (

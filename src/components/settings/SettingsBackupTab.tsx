@@ -1,10 +1,11 @@
 import React from "react";
-import { AlertCircle, Check, Download, FileJson, Upload } from "lucide-react";
+import { AlertCircle, Check, Download, FileJson, Loader2, Upload } from "lucide-react";
 import { SettingsLocaleText } from "./settingsLocales";
 
 interface SettingsBackupTabProps {
   st: SettingsLocaleText;
   importStatus: { success: boolean; msg: string } | null;
+  isImporting?: boolean;
   onExport: () => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
@@ -12,6 +13,7 @@ interface SettingsBackupTabProps {
 export const SettingsBackupTab: React.FC<SettingsBackupTabProps> = ({
   st,
   importStatus,
+  isImporting = false,
   onExport,
   onFileUpload,
 }) => {
@@ -66,10 +68,31 @@ export const SettingsBackupTab: React.FC<SettingsBackupTabProps> = ({
           </div>
         </div>
 
-        <label className="flex items-center justify-center gap-2 py-2.5 px-4 border border-slate-700 hover:border-cyan-500 rounded-lg bg-slate-800/80 hover:bg-slate-800 cursor-pointer text-slate-200 hover:text-white transition-colors font-medium">
-          <Upload className="w-4 h-4 text-cyan-400" />
-          <span>{st.loadJsonBtn}</span>
-          <input type="file" accept=".json" onChange={onFileUpload} className="hidden" />
+        <label
+          className={`flex items-center justify-center gap-2 py-2.5 px-4 border border-slate-700 rounded-lg bg-slate-800/80 text-slate-200 transition-colors font-medium ${
+            isImporting
+              ? "opacity-60 cursor-wait"
+              : "hover:border-cyan-500 hover:bg-slate-800 hover:text-white cursor-pointer"
+          }`}
+        >
+          {isImporting ? (
+            <>
+              <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+              <span>Importando respaldo a Firestore...</span>
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 text-cyan-400" />
+              <span>{st.loadJsonBtn}</span>
+            </>
+          )}
+          <input
+            type="file"
+            accept=".json"
+            disabled={isImporting}
+            onChange={onFileUpload}
+            className="hidden"
+          />
         </label>
       </div>
     </div>

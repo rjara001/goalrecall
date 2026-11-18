@@ -10,16 +10,18 @@ import {
   Lock, 
   AlertCircle,
   ArrowRight,
-  ClipboardList
+  ClipboardList,
+  Loader2
 } from "lucide-react";
 import { LogEntry } from "../types";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 interface PasteBulletsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => void;
+  onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => Promise<void> | void;
   onOpenCvModal?: () => void;
 }
 
@@ -35,6 +37,8 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
   const [defaultClient, setDefaultClient] = useState("Cliente General");
   const [defaultProject, setDefaultProject] = useState("Core Platform");
   const [defaultCategory, setDefaultCategory] = useState<LogEntry["category"]>("Feature ✨");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -44,30 +48,41 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
     .map((l) => l.replace(/^[\s•\-\*\d\.\)\>]+/, "").trim())
     .filter((l) => l.length > 8);
 
-  const handleImport = () => {
-    if (lines.length === 0) return;
+  const handleImport = async () => {
+    if (lines.length === 0 || isSaving) return;
 
-    const newLogs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[] = lines.map((line) => {
-      // Basic smart metric heuristic
-      const metricMatch = line.match(/(\d+[\%|\$|k|ms|s|x|min|hr|req]+|reduc|increas|mejor|optimi)[^\,\.\;]*/i);
-      const impactText = metricMatch ? metricMatch[0] : ml.defaultImpact;
+    setIsSaving(true);
+    setSaveError(null);
 
-      return {
-        date: new Date().toISOString().substring(0, 10),
-        client: defaultClient.trim() || "Cliente General",
-        project: defaultProject.trim() || "Core Platform",
-        category: defaultCategory,
-        title: line, // Logro multilínea completo (la viñeta cargada)
-        description: line,
-        impact: impactText,
-        tags: ["#Importado", "#Viñeta"],
-        isPublic: false, // Default strictly to private vault (Bóveda Privada)
-      };
-    });
+    try {
+      const newLogs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[] = lines.map((line) => {
+        // Basic smart metric heuristic
+        const metricMatch = line.match(/(\d+[\%|\$|k|ms|s|x|min|hr|req]+|reduc|increas|mejor|optimi)[^\,\.\;]*/i);
+        const impactText = metricMatch ? metricMatch[0] : ml.defaultImpact;
 
-    onImportLogs(newLogs);
-    setRawText("");
-    onClose();
+        return {
+          date: new Date().toISOString().substring(0, 10),
+          client: defaultClient.trim() || "Cliente General",
+          project: defaultProject.trim() || "Core Platform",
+          category: defaultCategory,
+          title: line, // Logro multilínea completo (la viñeta cargada)
+          description: line,
+          impact: impactText,
+          tags: ["#Importado", "#Viñeta"],
+          isPublic: false, // Default strictly to private vault (Bóveda Privada)
+        };
+      });
+
+      await onImportLogs(newLogs);
+      setRawText("");
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(err, "No se pudieron importar las viñetas a Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -93,9 +108,11 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
           </div>
 
           <button
+            type="button"
+            disabled={isSaving}
             onClick={onClose}
             aria-label={t.common.close}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-4 h-4" />
           </button>
@@ -103,6 +120,15 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
 
         {/* Body */}
         <div className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+          {saveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{saveError}</span>
+            </div>
+          )}
           {/* Metadata defaults */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
             <div>
@@ -238,24 +264,34 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-900/60">
           <button
             type="button"
+            disabled={isSaving}
             onClick={onClose}
-            className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+            className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors disabled:opacity-40"
           >
             Cancelar
           </button>
 
           <button
             type="button"
-            onClick={handleImport}
-            disabled={lines.length === 0}
+            onClick={() => void handleImport()}
+            disabled={lines.length === 0 || isSaving}
             className={`px-5 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all ${
-              lines.length > 0
+              lines.length > 0 && !isSaving
                 ? "bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20 active:scale-95 cursor-pointer"
                 : "bg-slate-800 text-slate-500 cursor-not-allowed"
             }`}
           >
-            <span>Crear {lines.length} {lines.length === 1 ? "Logro" : "Logros"}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            {isSaving ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Guardando en Firestore...</span>
+              </>
+            ) : (
+              <>
+                <span>Crear {lines.length} {lines.length === 1 ? "Logro" : "Logros"}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            )}
           </button>
         </div>
       </div>

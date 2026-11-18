@@ -4,9 +4,6 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { createCvRouter } from "./server/routes/cv";
-import { createPublicRouter } from "./server/routes/public";
-import { createCloudSyncRouter } from "./server/routes/cloudSync";
-import { createProductsRouter } from "./server/routes/products";
 import { createIntegrationsRouter } from "./server/routes/integrations";
 
 dotenv.config();
@@ -24,9 +21,6 @@ app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 app.use(express.static(path.resolve(__dirname, "public")));
 
 app.use("/api/cv", createCvRouter());
-app.use("/api/public", createPublicRouter());
-app.use("/api/cloud-sync", createCloudSyncRouter());
-app.use("/api/products", createProductsRouter());
 app.use("/api/integrations", createIntegrationsRouter());
 
 async function startServer() {

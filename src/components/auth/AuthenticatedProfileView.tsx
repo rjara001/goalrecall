@@ -1,9 +1,10 @@
 import React from "react";
 import {
+  AlertCircle,
   Camera,
   CheckCircle2,
-  ShieldCheck,
   Edit3,
+  Loader2,
   LogOut,
 } from "lucide-react";
 import { UserProfile } from "../../types";
@@ -30,6 +31,8 @@ interface AuthenticatedProfileViewProps {
   setEditLocation: (v: string) => void;
   editBio: string;
   setEditBio: (v: string) => void;
+  isSavingProfile: boolean;
+  profileSaveError: string | null;
   onSaveProfile: (e: React.FormEvent) => void;
 }
 
@@ -54,6 +57,8 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
   setEditLocation,
   editBio,
   setEditBio,
+  isSavingProfile,
+  profileSaveError,
   onSaveProfile,
 }) => {
   return (
@@ -84,17 +89,10 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
               <h4 className="text-base font-bold text-white truncate">
                 {currentUser.name}
               </h4>
-              {currentUser.authProvider === "google" ? (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>Google Login</span>
-                </span>
-              ) : (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/80 font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>Custom Login</span>
-                </span>
-              )}
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Google Auth</span>
+              </span>
             </div>
 
             <p className="text-xs text-cyan-300 font-medium truncate mt-0.5">
@@ -115,16 +113,20 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-xs">
           <button
+            type="button"
+            disabled={isSavingProfile}
             onClick={() => setIsEditingProfile(!isEditingProfile)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl transition-colors disabled:opacity-50"
           >
             <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
             <span>{isEditingProfile ? at.closeEdit : at.editProfile}</span>
           </button>
 
           <button
+            type="button"
+            disabled={isSavingProfile}
             onClick={onLogoutAndClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 font-semibold rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 font-semibold rounded-xl transition-colors disabled:opacity-50"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>{at.logout}</span>
@@ -152,6 +154,16 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
               </button>
             )}
           </div>
+
+          {profileSaveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 flex items-start gap-2 text-xs"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{profileSaveError}</span>
+            </div>
+          )}
 
           <div>
             <label className="block text-slate-300 font-medium mb-1">
@@ -253,16 +265,19 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
+              disabled={isSavingProfile}
               onClick={() => setIsEditingProfile(false)}
-              className="px-3 py-1.5 text-slate-400 hover:text-white"
+              className="px-3 py-1.5 text-slate-400 hover:text-white disabled:opacity-50"
             >
               {tCommonCancel}
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl shadow-sm"
+              disabled={isSavingProfile || editUsernameStatus.available === false}
+              className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl shadow-sm flex items-center gap-1.5"
             >
-              {tCommonSave}
+              {isSavingProfile && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isSavingProfile ? "Guardando..." : tCommonSave}</span>
             </button>
           </div>
         </form>

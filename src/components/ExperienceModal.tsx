@@ -17,11 +17,14 @@ import {
   CheckSquare, 
   Square, 
   Lock,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { WorkExperience, LogEntry, LogCategory } from "../types";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 interface ExperienceModalProps {
   isOpen: boolean;
@@ -29,7 +32,7 @@ interface ExperienceModalProps {
   onSave: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
     bulletsToCreate?: string[]
-  ) => void;
+  ) => Promise<void> | void;
   initialData?: WorkExperience | null;
   existingLogs?: LogEntry[];
 }
@@ -115,6 +118,8 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   // Bullets to autocreate in confirmation step
   const [pendingBullets, setPendingBullets] = useState<string[]>([]);
   const [selectedBullets, setSelectedBullets] = useState<Record<string, boolean>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -146,6 +151,8 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
     setIsLocationTechOpen(false);
     setPendingBullets([]);
     setSelectedBullets({});
+    setIsSaving(false);
+    setSaveError(null);
   }, [initialData, isOpen]);
 
   if (!isOpen) return null;
@@ -194,9 +201,30 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
     };
   };
 
+  const commitExperienceSave = async (
+    expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
+    bulletsToCreate: string[]
+  ) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(expData, bulletsToCreate);
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(err, "No se pudo guardar la experiencia en Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Called when user clicks "Guardar Experiencia" on form
-  const handleProceedToSave = (e: React.FormEvent) => {
+  const handleProceedToSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setSaveError(null);
     const { expData, parsedBullets } = getCleanExpData();
 
     // Check which bullets are brand new (not already in existing logs)
@@ -221,19 +249,19 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setModalStep("confirm_autocreate");
     } else {
       // No new bullets to autocreate, save directly
-      onSave(expData, []);
+      await commitExperienceSave(expData, []);
     }
   };
 
-  const handleConfirmAutocreate = () => {
+  const handleConfirmAutocreate = async () => {
     const { expData } = getCleanExpData();
     const chosen = pendingBullets.filter((b) => selectedBullets[b]);
-    onSave(expData, chosen);
+    await commitExperienceSave(expData, chosen);
   };
 
-  const handleSaveOnlyExperience = () => {
+  const handleSaveOnlyExperience = async () => {
     const { expData } = getCleanExpData();
-    onSave(expData, []);
+    await commitExperienceSave(expData, []);
   };
 
   const toggleAllBullets = () => {
@@ -288,9 +316,11 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
+            disabled={isSaving}
             onClick={onClose}
             aria-label={t.common.close}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
@@ -299,6 +329,15 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
         {/* STEP 2: CONFIRMATION MODAL PRESENTING AUTOCREATION */}
         {modalStep === "confirm_autocreate" ? (
           <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1 animate-in fade-in duration-150">
+            {saveError && (
+              <div
+                role="alert"
+                className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+              >
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{saveError}</span>
+              </div>
+            )}
             
             {/* Informative Presentation Banner */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/50 via-slate-900 to-slate-900 border border-cyan-500/40 space-y-2">
@@ -378,8 +417,9 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5">
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => setModalStep("form")}
-                className="w-full sm:w-auto px-3 py-2 text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 text-xs font-semibold"
+                className="w-full sm:w-auto px-3 py-2 text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 text-xs font-semibold disabled:opacity-40"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Volver a editar</span>
@@ -388,21 +428,30 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleSaveOnlyExperience}
-                  className="w-full sm:w-auto px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  disabled={isSaving}
+                  onClick={() => void handleSaveOnlyExperience()}
+                  className="w-full sm:w-auto px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
                 >
                   Solo guardar empresa
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmAutocreate}
-                  disabled={selectedCount === 0}
+                  onClick={() => void handleConfirmAutocreate()}
+                  disabled={selectedCount === 0 || isSaving}
                   className={`w-full sm:w-auto px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg text-xs transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 ${
-                    selectedCount === 0 ? "opacity-50 cursor-not-allowed" : ""
+                    selectedCount === 0 || isSaving ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Confirmar y Autocrear ({selectedCount} Logros)</span>
+                  {isSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {isSaving
+                      ? "Guardando en Firestore..."
+                      : `Confirmar y Autocrear (${selectedCount} Logros)`}
+                  </span>
                 </button>
               </div>
             </div>
@@ -411,6 +460,15 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
         ) : (
           /* STEP 1: MAIN FORM */
           <form onSubmit={handleProceedToSave} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+            {saveError && (
+              <div
+                role="alert"
+                className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+              >
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{saveError}</span>
+              </div>
+            )}
             
             {/* 1. PRIMARY FIELD: Misión & Contexto General del Rol */}
             <div className="space-y-1.5 p-4 bg-cyan-950/20 border border-cyan-800/40 rounded-xl">
@@ -760,20 +818,30 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
             <div className="pt-3 border-t border-slate-800/80 flex items-center justify-end gap-2.5">
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg transition-colors text-xs"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg transition-colors text-xs disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg transition-all shadow-md shadow-cyan-500/20 text-xs flex items-center gap-1.5"
+                disabled={isSaving}
+                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold rounded-lg transition-all shadow-md shadow-cyan-500/20 text-xs flex items-center gap-1.5"
               >
-                <Check className="w-4 h-4" />
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
                 <span>
-                  {bulletCount > 0 ? "Guardar y Revisar Logros" : "Guardar Experiencia"}
+                  {isSaving
+                    ? "Guardando en Firestore..."
+                    : bulletCount > 0
+                    ? "Guardar y Revisar Logros"
+                    : "Guardar Experiencia"}
                 </span>
-                {bulletCount > 0 && <ChevronRight className="w-3.5 h-3.5" />}
+                {!isSaving && bulletCount > 0 && <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             </div>
           </form>

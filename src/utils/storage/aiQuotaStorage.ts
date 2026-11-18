@@ -1,39 +1,39 @@
 import { AiUsageRecord } from "../../types";
-import { STORAGE_KEYS } from "./keys";
 
 export const MAX_FREE_MONTHLY_AI_USES = 3;
 export const AI_COOLDOWN_MS = 10_000;
-const PRO_WAITLIST_KEY = "goal_recall_pro_waitlist_v1";
 
-export const getAiUsage = (now: Date = new Date()): AiUsageRecord => {
+let inMemoryAiUsage: AiUsageRecord | null = null;
+let inMemoryWaitlist: string[] = [];
+
+export const resetInMemoryAiQuotaForTests = (): void => {
+  inMemoryAiUsage = null;
+  inMemoryWaitlist = [];
+};
+
+export const getAiUsage = (
+  now: Date = new Date(),
+  overrideRecord?: AiUsageRecord | null
+): AiUsageRecord => {
   const currentMonthKey = now.toISOString().substring(0, 7);
-  if (typeof localStorage === "undefined") {
+  const source = overrideRecord ?? inMemoryAiUsage;
+  if (!source) {
     return { monthKey: currentMonthKey, count: 0, lastUsed: 0 };
   }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.AI_USAGE);
-    if (!raw) {
-      return { monthKey: currentMonthKey, count: 0, lastUsed: 0 };
-    }
-    const parsed: AiUsageRecord = JSON.parse(raw);
-    if (parsed.monthKey !== currentMonthKey) {
-      const resetRecord: AiUsageRecord = {
-        monthKey: currentMonthKey,
-        count: 0,
-        lastUsed: parsed.lastUsed || 0,
-      };
-      localStorage.setItem(STORAGE_KEYS.AI_USAGE, JSON.stringify(resetRecord));
-      return resetRecord;
-    }
-    return parsed;
-  } catch {
-    return { monthKey: currentMonthKey, count: 0, lastUsed: 0 };
+  if (source.monthKey !== currentMonthKey) {
+    return {
+      monthKey: currentMonthKey,
+      count: 0,
+      lastUsed: source.lastUsed || 0,
+    };
   }
+  return source;
 };
 
 export const checkCanUseAi = (
   plan: "free" | "pro" = "free",
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  usageRecord?: AiUsageRecord | null
 ): {
   canUse: boolean;
   reason?: string;
@@ -41,7 +41,7 @@ export const checkCanUseAi = (
   cooldownRemainingMs: number;
   usage: AiUsageRecord;
 } => {
-  const usage = getAiUsage(new Date(nowMs));
+  const usage = getAiUsage(new Date(nowMs), usageRecord);
   const cooldownRemainingMs = Math.max(0, usage.lastUsed + AI_COOLDOWN_MS - nowMs);
 
   if (plan === "pro") {
@@ -90,40 +90,19 @@ export const recordAiUsage = (nowMs: number = Date.now()): AiUsageRecord => {
     count: (current.monthKey === currentMonthKey ? current.count : 0) + 1,
     lastUsed: nowMs,
   };
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(STORAGE_KEYS.AI_USAGE, JSON.stringify(updated));
-    } catch (e) {
-      console.error("Error saving AI usage", e);
-    }
-  }
+  inMemoryAiUsage = updated;
   return updated;
 };
 
 export const saveProWaitlistEmail = (email: string): boolean => {
-  if (typeof localStorage === "undefined") return false;
-  try {
-    const clean = email.trim().toLowerCase();
-    if (!clean || !clean.includes("@")) return false;
-    const raw = localStorage.getItem(PRO_WAITLIST_KEY);
-    const list: string[] = raw ? JSON.parse(raw) : [];
-    if (!list.includes(clean)) {
-      list.push(clean);
-      localStorage.setItem(PRO_WAITLIST_KEY, JSON.stringify(list));
-    }
-    return true;
-  } catch (e) {
-    console.error("Error saving waitlist email", e);
-    return false;
+  const clean = email.trim().toLowerCase();
+  if (!clean || !clean.includes("@")) return false;
+  if (!inMemoryWaitlist.includes(clean)) {
+    inMemoryWaitlist.push(clean);
   }
+  return true;
 };
 
 export const getProWaitlistEmails = (): string[] => {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(PRO_WAITLIST_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [...inMemoryWaitlist];
 };

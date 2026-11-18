@@ -1,5 +1,3 @@
-import { purgeDummyPresetData } from "./storage/backupStorage";
-
 export * from "./storage/keys";
 export * from "./storage/workspaceState";
 export * from "./storage/experiencesStorage";
@@ -14,5 +12,3 @@ export * from "./storage/cvStorage";
 export * from "./storage/aiQuotaStorage";
 export * from "./storage/backupStorage";
 export * from "./storage/cloudSyncClient";
-
-purgeDummyPresetData();

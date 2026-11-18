@@ -15,22 +15,25 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { UserProfile, VisitorMessage } from "../types";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { EcosystemIngestPanel } from "./inbox/EcosystemIngestPanel";
 
 interface InboxViewProps {
   messages: VisitorMessage[];
   userProfile?: UserProfile | null;
-  onMarkRead: (id: string) => void;
-  onDeleteMessage: (id: string) => void;
+  onMarkRead: (id: string) => Promise<void> | void;
+  onDeleteMessage: (id: string) => Promise<void> | void;
   onIngestSuggestions?: (
     suggestions: VisitorMessage[]
-  ) => { addedCount: number; skippedCount: number };
+  ) => Promise<{ addedCount: number; skippedCount: number }> | { addedCount: number; skippedCount: number };
   onConvertSuggestionToLog?: (msg: VisitorMessage) => void;
-  onQuickSaveSuggestion?: (msg: VisitorMessage) => void;
+  onQuickSaveSuggestion?: (msg: VisitorMessage) => Promise<void> | void;
 }
 
 type InboxFilter = "all" | "ecosystem" | "visitors" | "unread";
@@ -49,6 +52,20 @@ export const InboxView: React.FC<InboxViewProps> = ({
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null);
   const [expandedStarIds, setExpandedStarIds] = useState<Record<string, boolean>>({});
+  const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const runInboxAction = async (id: string, fn: () => Promise<void> | void, fallbackMsg: string) => {
+    setBusyMessageId(id);
+    setActionError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setActionError(formatFirestoreUiError(err, fallbackMsg));
+    } finally {
+      setBusyMessageId(null);
+    }
+  };
 
   const isEcosystemItem = (m: VisitorMessage) =>
     m.sourceType === "git_pr" || m.sourceType === "gitlab_mr" || m.sourceType === "jira_issue";
@@ -147,6 +164,25 @@ export const InboxView: React.FC<InboxViewProps> = ({
           defaultGitHubHandle={userProfile?.socialLinks?.github || userProfile?.github}
           onIngestSuggestions={onIngestSuggestions}
         />
+      )}
+
+      {actionError && (
+        <div
+          role="alert"
+          className="p-3.5 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-[11px] font-semibold text-red-300 hover:text-white shrink-0"
+          >
+            Ocultar
+          </button>
+        </div>
       )}
 
       {/* Messages List */}
@@ -295,11 +331,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       {onQuickSaveSuggestion && !msg.convertedLogId && (
                         <button
                           type="button"
-                          onClick={() => onQuickSaveSuggestion(msg)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors whitespace-nowrap shrink-0"
+                          disabled={busyMessageId === msg.id}
+                          onClick={() =>
+                            void runInboxAction(
+                              msg.id,
+                              () => onQuickSaveSuggestion(msg),
+                              "No se pudo guardar la sugerencia en Firestore."
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                         >
-                          <Zap className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Guardar 1-clic</span>
+                          {busyMessageId === msg.id ? (
+                            <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                          ) : (
+                            <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          )}
+                          <span>{busyMessageId === msg.id ? "Guardando..." : "Guardar 1-clic"}</span>
                         </button>
                       )}
                       {msg.sourceUrl && (
@@ -341,15 +388,31 @@ export const InboxView: React.FC<InboxViewProps> = ({
                   <div className="flex items-center gap-2 ml-auto">
                     {!msg.read && (
                       <button
-                        onClick={() => onMarkRead(msg.id)}
-                        className="px-2.5 py-1 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors whitespace-nowrap shrink-0"
+                        type="button"
+                        disabled={busyMessageId === msg.id}
+                        onClick={() =>
+                          void runInboxAction(
+                            msg.id,
+                            () => onMarkRead(msg.id),
+                            "No se pudo marcar como leído en Firestore."
+                          )
+                        }
+                        className="px-2.5 py-1 text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
                       >
                         {il.markAsRead}
                       </button>
                     )}
                     <button
-                      onClick={() => onDeleteMessage(msg.id)}
-                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                      type="button"
+                      disabled={busyMessageId === msg.id}
+                      onClick={() =>
+                        void runInboxAction(
+                          msg.id,
+                          () => onDeleteMessage(msg.id),
+                          "No se pudo eliminar el mensaje de Firestore."
+                        )
+                      }
+                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"
                       title={isEco ? "Descartar sugerencia" : t.common.delete}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

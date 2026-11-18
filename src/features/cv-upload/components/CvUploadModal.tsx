@@ -1,10 +1,10 @@
 import React from "react";
-import { RotateCcw, Save, ShieldCheck, Sparkles, X, Zap } from "lucide-react";
-import { LogEntry, UserProfile, WorkExperience } from "../../../types";
+import { AlertTriangle, Loader2, RotateCcw, Save, ShieldCheck, Sparkles, X, Zap } from "lucide-react";
+import { AiUsageRecord, UserProfile, WorkExperience } from "../../../types";
 import { useI18n } from "../../../i18n";
 import { MAX_FREE_MONTHLY_AI_USES } from "../../../utils/storage";
 import { ProUpgradeModal } from "../../../components/ProUpgradeModal";
-import { useCvUpload } from "../hooks/useCvUpload";
+import { CvSavedResult, useCvUpload } from "../hooks/useCvUpload";
 import { CvDropzone } from "./CvDropzone";
 import { CvProcessingState } from "./CvProcessingState";
 import { CvCompletenessBar } from "./CvCompletenessBar";
@@ -16,22 +16,39 @@ import { CvPendingFieldEditor } from "./CvPendingFieldEditor";
 export interface CvUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => void;
-  onExperiencesUpdated?: (updated: WorkExperience[]) => void;
+  existingExperiences?: WorkExperience[];
   currentUser?: UserProfile | null;
-  onUpdateProfile?: (updated: UserProfile) => void;
+  aiQuota?: AiUsageRecord | null;
+  onAiQuotaUpdated?: (quota: AiUsageRecord) => void;
+  onCvSaved: (result: CvSavedResult) => Promise<void> | void;
 }
 
 export const CvUploadModal: React.FC<CvUploadModalProps> = ({
-  isOpen, onClose, onImportLogs, onExperiencesUpdated, currentUser, onUpdateProfile,
+  isOpen,
+  onClose,
+  existingExperiences = [],
+  currentUser,
+  aiQuota,
+  onAiQuotaUpdated,
+  onCvSaved,
 }) => {
   const { t } = useI18n();
-  const state = useCvUpload({ isOpen, onClose, onImportLogs, onExperiencesUpdated, currentUser, onUpdateProfile });
+  const state = useCvUpload({
+    isOpen,
+    onClose,
+    existingExperiences,
+    currentUser,
+    aiQuota,
+    onAiQuotaUpdated,
+    onCvSaved,
+  });
 
   if (!isOpen) return null;
 
   const isProcessing = state.phase === "processing";
-  const showUpload = (state.phase === "upload" || state.phase === "quota_exceeded") && !state.extractedCv;
+  const showUpload =
+    (state.phase === "upload" || state.phase === "quota_exceeded") &&
+    !state.extractedCv;
   const showReview = state.phase === "review" && state.extractedCv !== null;
 
   return (
@@ -47,20 +64,33 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-bold text-white tracking-tight">{t.cv.modalTitle}</h3>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  {t.cv.modalTitle}
+                </h3>
                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-400" />
                   {t.publicDeck.verifiedBadge}
                 </span>
                 <button
                   type="button"
+                  disabled={state.isSaving}
                   onClick={() => state.setShowProModal(true)}
-                  className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-slate-700/90 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                   title="Detalles de cuota y plan"
                 >
-                  <Zap className={`w-3 h-3 ${state.aiUsage.count >= MAX_FREE_MONTHLY_AI_USES ? "text-amber-400" : "text-purple-400"}`} />
-                  <span>{state.aiUsage.count} / {MAX_FREE_MONTHLY_AI_USES} AI</span>
-                  <span className="text-purple-400 font-semibold underline ml-0.5">Pro</span>
+                  <Zap
+                    className={`w-3 h-3 ${
+                      state.aiUsage.count >= MAX_FREE_MONTHLY_AI_USES
+                        ? "text-amber-400"
+                        : "text-purple-400"
+                    }`}
+                  />
+                  <span>
+                    {state.aiUsage.count} / {MAX_FREE_MONTHLY_AI_USES} AI
+                  </span>
+                  <span className="text-purple-400 font-semibold underline ml-0.5">
+                    Pro
+                  </span>
                 </button>
               </div>
               <p className="text-xs text-slate-400">{t.cv.modalSubtitle}</p>
@@ -71,15 +101,21 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
             {state.extractedCv && (
               <button
                 type="button"
+                disabled={state.isSaving}
                 onClick={state.resetState}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Cargar otro documento"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Nuevo Archivo</span>
               </button>
             )}
-            <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors">
+            <button
+              type="button"
+              disabled={state.isSaving}
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -107,10 +143,37 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
             />
           )}
 
-          {isProcessing && <CvProcessingState processingStep={state.processingStep} />}
+          {isProcessing && (
+            <CvProcessingState processingStep={state.processingStep} />
+          )}
 
           {showReview && state.extractedCv && (
             <div className="space-y-6">
+              {state.saveError && (
+                <div
+                  role="alert"
+                  className="p-3.5 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-red-100">
+                        Error al guardar en Firestore
+                      </p>
+                      <p className="text-red-200/90 mt-0.5">{state.saveError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void state.handleSaveAndApply()}
+                    disabled={state.isSaving}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold shrink-0 transition-colors disabled:opacity-50"
+                  >
+                    Reintentar guardado
+                  </button>
+                </div>
+              )}
+
               <CvCompletenessBar
                 completenessScore={state.completenessScore}
                 pendingCount={state.pendingFields.length}
@@ -121,7 +184,10 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
               />
 
               {state.reviewTab === "pending" && (
-                <CvPendingTab pendingFields={state.pendingFields} onOpenFillPending={state.handleOpenFillPending} />
+                <CvPendingTab
+                  pendingFields={state.pendingFields}
+                  onOpenFillPending={state.handleOpenFillPending}
+                />
               )}
 
               {state.reviewTab === "radiography" && (
@@ -147,22 +213,40 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/90 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-400 flex items-center gap-2">
             {state.extractedCv && (
-              <span>Auditoría: <strong>{state.completenessScore}%</strong> · {state.pendingFields.length} pendientes</span>
+              <span>
+                Auditoría: <strong>{state.completenessScore}%</strong> ·{" "}
+                {state.pendingFields.length} pendientes
+              </span>
             )}
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+            <button
+              type="button"
+              disabled={state.isSaving}
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               Cerrar
             </button>
             {state.extractedCv && (
               <button
                 type="button"
-                onClick={state.handleSaveAndApply}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-purple-900/40 flex items-center gap-2"
+                disabled={state.isSaving}
+                onClick={() => void state.handleSaveAndApply()}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-purple-800 disabled:to-indigo-800 disabled:opacity-70 text-white font-semibold text-xs transition-all shadow-lg shadow-purple-900/40 flex items-center gap-2"
               >
-                <Save className="w-4 h-4" />
-                Guardar CV y Aplicar a mi Bitácora / Perfil
+                {state.isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Guardando en Firestore...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Guardar CV y Aplicar a mi Bitácora / Perfil
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -179,10 +263,14 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
 
       <ProUpgradeModal
         isOpen={state.showProModal}
-        onClose={() => { state.setShowProModal(false); state.setProEmailSaved(false); }}
+        onClose={() => {
+          state.setShowProModal(false);
+          state.setProEmailSaved(false);
+        }}
         proEmail={state.proEmail}
         onProEmailChange={state.setProEmail}
         proEmailSaved={state.proEmailSaved}
+        proEmailError={state.proEmailError}
         onSaveProEmail={state.handleSaveProEmail}
       />
     </div>

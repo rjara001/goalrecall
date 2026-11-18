@@ -223,9 +223,9 @@ export const GitHubProfileExportPanel: React.FC<
       {/* Badge Summary Preview */}
       <div className="p-4 rounded-xl bg-[#080C14] border border-slate-800 space-y-2">
         <div className="flex items-center justify-between text-[11px]">
-          <span className="font-mono text-slate-400">Vista previa de tarjeta SVG</span>
+          <span className="font-mono text-slate-400">Vista previa de tarjeta de vitrina</span>
           <span className="font-mono tabular-nums text-emerald-400 truncate max-w-[260px]">
-            /api/public/u/{handle}/badge.svg
+            /u/{handle}
           </span>
         </div>
         <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 space-y-1.5">
@@ -248,8 +248,8 @@ export const GitHubProfileExportPanel: React.FC<
           )}
         </div>
         {options.badgeStyle === "live_svg" && (
-          <p className="text-[10px] font-mono text-slate-500 break-all">
-            Endpoint: {liveSvgUrl}
+          <p className="text-[10px] font-mono text-slate-400 break-all">
+            Vista SVG URL: {liveSvgUrl} (usa Shields.io Estático para compatibilidad directa sin servidor proxy)
           </p>
         )}
       </div>

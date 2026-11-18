@@ -33,13 +33,16 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
-  EyeOff
+  EyeOff,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { LogCategory, LogEntry, UserProfile, VisitorMessage, Product, TechnicalCertification } from "../types";
 import { FirstMateChat } from "./FirstMateChat";
 import { ProductCard } from "./ProductCard";
 import { ShareDeckModal } from "./ShareDeckModal";
 import { getCertificationValidityStatus } from "../utils/storage/certificationsStorage";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { useI18n } from "../i18n";
 
 interface PublicDeckProps {
@@ -47,19 +50,19 @@ interface PublicDeckProps {
   products?: Product[];
   certifications?: TechnicalCertification[];
   userProfile: UserProfile;
-  onSendVisitorMessage: (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => void;
+  onSendVisitorMessage: (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => Promise<void> | void;
   onBackToLanding?: () => void;
   onOpenAuth?: () => void;
   isVisitorPreview?: boolean;
   isOwner?: boolean;
   onOpenNewProduct?: () => void;
   onEditProduct?: (product: Product) => void;
-  onDeleteProduct?: (id: string) => void;
-  onToggleProductPublic?: (id: string) => void;
+  onDeleteProduct?: (id: string) => Promise<void> | void;
+  onToggleProductPublic?: (id: string) => Promise<void> | void;
   onOpenNewCertification?: () => void;
   onEditCertification?: (cert: TechnicalCertification) => void;
-  onDeleteCertification?: (id: string) => void;
-  onToggleCertificationPublic?: (id: string) => void;
+  onDeleteCertification?: (id: string) => Promise<void> | void;
+  onToggleCertificationPublic?: (id: string) => Promise<void> | void;
 }
 
 const EMPTY_PRODUCTS: Product[] = [];
@@ -162,6 +165,19 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
   const [visitorOrg, setVisitorOrg] = useState("");
   const [visitorMessage, setVisitorMessage] = useState("");
   const [noteSent, setNoteSent] = useState(false);
+  const [isSendingNote, setIsSendingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [ownerActionError, setOwnerActionError] = useState<string | null>(null);
+
+  const runOwnerAction = async (fn: (() => Promise<void> | void) | undefined, fallbackMsg: string) => {
+    if (!fn) return;
+    setOwnerActionError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setOwnerActionError(formatFirestoreUiError(err, fallbackMsg));
+    }
+  };
 
   // Unique categories and tags across public logs only
   const categories = useMemo(() => Array.from(new Set(publicLogs.map((l) => l.category))), [publicLogs]);
@@ -193,26 +209,39 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
     });
   }, [publicProducts, selectedTech]);
 
-  const handleNoteSubmit = (e: React.FormEvent) => {
+  const handleNoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!visitorName.trim() || !visitorEmail.trim() || !visitorMessage.trim()) return;
+    if (!visitorName.trim() || !visitorEmail.trim() || !visitorMessage.trim() || isSendingNote) return;
 
-    onSendVisitorMessage({
-      name: visitorName.trim(),
-      email: visitorEmail.trim(),
-      organization: visitorOrg.trim() || undefined,
-      message: visitorMessage.trim(),
-    });
+    setIsSendingNote(true);
+    setNoteError(null);
+    try {
+      await onSendVisitorMessage({
+        name: visitorName.trim(),
+        email: visitorEmail.trim(),
+        organization: visitorOrg.trim() || undefined,
+        message: visitorMessage.trim(),
+      });
 
-    setNoteSent(true);
-    setVisitorName("");
-    setVisitorEmail("");
-    setVisitorOrg("");
-    setVisitorMessage("");
+      setNoteSent(true);
+      setVisitorName("");
+      setVisitorEmail("");
+      setVisitorOrg("");
+      setVisitorMessage("");
 
-    setTimeout(() => {
-      setNoteSent(false);
-    }, 5000);
+      setTimeout(() => {
+        setNoteSent(false);
+      }, 5000);
+    } catch (err) {
+      setNoteError(
+        formatFirestoreUiError(
+          err,
+          "No se pudo enviar el recado a Firestore. Requiere sesión autenticada de dueño."
+        )
+      );
+    } finally {
+      setIsSendingNote(false);
+    }
   };
 
   const handleSelectFromChat = (log: LogEntry) => {
@@ -497,6 +526,24 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
         
         {/* Left Column: Showcase Container (7 Cols) */}
         <div className="lg:col-span-7 space-y-6">
+          {ownerActionError && (
+            <div
+              role="alert"
+              className="p-3.5 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-center justify-between gap-3"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{ownerActionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOwnerActionError(null)}
+                className="text-[11px] font-semibold text-red-300 hover:text-white shrink-0"
+              >
+                Ocultar
+              </button>
+            </div>
+          )}
           
           {/* Navigation Tabs (As requested in user ASCII diagram) */}
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 p-3 bg-slate-900/70 border border-slate-800 rounded-2xl shadow-sm">
@@ -838,8 +885,24 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                           onSelectLog={handleSelectFromChat}
                           isOwner={isOwner}
                           onEdit={onEditProduct}
-                          onDelete={onDeleteProduct}
-                          onTogglePublic={onToggleProductPublic}
+                          onDelete={
+                            onDeleteProduct
+                              ? (id) =>
+                                  void runOwnerAction(
+                                    () => onDeleteProduct(id),
+                                    "No se pudo eliminar el producto de Firestore."
+                                  )
+                              : undefined
+                          }
+                          onTogglePublic={
+                            onToggleProductPublic
+                              ? (id) =>
+                                  void runOwnerAction(
+                                    () => onToggleProductPublic(id),
+                                    "No se pudo cambiar la visibilidad del producto."
+                                  )
+                              : undefined
+                          }
                         />
                       </div>
                     );
@@ -931,7 +994,12 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                             {isOwner && onToggleCertificationPublic && (
                               <button
                                 type="button"
-                                onClick={() => onToggleCertificationPublic(cert.id)}
+                                onClick={() =>
+                                  void runOwnerAction(
+                                    () => onToggleCertificationPublic(cert.id),
+                                    "No se pudo cambiar la visibilidad de la certificación."
+                                  )
+                                }
                                 title={cert.isPublic ? "Ocultar" : "Publicar"}
                                 className="p-1.5 text-slate-400 hover:text-emerald-300 rounded-lg hover:bg-slate-800 transition-colors"
                               >
@@ -955,7 +1023,12 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                             {isOwner && onDeleteCertification && (
                               <button
                                 type="button"
-                                onClick={() => onDeleteCertification(cert.id)}
+                                onClick={() =>
+                                  void runOwnerAction(
+                                    () => onDeleteCertification(cert.id),
+                                    "No se pudo eliminar la certificación de Firestore."
+                                  )
+                                }
                                 title="Eliminar"
                                 className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
                               >
@@ -1047,6 +1120,16 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
               </div>
             ) : (
               <form onSubmit={handleNoteSubmit} className="space-y-3 text-xs">
+                {noteError && (
+                  <div
+                    role="alert"
+                    className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span>{noteError}</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">{t.common.role} / {t.auth.nameLabel} *</label>
                   <input
@@ -1096,9 +1179,11 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-emerald-500/20"
+                  disabled={isSendingNote}
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-emerald-500/20 inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  {t.publicDeck.sendRecruiterNote}
+                  {isSendingNote && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSendingNote ? "Enviando a Firestore..." : t.publicDeck.sendRecruiterNote}</span>
                 </button>
               </form>
             )}

@@ -1,64 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { User as FirebaseAuthUser } from "firebase/auth";
 import {
-  addCareerGoal,
-  addCertification,
-  addExperience,
-  addJobOffer,
-  addLog,
-  addProduct,
-  addVisitorMessage,
-  clearSessionData,
-  deleteCareerGoal,
-  deleteCertification,
-  deleteExperience,
-  deleteJobOffer,
-  deleteLog,
-  deleteMessage,
-  deleteProduct,
-  getStoredCareerGoals,
-  getStoredCertifications,
-  getStoredExperiences,
-  getStoredInbox,
-  getStoredJobOffers,
-  getStoredLogs,
-  getStoredProducts,
-  getStoredUser,
-  ingestIntegrationSuggestions,
-  INITIAL_EXPERIENCES,
-  INITIAL_INBOX,
-  INITIAL_LOGS,
-  INITIAL_USER,
-  initializeStateFromCloud,
-  markInboxSuggestionConverted,
-  markMessageRead,
-  purgeDummyPresetData,
-  resetToDemoData,
-  restoreFromCloudIfEmpty,
-  saveExperiences,
-  saveUser,
-  setCareerGoalStatus,
-  toggleCareerGoalActionItem,
-  toggleCertificationPublic,
-  toggleLogPublic,
-  toggleProductPublic,
-  updateCareerGoal,
-  updateCertification,
-  updateExperience,
-  updateJobOffer,
-  updateLog,
-  updateProduct,
-  updateUserAvatar,
-} from "../utils/storage";
-import { ensureAuthenticatedUser, fetchCloudUserState } from "../utils/cloudState";
+  auth,
+  getRedirectResult,
+  onAuthStateChanged,
+  signOut,
+  testConnection,
+} from "../firebase";
 import {
   buildLogFromExtractedBullet,
   buildLogFromSavedExperienceBullet,
-  healExperiencesFromLogs,
 } from "../utils/bulletToLogMapper";
-import { auth, getRedirectResult } from "../firebase";
+import { ParsedBackupBundle } from "../utils/storage/backupStorage";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import {
+  createCareerGoalFirestore,
+  createCertificationFirestore,
+  createExperienceFirestore,
+  createInboxBatchFirestore,
+  createInboxMessageFirestore,
+  createJobOfferFirestore,
+  createLogFirestore,
+  createLogsBatchFirestore,
+  createProductFirestore,
+  deleteCareerGoalFirestore,
+  deleteCertificationFirestore,
+  deleteExperienceFirestore,
+  deleteJobOfferFirestore,
+  deleteLogFirestore,
+  deleteInboxMessageFirestore,
+  deleteProductFirestore,
+  importBackupBundleToFirestore,
+  loadWorkspaceFromFirestore,
+  saveUserProfileFirestore,
+  syncPublicShowcaseFirestore,
+  updateCareerGoalFirestore,
+  updateCertificationFirestore,
+  updateExperienceFirestore,
+  updateInboxMessageStatusFirestore,
+  updateJobOfferFirestore,
+  updateLogFirestore,
+  updateProductFirestore,
+} from "../utils/firestore/repository";
+import {
+  AiUsageRecord,
   CareerGoal,
   CareerGoalStatus,
+  ExtractedCvData,
   JobOffer,
   LogEntry,
   Product,
@@ -74,12 +62,14 @@ export interface UseWorkspaceDataOptions {
   showToast: (message: string, type?: ToastType) => void;
   onAuthenticatedNavigate: () => void;
   onLoggedOutNavigate: () => void;
+  shouldRedirectLandingToQuarters?: () => boolean;
 }
 
 export const useWorkspaceData = ({
   showToast,
   onAuthenticatedNavigate,
   onLoggedOutNavigate,
+  shouldRedirectLandingToQuarters,
 }: UseWorkspaceDataOptions) => {
   const { t } = useI18n();
 
@@ -89,287 +79,536 @@ export const useWorkspaceData = ({
   onAuthenticatedNavigateRef.current = onAuthenticatedNavigate;
   const onLoggedOutNavigateRef = useRef(onLoggedOutNavigate);
   onLoggedOutNavigateRef.current = onLoggedOutNavigate;
+  const shouldRedirectLandingRef = useRef(shouldRedirectLandingToQuarters);
+  shouldRedirectLandingRef.current = shouldRedirectLandingToQuarters;
 
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(true);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [experiences, setExperiences] = useState<WorkExperience[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [storedCv, setStoredCv] = useState<ExtractedCvData | null>(null);
+  const [aiQuota, setAiQuota] = useState<AiUsageRecord | null>(null);
   const [inbox, setInbox] = useState<VisitorMessage[]>([]);
   const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [certifications, setCertifications] = useState<TechnicalCertification[]>([]);
   const [careerGoals, setCareerGoals] = useState<CareerGoal[]>([]);
 
-  const reloadDataFromStorage = useCallback(() => {
-    setLogs(getStoredLogs());
-    setExperiences(getStoredExperiences());
-    setUser(getStoredUser());
-    setInbox(getStoredInbox());
-    setJobOffers(getStoredJobOffers());
-    setProducts(getStoredProducts());
-    setCertifications(getStoredCertifications());
-    setCareerGoals(getStoredCareerGoals());
+  const hydratedUidRef = useRef<string | null>(null);
+  const hydratingPromiseRef = useRef<Promise<void> | null>(null);
+
+  const stateRef = useRef({
+    user,
+    logs,
+    experiences,
+    inbox,
+    jobOffers,
+    products,
+    certifications,
+    careerGoals,
+  });
+  stateRef.current = {
+    user,
+    logs,
+    experiences,
+    inbox,
+    jobOffers,
+    products,
+    certifications,
+    careerGoals,
+  };
+
+  const resetLocalState = useCallback(() => {
+    hydratedUidRef.current = null;
+    setUser(null);
+    setStoredCv(null);
+    setAiQuota(null);
+    setLogs([]);
+    setExperiences([]);
+    setInbox([]);
+    setJobOffers([]);
+    setProducts([]);
+    setCertifications([]);
+    setCareerGoals([]);
   }, []);
 
-  const handleLogin = useCallback(
-    async (newUser: UserProfile) => {
-      purgeDummyPresetData();
-      saveUser(newUser);
-      setUser(newUser);
-
+  const syncShowcaseIfPublished = useCallback(
+    async (overrides?: {
+      userProfile?: UserProfile | null;
+      logs?: LogEntry[];
+      products?: Product[];
+      certifications?: TechnicalCertification[];
+      createIfMissing?: boolean;
+    }) => {
+      const targetUser = overrides?.userProfile ?? stateRef.current.user;
+      if (!targetUser?.username || !targetUser.id) return;
       try {
-        const cloudData = await fetchCloudUserState();
-        if (cloudData) {
-          initializeStateFromCloud(cloudData);
-          if (cloudData.experiences) setExperiences(cloudData.experiences);
-          if (cloudData.logs) setLogs(cloudData.logs);
-          if (cloudData.jobOffers) setJobOffers(cloudData.jobOffers);
-          if (cloudData.products) setProducts(cloudData.products);
-          if (cloudData.certifications) setCertifications(cloudData.certifications);
-          if (cloudData.careerGoals) setCareerGoals(cloudData.careerGoals);
-          if (cloudData.user) {
-            const merged = {
-              ...newUser,
-              ...cloudData.user,
-              username: cloudData.user.username || newUser.username,
-            };
-            setUser(merged);
-            saveUser(merged);
-          } else {
-            saveUser(newUser);
-          }
-          showToastRef.current(t.toasts.dataRestored, "success");
-        } else if (newUser.email) {
-          const restored = await restoreFromCloudIfEmpty(newUser.email);
-          if (restored) {
-            reloadDataFromStorage();
-            showToastRef.current(t.toasts.dataRestored, "success");
-          }
-        }
+        await syncPublicShowcaseFirestore({
+          username: targetUser.username,
+          userProfile: targetUser,
+          logs: overrides?.logs ?? stateRef.current.logs,
+          products: overrides?.products ?? stateRef.current.products,
+          certifications: overrides?.certifications ?? stateRef.current.certifications,
+          createIfMissing: overrides?.createIfMissing ?? false,
+        });
       } catch (err) {
-        console.warn("[App] Cloud data hydration notice:", err);
+        console.warn("[Firestore] Public showcase sync notice:", err);
       }
-
-      setLogs(getStoredLogs());
-      setExperiences(getStoredExperiences());
-      setInbox(getStoredInbox());
-      setJobOffers(getStoredJobOffers());
-      setProducts(getStoredProducts());
-      setCertifications(getStoredCertifications());
-      setCareerGoals(getStoredCareerGoals());
-      const providerLabel = newUser.authProvider === "google" ? "Google" : "Email";
-      showToastRef.current(`${newUser.name} · ${providerLabel} ✨`, "success");
-      onAuthenticatedNavigateRef.current();
     },
-    [reloadDataFromStorage, t.toasts.dataRestored]
+    []
   );
 
-  const handleLoginRef = useRef(handleLogin);
-  handleLoginRef.current = handleLogin;
-
-  // Initial Data Load, Cloud Sync Hydration & Firebase Redirect Check (mount-only)
-  useEffect(() => {
-    purgeDummyPresetData();
-    const storedLogs = getStoredLogs();
-    const storedExps = getStoredExperiences();
-
-    const healed = healExperiencesFromLogs(storedExps, storedLogs);
-    if (healed.changed) {
-      saveExperiences(healed.experiences);
-    }
-    setExperiences(healed.experiences);
-
-    setLogs(storedLogs);
-    const currentUser = getStoredUser();
-    setUser(currentUser);
-    setInbox(getStoredInbox());
-    setJobOffers(getStoredJobOffers());
-    setProducts(getStoredProducts());
-    setCertifications(getStoredCertifications());
-    setCareerGoals(getStoredCareerGoals());
-
-    ensureAuthenticatedUser().then(() => {
-      fetchCloudUserState().then((cloudData) => {
-        if (cloudData) {
-          initializeStateFromCloud(cloudData);
-          if (cloudData.experiences) setExperiences(cloudData.experiences);
-          if (cloudData.logs) setLogs(cloudData.logs);
-          if (cloudData.user) setUser(cloudData.user);
-          if (cloudData.jobOffers) setJobOffers(cloudData.jobOffers);
-          if (cloudData.products) setProducts(cloudData.products);
-          if (cloudData.certifications) setCertifications(cloudData.certifications);
-          if (cloudData.careerGoals) setCareerGoals(cloudData.careerGoals);
+  const hydrateFromFirebaseUser = useCallback(
+    async (
+      fbUser: FirebaseAuthUser,
+      options?: { navigate?: boolean; showToastMessage?: boolean }
+    ) => {
+      if (!fbUser.emailVerified) {
+        if (auth) {
+          await signOut(auth).catch(() => undefined);
         }
+        resetLocalState();
+        throw new Error(
+          "Tu cuenta de Google debe tener el correo electrónico verificado para acceder."
+        );
+      }
+
+      if (hydratedUidRef.current === fbUser.uid && hydratingPromiseRef.current === null) {
+        if (options?.navigate) {
+          onAuthenticatedNavigateRef.current();
+        }
+        return;
+      }
+
+      setIsHydrating(true);
+      const task = (async () => {
+        try {
+          const workspace = await loadWorkspaceFromFirestore(fbUser);
+          hydratedUidRef.current = fbUser.uid;
+          setUser(workspace.user);
+          setStoredCv(workspace.cv);
+          setAiQuota(workspace.aiQuota);
+          setExperiences(workspace.experiences);
+          setLogs(workspace.logs);
+          setInbox(workspace.inbox);
+          setJobOffers(workspace.jobOffers);
+          setProducts(workspace.products);
+          setCertifications(workspace.certifications);
+          setCareerGoals(workspace.careerGoals);
+
+          if (options?.showToastMessage) {
+            showToastRef.current(`${workspace.user.name} · Google ✨`, "success");
+          }
+          if (options?.navigate) {
+            onAuthenticatedNavigateRef.current();
+          }
+        } catch (err) {
+          console.error("[Firestore] Error hydrating workspace:", err);
+          showToastRef.current(
+            formatFirestoreUiError(err, "No se pudo cargar tu espacio de trabajo desde Firestore."),
+            "error"
+          );
+          throw err;
+        } finally {
+          setIsHydrating(false);
+          hydratingPromiseRef.current = null;
+        }
+      })();
+
+      hydratingPromiseRef.current = task;
+      await task;
+    },
+    [resetLocalState]
+  );
+
+  // Initial Firestore connectivity probe + Firebase Auth listener + Google Redirect check
+  useEffect(() => {
+    void testConnection();
+
+    if (!auth) {
+      setIsHydrating(false);
+      setIsAuthReady(true);
+      return;
+    }
+
+    const firebaseAuth = auth;
+    let isMounted = true;
+
+    getRedirectResult(firebaseAuth)
+      .then((result) => {
+        if (isMounted && result?.user) {
+          void hydrateFromFirebaseUser(result.user, {
+            navigate: true,
+            showToastMessage: true,
+          }).catch(() => undefined);
+        }
+      })
+      .catch((err) => {
+        console.error("[Auth] Firebase getRedirectResult error:", err);
       });
+
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
+      if (!isMounted) return;
+      if (!fbUser) {
+        resetLocalState();
+        setIsHydrating(false);
+        setIsAuthReady(true);
+        return;
+      }
+
+      if (!fbUser.emailVerified) {
+        await signOut(firebaseAuth).catch(() => undefined);
+        resetLocalState();
+        setIsHydrating(false);
+        setIsAuthReady(true);
+        showToastRef.current(
+          "Tu cuenta de Google debe tener el correo verificado para operar en GoalRecall.",
+          "error"
+        );
+        return;
+      }
+
+      try {
+        const shouldRedirect = shouldRedirectLandingRef.current?.() ?? false;
+        await hydrateFromFirebaseUser(fbUser, {
+          navigate: shouldRedirect,
+          showToastMessage: false,
+        });
+      } catch {
+        // Already surfaced via toast
+      } finally {
+        if (isMounted) {
+          setIsAuthReady(true);
+        }
+      }
     });
 
-    if (currentUser?.email && storedLogs.length === 0) {
-      restoreFromCloudIfEmpty(currentUser.email).then((restored) => {
-        if (restored) {
-          setLogs(getStoredLogs());
-          setExperiences(getStoredExperiences());
-          setInbox(getStoredInbox());
-          setJobOffers(getStoredJobOffers());
-          setProducts(getStoredProducts());
-          setCertifications(getStoredCertifications());
-          setCareerGoals(getStoredCareerGoals());
-        }
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [hydrateFromFirebaseUser, resetLocalState]);
+
+  const handleLoginWithFirebaseUser = useCallback(
+    async (fbUser: FirebaseAuthUser) => {
+      await hydrateFromFirebaseUser(fbUser, {
+        navigate: true,
+        showToastMessage: true,
       });
-    }
+    },
+    [hydrateFromFirebaseUser]
+  );
 
+  const handleLogout = useCallback(async () => {
     if (auth) {
-      getRedirectResult(auth)
-        .then((result) => {
-          if (result && result.user) {
-            const fbUser = result.user;
-            const userHandle = (
-              fbUser.email?.split("@")[0] ||
-              fbUser.displayName ||
-              fbUser.uid.substring(0, 8)
-            )
-              .toLowerCase()
-              .replace(/[^a-z0-9_-]/g, "");
-
-            const googleUserProfile: UserProfile = {
-              ...INITIAL_USER,
-              id: "google-" + fbUser.uid,
-              username: userHandle.length >= 3 ? userHandle : `user_${fbUser.uid.substring(0, 6)}`,
-              name: fbUser.displayName || fbUser.email?.split("@")[0] || "Usuario",
-              email: fbUser.email || "",
-              avatar: fbUser.photoURL || INITIAL_USER.avatar,
-              title: "",
-              bio: "",
-              location: "",
-              github: "",
-              linkedin: "",
-              skills: [],
-              authProvider: "google",
-              isCustom: false,
-              createdAt: Date.now(),
-            };
-            handleLoginRef.current(googleUserProfile);
-          }
-        })
-        .catch((err) => {
-          console.error("[App] Firebase getRedirectResult error:", err);
-        });
+      await signOut(auth);
     }
-  }, []);
+    resetLocalState();
+    onLoggedOutNavigateRef.current();
+    showToastRef.current(`${t.nav.signOut} · ${t.common.success}`, "info");
+  }, [resetLocalState, t.common.success, t.nav.signOut]);
+
+  // CV Apply callback (persisted inside useCvUpload via saveCvAndApplyBatchFirestore)
+  const handleCvAppliedState = useCallback(
+    async (result: {
+      cvData: ExtractedCvData;
+      savedUser: UserProfile | null;
+      savedExperiences: WorkExperience[];
+      savedLogs: LogEntry[];
+    }) => {
+      const nextLogs = [...result.savedLogs, ...stateRef.current.logs];
+      setStoredCv(result.cvData);
+      if (result.savedUser) {
+        setUser(result.savedUser);
+      }
+      setExperiences(result.savedExperiences);
+      setLogs(nextLogs);
+
+      await syncShowcaseIfPublished({
+        userProfile: result.savedUser ?? stateRef.current.user,
+        logs: nextLogs,
+      });
+
+      const appliedCount = result.savedLogs.length;
+      showToastRef.current(
+        appliedCount > 0
+          ? `CV guardado en Firestore y ${appliedCount} logro(s) añadidos a tu Bóveda Privada ✨`
+          : "CV y perfil profesional guardados en Firestore ✨",
+        "success"
+      );
+    },
+    [syncShowcaseIfPublished]
+  );
 
   // Log Actions
   const handleSaveLog = useCallback(
-    (
+    async (
       entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
       editingLog: LogEntry | null,
       sourceInboxMessageId?: string
-    ) => {
-      if (editingLog) {
-        updateLog({ ...editingLog, ...entryData });
-        setLogs(getStoredLogs());
-        showToast(t.toasts.logSaved);
-        return true;
+    ): Promise<boolean> => {
+      try {
+        if (editingLog) {
+          const updated = await updateLogFirestore({
+            ...editingLog,
+            ...entryData,
+          });
+          const nextLogs = stateRef.current.logs.map((l) =>
+            l.id === updated.id ? updated : l
+          );
+          setLogs(nextLogs);
+          await syncShowcaseIfPublished({ logs: nextLogs });
+          showToastRef.current(t.toasts.logSaved, "success");
+          return true;
+        }
+
+        const created = await createLogFirestore(entryData);
+        const nextLogs = [created, ...stateRef.current.logs];
+        setLogs(nextLogs);
+
+        if (sourceInboxMessageId) {
+          await updateInboxMessageStatusFirestore(sourceInboxMessageId, {
+            read: true,
+            convertedLogId: created.id,
+          });
+          setInbox((prev) =>
+            prev.map((m) =>
+              m.id === sourceInboxMessageId
+                ? { ...m, read: true, convertedLogId: created.id }
+                : m
+            )
+          );
+        }
+
+        if (created.isPublic) {
+          await syncShowcaseIfPublished({ logs: nextLogs });
+        }
+
+        showToastRef.current(
+          created.isPublic ? t.toasts.logToggledPublic : t.toasts.logToggledPrivate,
+          "success"
+        );
+        return false;
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo guardar el logro en Firestore.");
+        throw new Error(msg);
       }
-      const created = addLog(entryData);
-      setLogs(getStoredLogs());
-      if (sourceInboxMessageId) {
-        const updatedInbox = markInboxSuggestionConverted(sourceInboxMessageId, created.id);
-        setInbox(updatedInbox);
-      }
-      showToast(created.isPublic ? t.toasts.logToggledPublic : t.toasts.logToggledPrivate);
-      return false;
     },
-    [showToast, t.toasts.logSaved, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
+    [syncShowcaseIfPublished, t.toasts.logSaved, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
   );
 
   const handleTogglePublic = useCallback(
-    (id: string) => {
-      const updated = toggleLogPublic(id);
-      if (updated) {
-        setLogs(getStoredLogs());
-        showToast(updated.isPublic ? t.toasts.logToggledPublic : t.toasts.logToggledPrivate);
+    async (id: string) => {
+      const target = stateRef.current.logs.find((l) => l.id === id);
+      if (!target) return;
+      try {
+        const updated = await updateLogFirestore({
+          ...target,
+          isPublic: !target.isPublic,
+        });
+        const nextLogs = stateRef.current.logs.map((l) =>
+          l.id === id ? updated : l
+        );
+        setLogs(nextLogs);
+        await syncShowcaseIfPublished({ logs: nextLogs });
+        showToastRef.current(
+          updated.isPublic ? t.toasts.logToggledPublic : t.toasts.logToggledPrivate,
+          "info"
+        );
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo cambiar la visibilidad del logro.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
       }
     },
-    [showToast, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
+    [syncShowcaseIfPublished, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
   );
 
   const handleDeleteLog = useCallback(
-    (id: string) => {
-      deleteLog(id);
-      setLogs(getStoredLogs());
-      showToast(t.toasts.logDeleted, "info");
+    async (id: string) => {
+      try {
+        await deleteLogFirestore(id);
+        const nextLogs = stateRef.current.logs.filter((l) => l.id !== id);
+        setLogs(nextLogs);
+        await syncShowcaseIfPublished({ logs: nextLogs });
+        showToastRef.current(t.toasts.logDeleted, "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar el logro.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.logDeleted]
+    [syncShowcaseIfPublished, t.toasts.logDeleted]
   );
 
   const handleDuplicateLog = useCallback(
-    (entry: LogEntry) => {
-      addLog({
-        date: new Date().toISOString().substring(0, 10),
-        client: entry.client,
-        project: entry.project,
-        category: entry.category,
-        title: `${entry.title} (${t.common.copy})`,
-        description: entry.description,
-        impact: entry.impact,
-        tags: entry.tags,
-        isPublic: false,
-      });
-      setLogs(getStoredLogs());
-      showToast(t.toasts.logDuplicated, "info");
+    async (entry: LogEntry) => {
+      try {
+        const created = await createLogFirestore({
+          experienceId: entry.experienceId,
+          date: new Date().toISOString().substring(0, 10),
+          client: entry.client,
+          project: entry.project,
+          category: entry.category,
+          title: `${entry.title} (${t.common.copy})`,
+          whatWasSought: entry.whatWasSought,
+          whyImportant: entry.whyImportant,
+          howApplied: entry.howApplied,
+          description: entry.description,
+          impact: entry.impact,
+          tags: entry.tags,
+          isPublic: false,
+        });
+        setLogs((prev) => [created, ...prev]);
+        showToastRef.current(t.toasts.logDuplicated, "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo duplicar el logro.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.common.copy, t.toasts.logDuplicated]
+    [t.common.copy, t.toasts.logDuplicated]
   );
 
   const handleImportBatchLogs = useCallback(
-    (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
-      batch.forEach((entry) => addLog(entry));
-      setLogs(getStoredLogs());
-      setExperiences(getStoredExperiences());
-      showToast(`${t.toasts.bulletsImported} (${batch.length})`, "success");
+    async (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
+      if (batch.length === 0) return;
+      try {
+        const created = await createLogsBatchFirestore(batch);
+        const nextLogs = [...created, ...stateRef.current.logs];
+        setLogs(nextLogs);
+        await syncShowcaseIfPublished({ logs: nextLogs });
+        showToastRef.current(`${t.toasts.bulletsImported} (${created.length})`, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudieron importar las viñetas a Firestore.");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.bulletsImported]
+    [syncShowcaseIfPublished, t.toasts.bulletsImported]
   );
 
   // Experience Actions
+  const handleCreateQuickExperience = useCallback(
+    async (expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">) => {
+      try {
+        const res = await createExperienceFirestore(expData);
+        setExperiences((prev) => [res.experience, ...prev]);
+        return res.experience;
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo crear la nueva empresa en Firestore.");
+        throw new Error(msg);
+      }
+    },
+    []
+  );
+
   const handleSaveExperience = useCallback(
-    (
+    async (
       expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
       newLogBulletsToCreate?: string[]
     ) => {
-      let experienceId = expData.id;
-      if (expData.id) {
-        updateExperience(expData as WorkExperience);
-      } else {
-        const created = addExperience(expData);
-        experienceId = created.id;
-      }
+      try {
+        if (expData.id) {
+          const existing = stateRef.current.experiences.find((e) => e.id === expData.id);
+          const fullExp: WorkExperience = {
+            ...(existing || { createdAt: Date.now() }),
+            ...expData,
+            id: expData.id,
+            updatedAt: Date.now(),
+          };
+          const linkedToRename =
+            existing && existing.company !== fullExp.company
+              ? stateRef.current.logs.filter((l) => l.experienceId === fullExp.id)
+              : [];
 
-      if (newLogBulletsToCreate && newLogBulletsToCreate.length > 0) {
-        newLogBulletsToCreate.forEach((bulletText) => {
-          addLog(buildLogFromSavedExperienceBullet(expData, experienceId, bulletText));
-        });
-        showToast(`${t.toasts.experienceSaved} (${newLogBulletsToCreate.length}) 🔒✨`, "success");
-      } else {
-        showToast(`${t.toasts.experienceSaved}: ${expData.company}`);
-      }
+          const res = await updateExperienceFirestore(
+            fullExp,
+            linkedToRename,
+            newLogBulletsToCreate
+          );
 
-      setExperiences(getStoredExperiences());
-      setLogs(getStoredLogs());
+          setExperiences((prev) =>
+            prev.map((e) => (e.id === res.experience.id ? res.experience : e))
+          );
+
+          const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
+          const nextLogs = [
+            ...res.createdLogs,
+            ...stateRef.current.logs.map((l) => updatedMap.get(l.id) || l),
+          ];
+          setLogs(nextLogs);
+
+          if (res.updatedLogs.length > 0) {
+            await syncShowcaseIfPublished({ logs: nextLogs });
+          }
+
+          if (res.createdLogs.length > 0) {
+            showToastRef.current(
+              `${t.toasts.experienceSaved} (${res.createdLogs.length}) 🔒✨`,
+              "success"
+            );
+          } else {
+            showToastRef.current(`${t.toasts.experienceSaved}: ${expData.company}`, "success");
+          }
+        } else {
+          const bullets = newLogBulletsToCreate || [];
+          const res = await createExperienceFirestore(expData, bullets);
+          setExperiences((prev) => [res.experience, ...prev]);
+          if (res.createdLogs.length > 0) {
+            setLogs((prev) => [...res.createdLogs, ...prev]);
+            showToastRef.current(
+              `${t.toasts.experienceSaved} (${res.createdLogs.length}) 🔒✨`,
+              "success"
+            );
+          } else {
+            showToastRef.current(`${t.toasts.experienceSaved}: ${expData.company}`, "success");
+          }
+        }
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo guardar la experiencia en Firestore.");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.experienceSaved]
+    [syncShowcaseIfPublished, t.toasts.experienceSaved]
   );
 
   const handleDeleteExperience = useCallback(
-    (id: string) => {
-      deleteExperience(id);
-      setExperiences(getStoredExperiences());
-      setLogs(getStoredLogs());
-      showToast(t.toasts.experienceDeleted, "info");
+    async (id: string) => {
+      const remaining = stateRef.current.experiences.filter((e) => e.id !== id);
+      const fallback = remaining.find((e) => e.isPersonalProjects) || remaining[0];
+      const reassignedLogs = fallback
+        ? stateRef.current.logs
+            .filter((l) => l.experienceId === id)
+            .map((l) => ({
+              ...l,
+              experienceId: fallback.id,
+              client: fallback.company,
+              updatedAt: Date.now(),
+            }))
+        : [];
+
+      try {
+        await deleteExperienceFirestore(id, reassignedLogs);
+        setExperiences(remaining);
+        if (reassignedLogs.length > 0) {
+          const map = new Map(reassignedLogs.map((l) => [l.id, l]));
+          const nextLogs = stateRef.current.logs.map((l) => map.get(l.id) || l);
+          setLogs(nextLogs);
+          await syncShowcaseIfPublished({ logs: nextLogs });
+        }
+        showToastRef.current(t.toasts.experienceDeleted, "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar la experiencia.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.experienceDeleted]
+    [syncShowcaseIfPublished, t.toasts.experienceDeleted]
   );
 
   const handleExtractBulletToLog = useCallback(
-    (
+    async (
       experienceId: string,
       company: string,
       role: string,
@@ -385,16 +624,22 @@ export const useWorkspaceData = ({
       });
       if (!newLog) return;
 
-      addLog(newLog);
-      setLogs(getStoredLogs());
-      showToast(`${company}: ${t.toasts.logSaved} ✨`, "success");
+      try {
+        const created = await createLogFirestore(newLog);
+        setLogs((prev) => [created, ...prev]);
+        showToastRef.current(`${company}: ${t.toasts.logSaved} ✨`, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo guardar la viñeta en tu bitácora.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.logSaved]
+    [t.toasts.logSaved]
   );
 
   const handleExtractAllBulletsForExperience = useCallback(
-    (experienceId: string) => {
-      const exp = experiences.find((e) => e.id === experienceId);
+    async (experienceId: string) => {
+      const exp = stateRef.current.experiences.find((e) => e.id === experienceId);
       if (!exp) return;
 
       const bullets =
@@ -406,82 +651,133 @@ export const useWorkspaceData = ({
 
       if (bullets.length === 0) return;
 
-      const currentLogs = getStoredLogs();
       const existingBullets = new Set(
-        currentLogs
+        stateRef.current.logs
           .filter((l) => l.experienceId === experienceId)
-          .map((l) => (l.originalBullet || l.impact).trim())
+          .map((l) => (l.originalBullet || l.impact || "").trim())
       );
 
       const unextracted = bullets.filter((b) => !existingBullets.has(b.trim()));
       if (unextracted.length === 0) {
-        showToast(`${t.toasts.bulletsImported} (${exp.company})`, "info");
+        showToastRef.current(`${t.toasts.bulletsImported} (${exp.company})`, "info");
         return;
       }
 
-      unextracted.forEach((b) => {
-        handleExtractBulletToLog(exp.id, exp.company, exp.role, b, exp.technologies);
-      });
+      const entries = unextracted
+        .map((b) =>
+          buildLogFromSavedExperienceBullet(exp, exp.id, b)
+        )
+        .map((entry) => ({
+          ...entry,
+          impact: entry.impact || entry.title,
+        }));
 
-      showToast(
-        `${t.toasts.bulletsImported} (${unextracted.length} - ${exp.company}) 🚀`,
-        "success"
-      );
+      try {
+        const created = await createLogsBatchFirestore(entries);
+        setLogs((prev) => [...created, ...prev]);
+        showToastRef.current(
+          `${t.toasts.bulletsImported} (${created.length} - ${exp.company}) 🚀`,
+          "success"
+        );
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudieron extraer las viñetas a Firestore.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [experiences, handleExtractBulletToLog, showToast, t.toasts.bulletsImported]
+    [t.toasts.bulletsImported]
   );
 
   // Inbox Actions
   const handleSendVisitorMessage = useCallback(
-    (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => {
-      addVisitorMessage(msg);
-      setInbox(getStoredInbox());
-      showToast(t.toasts.messageSent, "success");
+    async (msg: Omit<VisitorMessage, "id" | "date" | "read" | "replied">) => {
+      try {
+        const created = await createInboxMessageFirestore(msg);
+        setInbox((prev) => [created, ...prev]);
+        showToastRef.current(t.toasts.messageSent, "success");
+      } catch (err) {
+        const errMsg = formatFirestoreUiError(
+          err,
+          "No se pudo enviar el mensaje a la base de datos. Inicia sesión con Google para pruebas de dueño o verifica permisos."
+        );
+        throw new Error(errMsg);
+      }
     },
-    [showToast, t.toasts.messageSent]
+    [t.toasts.messageSent]
   );
 
-  const handleMarkMessageRead = useCallback((id: string) => {
-    markMessageRead(id);
-    setInbox(getStoredInbox());
+  const handleMarkMessageRead = useCallback(async (id: string) => {
+    try {
+      await updateInboxMessageStatusFirestore(id, { read: true });
+      setInbox((prev) => prev.map((m) => (m.id === id ? { ...m, read: true } : m)));
+    } catch (err) {
+      const msg = formatFirestoreUiError(err, "No se pudo actualizar el estado del mensaje.");
+      showToastRef.current(msg, "error");
+      throw new Error(msg);
+    }
   }, []);
 
   const handleDeleteMessage = useCallback(
-    (id: string) => {
-      deleteMessage(id);
-      setInbox(getStoredInbox());
-      showToast(t.toasts.messageDeleted, "info");
+    async (id: string) => {
+      try {
+        await deleteInboxMessageFirestore(id);
+        setInbox((prev) => prev.filter((m) => m.id !== id));
+        showToastRef.current(t.toasts.messageDeleted, "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar el mensaje.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.messageDeleted]
+    [t.toasts.messageDeleted]
   );
 
   const handleIngestIntegrationSuggestions = useCallback(
-    (suggestions: VisitorMessage[]) => {
-      const result = ingestIntegrationSuggestions(suggestions);
-      setInbox(result.inbox);
-      if (result.addedCount > 0) {
-        showToast(
-          `${result.addedCount} sugerencia(s) importadas al Inbox listas para convertir en logros ✨`,
+    async (
+      suggestions: VisitorMessage[]
+    ): Promise<{ addedCount: number; skippedCount: number }> => {
+      const existingIds = new Set(stateRef.current.inbox.map((m) => m.id));
+      const newOnes = suggestions.filter((s) => !existingIds.has(s.id));
+      const skippedCount = suggestions.length - newOnes.length;
+
+      if (newOnes.length === 0) {
+        showToastRef.current(
+          "Todas esas sugerencias ya estaban importadas en tu Inbox.",
+          "info"
+        );
+        return { addedCount: 0, skippedCount };
+      }
+
+      try {
+        const saved = await createInboxBatchFirestore(newOnes);
+        setInbox((prev) => [...saved, ...prev]);
+        showToastRef.current(
+          `${saved.length} sugerencia(s) guardadas en tu Inbox de Firestore ✨`,
           "success"
         );
-      } else {
-        showToast("Todas esas sugerencias ya estaban importadas en tu Inbox.", "info");
+        return { addedCount: saved.length, skippedCount };
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudieron guardar las sugerencias en Firestore."
+        );
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
       }
-      return result;
     },
-    [showToast]
+    []
   );
 
-  const handleQuickConvertInboxSuggestion = useCallback(
-    (msg: VisitorMessage) => {
-      if (!msg.achievementDraft) return;
-      const draft = msg.achievementDraft;
-      const matchedExp =
-        experiences.find((e) =>
-          e.company.toLowerCase().includes(draft.client.toLowerCase())
-        ) || experiences[0];
+  const handleQuickConvertInboxSuggestion = useCallback(async (msg: VisitorMessage) => {
+    if (!msg.achievementDraft) return;
+    const draft = msg.achievementDraft;
+    const matchedExp =
+      stateRef.current.experiences.find((e) =>
+        e.company.toLowerCase().includes(draft.client.toLowerCase())
+      ) || stateRef.current.experiences[0];
 
-      const created = addLog({
+    try {
+      const created = await createLogFirestore({
         experienceId: matchedExp?.id,
         date:
           msg.date && /^\d{4}-\d{2}-\d{2}/.test(msg.date)
@@ -500,280 +796,441 @@ export const useWorkspaceData = ({
         isPublic: false,
       });
 
-      const updatedInbox = markInboxSuggestionConverted(msg.id, created.id);
-      setLogs(getStoredLogs());
-      setInbox(updatedInbox);
-      showToast("Logro guardado en Bóveda Privada desde Inbox ✨", "success");
-    },
-    [experiences, showToast]
-  );
+      await updateInboxMessageStatusFirestore(msg.id, {
+        read: true,
+        convertedLogId: created.id,
+      });
+
+      setLogs((prev) => [created, ...prev]);
+      setInbox((prev) =>
+        prev.map((m) =>
+          m.id === msg.id ? { ...m, read: true, convertedLogId: created.id } : m
+        )
+      );
+      showToastRef.current("Logro guardado en Bóveda Privada desde Inbox ✨", "success");
+    } catch (err) {
+      const errMsg = formatFirestoreUiError(
+        err,
+        "No se pudo convertir el borrador en logro."
+      );
+      showToastRef.current(errMsg, "error");
+      throw new Error(errMsg);
+    }
+  }, []);
 
   // User Actions
-  const handleLoginDev = useCallback(() => {
-    const devUser: UserProfile = {
-      ...INITIAL_USER,
-      id: "dev-" + Date.now(),
-      username: "devlead",
-      name: "Rodrigo Jara (Dev Lead)",
-      email: "rjara@example.com",
-      avatar:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-      title: "Senior Full Stack Architect",
-      bio: "Engineering lead focused on scalable cloud systems and clean architecture.",
-      location: "Santiago, Chile / Remote",
-      skills: [
-        { name: "TypeScript", category: "Languages" },
-        { name: "React", category: "Frameworks" },
-        { name: "Node.js", category: "Frameworks" },
-        { name: "Firebase", category: "Cloud/DevOps" },
-      ],
-      authProvider: "custom",
-      isCustom: true,
-      createdAt: Date.now(),
-    };
-    handleLogin(devUser);
-  }, [handleLogin]);
-
-  const handleLogout = useCallback(() => {
-    clearSessionData();
-    setUser(null);
-
-    resetToDemoData();
-    setLogs(INITIAL_LOGS);
-    setExperiences(INITIAL_EXPERIENCES);
-    setInbox(INITIAL_INBOX);
-    setJobOffers([]);
-    setProducts([]);
-    setCertifications([]);
-    setCareerGoals([]);
-
-    onLoggedOutNavigateRef.current();
-    showToastRef.current(`${t.nav.signOut} · ${t.common.success}`, "info");
-  }, [t.common.success, t.nav.signOut]);
-
   const handleUpdateProfile = useCallback(
-    (updated: UserProfile) => {
-      saveUser(updated);
-      setUser(updated);
-      if (updated.username) {
-        fetch("/api/public/claim-username", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: updated.username,
-            userKey: updated.id || updated.email || "usr-current",
-            userProfile: updated,
-            logs,
-            products,
-            certifications,
-          }),
-        }).catch((e) => console.error("Silent claim-username sync error:", e));
+    async (updated: UserProfile) => {
+      try {
+        const saved = await saveUserProfileFirestore(updated);
+        setUser(saved);
+        await syncShowcaseIfPublished({ userProfile: saved });
+        showToastRef.current(t.toasts.profileUpdated, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo guardar el perfil en Firestore."
+        );
+        throw new Error(msg);
       }
-      showToast(t.toasts.profileUpdated, "success");
     },
-    [certifications, logs, products, showToast, t.toasts.profileUpdated]
+    [syncShowcaseIfPublished, t.toasts.profileUpdated]
   );
 
   const handleUpdateAvatar = useCallback(
-    (newAvatarUrl: string) => {
-      const updated = updateUserAvatar(newAvatarUrl);
-      if (updated) {
-        setUser(updated);
-        showToast(t.toasts.profileUpdated, "success");
+    async (newAvatarUrl: string) => {
+      const current = stateRef.current.user;
+      if (!current) {
+        throw new Error("Debes iniciar sesión con Google para cambiar tu avatar.");
+      }
+      try {
+        const saved = await saveUserProfileFirestore({
+          ...current,
+          avatar: newAvatarUrl,
+        });
+        setUser(saved);
+        await syncShowcaseIfPublished({ userProfile: saved });
+        showToastRef.current(t.toasts.profileUpdated, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo guardar tu nuevo avatar en Firestore."
+        );
+        throw new Error(msg);
       }
     },
-    [showToast, t.toasts.profileUpdated]
+    [syncShowcaseIfPublished, t.toasts.profileUpdated]
   );
 
   // Job Offer Actions
   const handleSaveJobOffer = useCallback(
-    (updated: JobOffer) => {
-      updateJobOffer(updated);
-      setJobOffers(getStoredJobOffers());
-      showToast(`${updated.company}: ${t.toasts.offerSaved} ✨`);
+    async (updated: JobOffer) => {
+      try {
+        const saved = await updateJobOfferFirestore(updated);
+        setJobOffers((prev) => prev.map((o) => (o.id === saved.id ? saved : o)));
+        showToastRef.current(`${saved.company}: ${t.toasts.offerSaved} ✨`, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo actualizar la postulación.");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.offerSaved]
+    [t.toasts.offerSaved]
   );
 
   const handleAddJobOffer = useCallback(
-    (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => {
-      const created = addJobOffer(offer);
-      setJobOffers(getStoredJobOffers());
-      showToast(`${created.company}: ${t.toasts.offerSaved} 🎯`, "success");
+    async (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => {
+      try {
+        const created = await createJobOfferFirestore(offer);
+        setJobOffers((prev) => [created, ...prev]);
+        showToastRef.current(`${created.company}: ${t.toasts.offerSaved} 🎯`, "success");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo registrar la postulación.");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.offerSaved]
+    [t.toasts.offerSaved]
   );
 
   const handleDeleteJobOffer = useCallback(
-    (id: string) => {
-      deleteJobOffer(id);
-      setJobOffers(getStoredJobOffers());
-      showToast(t.toasts.offerDeleted, "info");
+    async (id: string) => {
+      try {
+        await deleteJobOfferFirestore(id);
+        setJobOffers((prev) => prev.filter((o) => o.id !== id));
+        showToastRef.current(t.toasts.offerDeleted, "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar la postulación.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast, t.toasts.offerDeleted]
+    [t.toasts.offerDeleted]
   );
 
   // Product Actions
   const handleSaveProduct = useCallback(
-    (productData: any, isEditing: boolean) => {
-      if (isEditing) {
-        updateProduct(productData);
-        setProducts(getStoredProducts());
-        showToast("Producto actualizado exitosamente.", "success");
-      } else {
-        addProduct(productData);
-        setProducts(getStoredProducts());
-        showToast("Producto agregado al showcase.", "success");
+    async (productData: Omit<Product, "id" | "createdAt"> | Product, isEditing: boolean) => {
+      try {
+        if (isEditing && "id" in productData && productData.id) {
+          const saved = await updateProductFirestore(productData as Product);
+          const nextProducts = stateRef.current.products.map((p) =>
+            p.id === saved.id ? saved : p
+          );
+          setProducts(nextProducts);
+          await syncShowcaseIfPublished({ products: nextProducts });
+          showToastRef.current("Producto actualizado en Firestore.", "success");
+        } else {
+          const created = await createProductFirestore(
+            productData as Omit<Product, "id" | "createdAt">
+          );
+          const nextProducts = [created, ...stateRef.current.products];
+          setProducts(nextProducts);
+          if (created.isPublic !== false) {
+            await syncShowcaseIfPublished({ products: nextProducts });
+          }
+          showToastRef.current("Producto guardado en tu showcase.", "success");
+        }
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo guardar el producto en Firestore.");
+        throw new Error(msg);
       }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   const handleDeleteProduct = useCallback(
-    (id: string) => {
-      deleteProduct(id);
-      setProducts(getStoredProducts());
-      showToast("Producto eliminado del showcase.", "info");
+    async (id: string) => {
+      try {
+        await deleteProductFirestore(id);
+        const nextProducts = stateRef.current.products.filter((p) => p.id !== id);
+        setProducts(nextProducts);
+        await syncShowcaseIfPublished({ products: nextProducts });
+        showToastRef.current("Producto eliminado del showcase.", "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar el producto.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   const handleToggleProductPublic = useCallback(
-    (id: string) => {
-      const updated = toggleProductPublic(id);
-      if (updated) {
-        setProducts(getStoredProducts());
-        showToast(
-          updated.isPublic ? "Producto visible en la Vitrina Pública." : "Producto movido a Bóveda Privada.",
+    async (id: string) => {
+      const target = stateRef.current.products.find((p) => p.id === id);
+      if (!target) return;
+      try {
+        const updated = await updateProductFirestore({
+          ...target,
+          isPublic: target.isPublic === false ? true : false,
+        });
+        const nextProducts = stateRef.current.products.map((p) =>
+          p.id === id ? updated : p
+        );
+        setProducts(nextProducts);
+        await syncShowcaseIfPublished({ products: nextProducts });
+        showToastRef.current(
+          updated.isPublic
+            ? "Producto visible en la Vitrina Pública."
+            : "Producto movido a Bóveda Privada.",
           "info"
         );
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo cambiar la visibilidad del producto.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
       }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   // Certification Actions
   const handleSaveCertification = useCallback(
-    (
-      certData: Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt"> | TechnicalCertification,
+    async (
+      certData:
+        | Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt">
+        | TechnicalCertification,
       isEditing: boolean,
       sourceGoalId?: string
-    ): TechnicalCertification => {
-      let savedCert: TechnicalCertification;
-      if (isEditing && "id" in certData && certData.id) {
-        updateCertification(certData as TechnicalCertification);
-        savedCert = certData as TechnicalCertification;
-        setCertifications(getStoredCertifications());
-        showToast("Certificación actualizada.", "success");
-      } else {
-        savedCert = addCertification(
-          certData as Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt">
-        );
-        setCertifications(getStoredCertifications());
-        showToast("Certificación agregada al perfil técnico.", "success");
-      }
-
-      if (sourceGoalId) {
-        const currentGoal = getStoredCareerGoals().find((g) => g.id === sourceGoalId);
-        if (currentGoal) {
-          updateCareerGoal({
-            ...currentGoal,
-            status: "achieved",
-            achievedDate:
-              currentGoal.achievedDate || new Date().toISOString().substring(0, 10),
-            linkedCertificationId: savedCert.id,
-          });
-          setCareerGoals(getStoredCareerGoals());
+    ): Promise<TechnicalCertification> => {
+      try {
+        if (isEditing && "id" in certData && certData.id) {
+          const saved = await updateCertificationFirestore(certData as TechnicalCertification);
+          const nextCerts = stateRef.current.certifications.map((c) =>
+            c.id === saved.id ? saved : c
+          );
+          setCertifications(nextCerts);
+          await syncShowcaseIfPublished({ certifications: nextCerts });
+          showToastRef.current("Certificación actualizada en Firestore.", "success");
+          return saved;
         }
-      }
 
-      return savedCert;
+        const linkedGoal = sourceGoalId
+          ? stateRef.current.careerGoals.find((g) => g.id === sourceGoalId)
+          : undefined;
+        const created = await createCertificationFirestore(
+          certData as Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt">,
+          linkedGoal
+        );
+
+        const nextCerts = [created, ...stateRef.current.certifications];
+        setCertifications(nextCerts);
+        if (linkedGoal) {
+          setCareerGoals((prev) =>
+            prev.map((g) =>
+              g.id === linkedGoal.id
+                ? {
+                    ...g,
+                    status: "achieved",
+                    achievedDate:
+                      g.achievedDate || new Date().toISOString().substring(0, 10),
+                    linkedCertificationId: created.id,
+                    updatedAt: Date.now(),
+                  }
+                : g
+            )
+          );
+        }
+        if (created.isPublic !== false) {
+          await syncShowcaseIfPublished({ certifications: nextCerts });
+        }
+        showToastRef.current("Certificación guardada en tu perfil técnico.", "success");
+        return created;
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo guardar la certificación en Firestore."
+        );
+        throw new Error(msg);
+      }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   const handleDeleteCertification = useCallback(
-    (id: string) => {
-      deleteCertification(id);
-      setCertifications(getStoredCertifications());
-      showToast("Certificación eliminada.", "info");
+    async (id: string) => {
+      try {
+        await deleteCertificationFirestore(id);
+        const nextCerts = stateRef.current.certifications.filter((c) => c.id !== id);
+        setCertifications(nextCerts);
+        await syncShowcaseIfPublished({ certifications: nextCerts });
+        showToastRef.current("Certificación eliminada.", "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo eliminar la certificación.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   const handleToggleCertificationPublic = useCallback(
-    (id: string) => {
-      const updated = toggleCertificationPublic(id);
-      if (updated) {
-        setCertifications(getStoredCertifications());
-        showToast(
+    async (id: string) => {
+      const target = stateRef.current.certifications.find((c) => c.id === id);
+      if (!target) return;
+      try {
+        const updated = await updateCertificationFirestore({
+          ...target,
+          isPublic: target.isPublic === false ? true : false,
+        });
+        const nextCerts = stateRef.current.certifications.map((c) =>
+          c.id === id ? updated : c
+        );
+        setCertifications(nextCerts);
+        await syncShowcaseIfPublished({ certifications: nextCerts });
+        showToastRef.current(
           updated.isPublic
             ? "Certificación visible en Vitrina Pública."
             : "Certificación oculta en Bóveda Privada.",
           "info"
         );
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo actualizar la visibilidad de la certificación."
+        );
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
       }
     },
-    [showToast]
+    [syncShowcaseIfPublished]
   );
 
   // Career Goal Actions
   const handleSaveCareerGoal = useCallback(
-    (goalData: Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal, isEditing: boolean) => {
-      if (isEditing && "id" in goalData && goalData.id) {
-        updateCareerGoal(goalData as CareerGoal);
-        setCareerGoals(getStoredCareerGoals());
-        showToast("Objetivo profesional actualizado.", "success");
-      } else {
-        addCareerGoal(goalData as Omit<CareerGoal, "id" | "createdAt" | "updatedAt">);
-        setCareerGoals(getStoredCareerGoals());
-        showToast("Nuevo objetivo añadido a tu Plan de Carrera.", "success");
+    async (
+      goalData: Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal,
+      isEditing: boolean
+    ) => {
+      try {
+        if (isEditing && "id" in goalData && goalData.id) {
+          const saved = await updateCareerGoalFirestore(goalData as CareerGoal);
+          setCareerGoals((prev) => prev.map((g) => (g.id === saved.id ? saved : g)));
+          showToastRef.current("Objetivo profesional actualizado.", "success");
+        } else {
+          const created = await createCareerGoalFirestore(
+            goalData as Omit<CareerGoal, "id" | "createdAt" | "updatedAt">
+          );
+          setCareerGoals((prev) => [created, ...prev]);
+          showToastRef.current("Nuevo objetivo añadido a tu Plan de Carrera.", "success");
+        }
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo guardar el objetivo profesional en Firestore."
+        );
+        throw new Error(msg);
       }
     },
-    [showToast]
+    []
   );
 
-  const handleDeleteCareerGoal = useCallback(
-    (id: string) => {
-      deleteCareerGoal(id);
-      setCareerGoals(getStoredCareerGoals());
-      showToast("Objetivo eliminado del plan de carrera.", "info");
-    },
-    [showToast]
-  );
+  const handleDeleteCareerGoal = useCallback(async (id: string) => {
+    try {
+      await deleteCareerGoalFirestore(id);
+      setCareerGoals((prev) => prev.filter((g) => g.id !== id));
+      showToastRef.current("Objetivo eliminado del plan de carrera.", "info");
+    } catch (err) {
+      const msg = formatFirestoreUiError(err, "No se pudo eliminar el objetivo.");
+      showToastRef.current(msg, "error");
+      throw new Error(msg);
+    }
+  }, []);
 
   const handleSetCareerGoalStatus = useCallback(
-    (id: string, status: CareerGoalStatus) => {
-      const updated = setCareerGoalStatus(id, status);
-      if (updated) {
-        setCareerGoals(getStoredCareerGoals());
+    async (id: string, status: CareerGoalStatus) => {
+      const current = stateRef.current.careerGoals.find((g) => g.id === id);
+      if (!current) return;
+      try {
+        const saved = await updateCareerGoalFirestore({
+          ...current,
+          status,
+          achievedDate:
+            status === "achieved"
+              ? current.achievedDate || new Date().toISOString().substring(0, 10)
+              : undefined,
+        });
+        setCareerGoals((prev) => prev.map((g) => (g.id === id ? saved : g)));
         const statusLabel =
           status === "achieved"
             ? "Objetivo marcado como logrado"
             : status === "in_progress"
             ? "Objetivo movido a En Curso"
             : "Objetivo movido a Planificadas";
-        showToast(statusLabel, status === "achieved" ? "success" : "info");
+        showToastRef.current(statusLabel, status === "achieved" ? "success" : "info");
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo cambiar el estado del objetivo.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
       }
     },
-    [showToast]
+    []
   );
 
-  const handleToggleCareerGoalActionItem = useCallback((goalId: string, itemId: string) => {
-    const updated = toggleCareerGoalActionItem(goalId, itemId);
-    if (updated) {
-      setCareerGoals(getStoredCareerGoals());
-    }
-  }, []);
+  const handleToggleCareerGoalActionItem = useCallback(
+    async (goalId: string, itemId: string) => {
+      const current = stateRef.current.careerGoals.find((g) => g.id === goalId);
+      if (!current) return;
+      const nextItems = (current.actionItems || []).map((item) =>
+        item.id === itemId ? { ...item, done: !item.done } : item
+      );
+      try {
+        const saved = await updateCareerGoalFirestore({
+          ...current,
+          actionItems: nextItems,
+        });
+        setCareerGoals((prev) => prev.map((g) => (g.id === goalId ? saved : g)));
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo actualizar el hito del objetivo.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    []
+  );
+
+  // JSON Backup Import into Firestore
+  const handleImportBackupData = useCallback(
+    async (bundle: ParsedBackupBundle): Promise<number> => {
+      try {
+        const writtenCount = await importBackupBundleToFirestore(bundle);
+        if (auth?.currentUser && auth.currentUser.emailVerified) {
+          hydratedUidRef.current = null;
+          await hydrateFromFirebaseUser(auth.currentUser, {
+            navigate: false,
+            showToastMessage: false,
+          });
+        }
+        showToastRef.current(
+          `Respaldo importado en Firestore (${writtenCount} registros sincronizados) ✨`,
+          "success"
+        );
+        return writtenCount;
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo importar el respaldo JSON en Firestore."
+        );
+        throw new Error(msg);
+      }
+    },
+    [hydrateFromFirebaseUser]
+  );
 
   const unreadInboxCount = inbox.filter((m) => !m.read).length;
   const publicLogsCount = logs.filter((l) => l.isPublic).length;
 
   return {
+    isAuthReady,
+    isHydrating,
     logs,
     experiences,
     setExperiences,
     user,
+    setUser,
+    storedCv,
+    setStoredCv,
+    aiQuota,
+    setAiQuota,
     inbox,
     jobOffers,
     products,
@@ -781,12 +1238,13 @@ export const useWorkspaceData = ({
     careerGoals,
     unreadInboxCount,
     publicLogsCount,
-    reloadDataFromStorage,
+    handleCvAppliedState,
     handleSaveLog,
     handleTogglePublic,
     handleDeleteLog,
     handleDuplicateLog,
     handleImportBatchLogs,
+    handleCreateQuickExperience,
     handleSaveExperience,
     handleDeleteExperience,
     handleExtractBulletToLog,
@@ -796,8 +1254,7 @@ export const useWorkspaceData = ({
     handleDeleteMessage,
     handleIngestIntegrationSuggestions,
     handleQuickConvertInboxSuggestion,
-    handleLogin,
-    handleLoginDev,
+    handleLoginWithFirebaseUser,
     handleLogout,
     handleUpdateProfile,
     handleUpdateAvatar,
@@ -814,5 +1271,6 @@ export const useWorkspaceData = ({
     handleDeleteCareerGoal,
     handleSetCareerGoalStatus,
     handleToggleCareerGoalActionItem,
+    handleImportBackupData,
   };
 };

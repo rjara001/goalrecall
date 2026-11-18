@@ -24,20 +24,22 @@ import {
   TrendingUp,
   Bookmark,
   Share2,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { JobOffer, JobOfferStatus, LogEntry, WorkExperience, UserProfile } from "../types";
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 interface OffersViewProps {
   offers: JobOffer[];
   logs: LogEntry[];
   experiences: WorkExperience[];
   user: UserProfile | null;
-  onSaveOffer: (offer: JobOffer) => void;
-  onAddOffer: (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => void;
-  onDeleteOffer: (id: string) => void;
+  onSaveOffer: (offer: JobOffer) => Promise<void> | void;
+  onAddOffer: (offer: Omit<JobOffer, "id" | "createdAt" | "updatedAt">) => Promise<void> | void;
+  onDeleteOffer: (id: string) => Promise<void> | void;
   onOpenQuickLog: () => void;
   onOpenCvUpload?: () => void;
 }
@@ -62,6 +64,9 @@ export const OffersView: React.FC<OffersViewProps> = ({
   const [activeTab, setActiveTab] = useState<"ats" | "cv" | "interview">("ats");
   const [isNewOfferModalOpen, setIsNewOfferModalOpen] = useState(false);
   const [copiedCvText, setCopiedCvText] = useState(false);
+  const [isSavingOffer, setIsSavingOffer] = useState(false);
+  const [modalOfferError, setModalOfferError] = useState<string | null>(null);
+  const [workspaceOfferError, setWorkspaceOfferError] = useState<string | null>(null);
 
   // New Offer Form State
   const [formCompany, setFormCompany] = useState("");
@@ -83,9 +88,9 @@ export const OffersView: React.FC<OffersViewProps> = ({
     return o.status === statusFilter;
   });
 
-  const handleCreateOffer = (e: React.FormEvent) => {
+  const handleCreateOffer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formCompany.trim() || !formRole.trim() || !formDescription.trim()) return;
+    if (!formCompany.trim() || !formRole.trim() || !formDescription.trim() || isSavingOffer) return;
 
     // Automatic ATS keywords & requirements analysis based on description
     const textLower = formDescription.toLowerCase();
@@ -165,28 +170,44 @@ export const OffersView: React.FC<OffersViewProps> = ({
       }
     };
 
-    onAddOffer(newOfferData);
-    setIsNewOfferModalOpen(false);
-
-    // Reset Form
-    setFormCompany("");
-    setFormRole("");
-    setFormDescription("");
-    setFormUrl("");
+    setIsSavingOffer(true);
+    setModalOfferError(null);
+    try {
+      await onAddOffer(newOfferData);
+      setIsNewOfferModalOpen(false);
+      // Reset Form
+      setFormCompany("");
+      setFormRole("");
+      setFormDescription("");
+      setFormUrl("");
+    } catch (err) {
+      setModalOfferError(
+        formatFirestoreUiError(err, "No se pudo guardar la oferta laboral en Firestore.")
+      );
+    } finally {
+      setIsSavingOffer(false);
+    }
   };
 
-  const handleStatusChange = (newStatus: JobOfferStatus) => {
+  const handleStatusChange = async (newStatus: JobOfferStatus) => {
     if (!currentOffer) return;
-    onSaveOffer({
-      ...currentOffer,
-      status: newStatus,
-      appliedDate: newStatus === "applied" && !currentOffer.appliedDate 
-        ? new Date().toISOString().substring(0, 10) 
-        : currentOffer.appliedDate
-    });
+    setWorkspaceOfferError(null);
+    try {
+      await onSaveOffer({
+        ...currentOffer,
+        status: newStatus,
+        appliedDate: newStatus === "applied" && !currentOffer.appliedDate 
+          ? new Date().toISOString().substring(0, 10) 
+          : currentOffer.appliedDate
+      });
+    } catch (err) {
+      setWorkspaceOfferError(
+        formatFirestoreUiError(err, "No se pudo actualizar el estado en Firestore.")
+      );
+    }
   };
 
-  const handleToggleLogSelection = (logId: string) => {
+  const handleToggleLogSelection = async (logId: string) => {
     if (!currentOffer) return;
     const currentSelected = currentOffer.tailoredCv?.selectedLogIds || [];
     const isSelected = currentSelected.includes(logId);
@@ -194,16 +215,34 @@ export const OffersView: React.FC<OffersViewProps> = ({
       ? currentSelected.filter((id) => id !== logId)
       : [...currentSelected, logId];
 
-    onSaveOffer({
-      ...currentOffer,
-      tailoredCv: {
-        headline: currentOffer.tailoredCv?.headline || currentOffer.role,
-        targetSummary: currentOffer.tailoredCv?.targetSummary || "",
-        highlightedSkills: currentOffer.tailoredCv?.highlightedSkills || [],
-        selectedExperienceIds: currentOffer.tailoredCv?.selectedExperienceIds || [],
-        selectedLogIds: updatedSelected,
-      }
-    });
+    setWorkspaceOfferError(null);
+    try {
+      await onSaveOffer({
+        ...currentOffer,
+        tailoredCv: {
+          headline: currentOffer.tailoredCv?.headline || currentOffer.role,
+          targetSummary: currentOffer.tailoredCv?.targetSummary || "",
+          highlightedSkills: currentOffer.tailoredCv?.highlightedSkills || [],
+          selectedExperienceIds: currentOffer.tailoredCv?.selectedExperienceIds || [],
+          selectedLogIds: updatedSelected,
+        }
+      });
+    } catch (err) {
+      setWorkspaceOfferError(
+        formatFirestoreUiError(err, "No se pudo guardar la selección de logros en Firestore.")
+      );
+    }
+  };
+
+  const handleDeleteCurrentOffer = async (offerId: string) => {
+    setWorkspaceOfferError(null);
+    try {
+      await onDeleteOffer(offerId);
+    } catch (err) {
+      setWorkspaceOfferError(
+        formatFirestoreUiError(err, "No se pudo eliminar la oferta de Firestore.")
+      );
+    }
   };
 
   const copyCvMarkdown = () => {
@@ -250,7 +289,10 @@ export const OffersView: React.FC<OffersViewProps> = ({
 
           <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={() => setIsNewOfferModalOpen(true)}
+              onClick={() => {
+                setModalOfferError(null);
+                setIsNewOfferModalOpen(true);
+              }}
               className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-900/30 flex items-center gap-2 transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
@@ -406,7 +448,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => onDeleteOffer(currentOffer.id)}
+                      onClick={() => void handleDeleteCurrentOffer(currentOffer.id)}
                       className="p-2 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
                       title="Eliminar esta oferta"
                     >
@@ -414,6 +456,25 @@ export const OffersView: React.FC<OffersViewProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {workspaceOfferError && (
+                  <div
+                    role="alert"
+                    className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <span>{workspaceOfferError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceOfferError(null)}
+                      className="text-[11px] font-semibold text-red-300 hover:text-white shrink-0"
+                    >
+                      Ocultar
+                    </button>
+                  </div>
+                )}
 
                 {/* Candidate Conditions Summary Bar */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-2xl text-xs">
@@ -797,8 +858,10 @@ export const OffersView: React.FC<OffersViewProps> = ({
           <div className="bg-[#0B101D] border border-indigo-900/60 rounded-3xl p-6 sm:p-8 max-w-xl w-full space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             
             <button
+              type="button"
+              disabled={isSavingOffer}
               onClick={() => setIsNewOfferModalOpen(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1"
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 disabled:opacity-40"
             >
               <X className="w-5 h-5" />
             </button>
@@ -813,6 +876,16 @@ export const OffersView: React.FC<OffersViewProps> = ({
                 {ol.modalSubtitle}
               </p>
             </div>
+
+            {modalOfferError && (
+              <div
+                role="alert"
+                className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2"
+              >
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{modalOfferError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateOffer} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -909,16 +982,19 @@ export const OffersView: React.FC<OffersViewProps> = ({
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={isSavingOffer}
                   onClick={() => setIsNewOfferModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white disabled:opacity-40"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-900/30 transition-all"
+                  disabled={isSavingOffer}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-900/30 transition-all inline-flex items-center gap-2 disabled:opacity-60"
                 >
-                  {ol.saveAndAnalyzeBtn}
+                  {isSavingOffer && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isSavingOffer ? "Guardando en Firestore..." : ol.saveAndAnalyzeBtn}</span>
                 </button>
               </div>
             </form>

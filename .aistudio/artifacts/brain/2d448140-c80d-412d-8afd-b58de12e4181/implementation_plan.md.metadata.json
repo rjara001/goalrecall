@@ -1,6 +1,6 @@
 {
-  "summary": "Plan de despliegue y delimitación de responsabilidades para GoalRecall en Firebase Hosting con dominio propio y garantía de Costo Cero ($0.00 USD) en el plan Spark. Divide de forma granular y sin ambigüedades qué tareas ejecuta la IA en el código y qué pasos exactos realiza el usuario en Firebase Console y Namecheap/GoDaddy.",
-  "updatedAt": "2026-11-03T11:07:27.932397733Z",
+  "summary": "Plan integral de persistencia remota en Firestore con Google Auth obligatorio, eliminación de almacenamiento local fragmentado, auditoría completa de módulos afectados (CV, logros, experiencias, productos, certificaciones, metas, ofertas, inbox, perfil/vitrina pública, cuotas IA y pagos), reglas de seguridad endurecidas y UX con guardado confirmado y manejo explícito de errores.",
+  "updatedAt": "2026-11-17T11:31:53.900739286Z",
   "requestFeedback": true,
   "userFacing": true
 }

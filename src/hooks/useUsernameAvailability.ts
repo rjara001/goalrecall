@@ -3,6 +3,7 @@ import {
   UsernameCheckStatus,
   sanitizeUsernameHandle,
 } from "../components/auth/authLocales";
+import { checkUsernameAvailabilityFirestore } from "../utils/firestore/repository";
 
 interface UseUsernameAvailabilityOptions {
   enabled: boolean;
@@ -40,28 +41,34 @@ export function useUsernameAvailability({
       return;
     }
 
+    let cancelled = false;
     setStatus({ checking: true });
     const timer = setTimeout(async () => {
       try {
-        const query = userKey ? `?userKey=${encodeURIComponent(userKey)}` : "";
-        const res = await fetch(
-          `/api/public/check-username/${encodeURIComponent(clean)}${query}`
-        );
-        if (res.ok) {
-          const data = await res.json();
+        const res = await checkUsernameAvailabilityFirestore(clean, userKey);
+        if (!cancelled) {
           setStatus({
             checking: false,
-            available: data.available,
-            reason: data.reason,
-            suggestions: data.suggestions,
+            available: res.available,
+            reason: res.reason,
+            suggestions: res.suggestions,
           });
         }
       } catch {
-        setStatus({ checking: false, available: true });
+        if (!cancelled) {
+          setStatus({
+            checking: false,
+            available: undefined,
+            reason: "No se pudo verificar disponibilidad en Firestore.",
+          });
+        }
       }
     }, 350);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [enabled, username, currentUsername, userKey]);
 
   return status;

@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "functions": [
     {
       "source": "functions",
@@ -37,6 +40,10 @@
       },
       {
         "source": "/api/public/u/:username",
+        "function": "apiPublicShowcase"
+      },
+      {
+        "source": "/api/public/**",
         "function": "apiPublicShowcase"
       },
       {

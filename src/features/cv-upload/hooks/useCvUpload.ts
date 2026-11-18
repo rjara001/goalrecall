@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
+  AiUsageRecord,
   CvExtractionPayload,
   CvFallbackReason,
   CvPendingField,
@@ -11,15 +12,14 @@ import {
   UserProfile,
   WorkExperience,
 } from "../../../types";
+import { checkCanUseAi, getAiUsage } from "../../../utils/storage";
+import { formatFirestoreUiError } from "../../../utils/firestore/errors";
 import {
-  checkCanUseAi,
-  getAiUsage,
-  getStoredExperiences,
-  recordAiUsage,
-  saveExperiences,
-  saveProWaitlistEmail,
-  saveStoredCv,
-} from "../../../utils/storage";
+  getAiQuotaFirestore,
+  recordAiUsageFirestore,
+  saveCvAndApplyBatchFirestore,
+  saveProWaitlistEmailFirestore,
+} from "../../../utils/firestore/repository";
 import { auth } from "../../../firebase";
 import { SAMPLE_CV_TEXT } from "../data/sampleCv";
 import {
@@ -34,22 +34,31 @@ import {
   mapRawAchievementsToBullets,
 } from "../services/cvImportMapper";
 
+export interface CvSavedResult {
+  cvData: ExtractedCvData;
+  savedUser: UserProfile | null;
+  savedExperiences: WorkExperience[];
+  savedLogs: LogEntry[];
+}
+
 export interface UseCvUploadParams {
   isOpen: boolean;
   onClose: () => void;
-  onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => void;
-  onExperiencesUpdated?: (updated: WorkExperience[]) => void;
+  existingExperiences?: WorkExperience[];
   currentUser?: UserProfile | null;
-  onUpdateProfile?: (updated: UserProfile) => void;
+  aiQuota?: AiUsageRecord | null;
+  onAiQuotaUpdated?: (quota: AiUsageRecord) => void;
+  onCvSaved?: (result: CvSavedResult) => Promise<void> | void;
 }
 
 export function useCvUpload({
   isOpen,
   onClose,
-  onImportLogs,
-  onExperiencesUpdated,
+  existingExperiences = [],
   currentUser,
-  onUpdateProfile,
+  aiQuota,
+  onAiQuotaUpdated,
+  onCvSaved,
 }: UseCvUploadParams) {
   const [phase, setPhase] = useState<CvUploadPhase>("upload");
   const [activeTab, setActiveTab] = useState<"file" | "text">("file");
@@ -65,6 +74,10 @@ export function useCvUpload({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fallbackNotice, setFallbackNotice] = useState<CvFallbackReason | null>(null);
 
+  // Persistence State
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   // Extracted Data State
   const [extractedCv, setExtractedCv] = useState<ExtractedCvData | null>(null);
   const [pendingFields, setPendingFields] = useState<CvPendingField[]>([]);
@@ -78,19 +91,29 @@ export function useCvUpload({
   const [quickFieldValue, setQuickFieldValue] = useState("");
 
   // AI Quota & Pro Plan State
-  const [aiUsage, setAiUsage] = useState(() => getAiUsage());
+  const [aiUsage, setAiUsage] = useState<AiUsageRecord>(() =>
+    getAiUsage(new Date(), aiQuota)
+  );
   const [pendingPayload, setPendingPayload] = useState<CvExtractionPayload | null>(null);
   const [showProModal, setShowProModal] = useState(false);
   const [proEmail, setProEmail] = useState("");
   const [proEmailSaved, setProEmailSaved] = useState(false);
+  const [proEmailError, setProEmailError] = useState<string | null>(null);
   const [isLoadingSamplePdf, setIsLoadingSamplePdf] = useState(false);
 
-  // Resync AI usage counter when modal opens or active user changes
+  // Sync AI usage counter from Firestore when modal opens or user/quota changes
   useEffect(() => {
-    if (isOpen) {
-      setAiUsage(getAiUsage());
+    setAiUsage(getAiUsage(new Date(), aiQuota));
+    if (isOpen && auth?.currentUser?.emailVerified) {
+      getAiQuotaFirestore()
+        .then((record) => {
+          setAiUsage(record);
+        })
+        .catch(() => {
+          // Keep last known quota if offline
+        });
     }
-  }, [isOpen, currentUser?.id]);
+  }, [isOpen, currentUser?.id, aiQuota]);
 
   const resetState = useCallback(() => {
     setPhase("upload");
@@ -101,6 +124,8 @@ export function useCvUpload({
     setExtractedBullets([]);
     setExtractionEngine("");
     setErrorMessage(null);
+    setSaveError(null);
+    setIsSaving(false);
     setFallbackNotice(null);
     setPastedCvText("");
     setActiveFieldEditing(null);
@@ -108,45 +133,54 @@ export function useCvUpload({
     setPendingPayload(null);
   }, []);
 
-  const executeExtraction = useCallback(async (payload: CvExtractionPayload) => {
-    setProcessingStep("Auditando completitud e identificando campos pendientes...");
+  const executeExtraction = useCallback(
+    async (payload: CvExtractionPayload) => {
+      setProcessingStep("Auditando completitud e identificando campos pendientes...");
 
-    let idToken: string | undefined;
-    if (!payload.forceLocal && auth && auth.currentUser) {
-      try {
-        idToken = await auth.currentUser.getIdToken();
-      } catch (tokenErr) {
-        console.warn("No se pudo obtener el token de autenticación:", tokenErr);
+      let idToken: string | undefined;
+      if (!payload.forceLocal && auth && auth.currentUser) {
+        try {
+          idToken = await auth.currentUser.getIdToken();
+        } catch (tokenErr) {
+          console.warn("No se pudo obtener el token de autenticación:", tokenErr);
+        }
       }
-    }
 
-    const result = await extractCvWithAi(payload, { idToken });
+      const result = await extractCvWithAi(payload, { idToken });
 
-    if (result.usedAi) {
-      recordAiUsage();
-      setAiUsage(getAiUsage());
-    }
+      if (result.usedAi && auth?.currentUser?.emailVerified) {
+        try {
+          const updatedQuota = await recordAiUsageFirestore();
+          setAiUsage(updatedQuota);
+          onAiQuotaUpdated?.(updatedQuota);
+        } catch (quotaErr) {
+          console.warn("No se pudo registrar el uso de cuota AI en Firestore:", quotaErr);
+        }
+      }
 
-    setFallbackNotice(result.fallbackReason || null);
-    setExtractionEngine(result.response.engine || "local-strict-parser");
-    setExtractedCv(result.response.cvData || null);
-    setPendingFields(result.response.pendingFields || []);
-    setCompletenessScore(result.response.completenessScore || 0);
-    setExtractedBullets(mapRawAchievementsToBullets(result.response.achievements || []));
-    setPhase("review");
+      setFallbackNotice(result.fallbackReason || null);
+      setExtractionEngine(result.response.engine || "local-strict-parser");
+      setExtractedCv(result.response.cvData || null);
+      setPendingFields(result.response.pendingFields || []);
+      setCompletenessScore(result.response.completenessScore || 0);
+      setExtractedBullets(mapRawAchievementsToBullets(result.response.achievements || []));
+      setSaveError(null);
+      setPhase("review");
 
-    if (result.response.cvData?.experiences?.length > 0) {
-      setReviewTab("radiography");
-    } else if (result.response.pendingFields?.length > 0) {
-      setReviewTab("pending");
-    } else {
-      setReviewTab("radiography");
-    }
-  }, []);
+      if (result.response.cvData?.experiences?.length > 0) {
+        setReviewTab("radiography");
+      } else if (result.response.pendingFields?.length > 0) {
+        setReviewTab("pending");
+      } else {
+        setReviewTab("radiography");
+      }
+    },
+    [onAiQuotaUpdated]
+  );
 
   const checkQuotaOrRun = useCallback(
     async (payload: CvExtractionPayload) => {
-      const quota = checkCanUseAi(currentUser?.plan || "free");
+      const quota = checkCanUseAi(currentUser?.plan || "free", Date.now(), aiUsage);
       if (!quota.canUse) {
         if (quota.cooldownRemainingMs > 0) {
           const sec = Math.ceil(quota.cooldownRemainingMs / 1000);
@@ -163,7 +197,7 @@ export function useCvUpload({
 
       await executeExtraction(payload);
     },
-    [currentUser?.plan, executeExtraction]
+    [aiUsage, currentUser?.plan, executeExtraction]
   );
 
   const handleFileSelect = useCallback(
@@ -181,6 +215,7 @@ export function useCvUpload({
         type: file.type || "application/octet-stream",
       });
       setErrorMessage(null);
+      setSaveError(null);
       setFallbackNotice(null);
       setPhase("processing");
       setProcessingStep("Leyendo documento binario...");
@@ -208,6 +243,7 @@ export function useCvUpload({
 
       const cleanText = normalizeCvText(textToProcess);
       setErrorMessage(null);
+      setSaveError(null);
       setFallbackNotice(null);
       setPhase("processing");
       setProcessingStep("Extrayendo estructura fidedigna con IA...");
@@ -360,52 +396,81 @@ export function useCvUpload({
     setExtractedBullets((prev) => prev.filter((b) => b.id !== id));
   }, []);
 
-  const handleSaveAndApply = useCallback(() => {
-    if (!extractedCv) return;
+  const handleSaveAndApply = useCallback(async () => {
+    if (!extractedCv || isSaving) return;
 
-    saveStoredCv(extractedCv, currentUser?.id);
+    if (!auth?.currentUser || !auth.currentUser.emailVerified) {
+      setSaveError(
+        "Debes iniciar sesión con una cuenta de Google verificada para guardar tu CV en Firestore."
+      );
+      return;
+    }
 
-    const existingExperiences = getStoredExperiences();
-    const { updatedUser, updatedExperiences, newLogs } =
-      buildWorkspaceImportFromCv({
-        extractedCv,
-        selectedBullets: extractedBullets.filter((b) => b.selected),
-        existingExperiences,
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const { updatedUser, updatedExperiences, newLogs } =
+        buildWorkspaceImportFromCv({
+          extractedCv,
+          selectedBullets: extractedBullets.filter((b) => b.selected),
+          existingExperiences,
+          currentUser,
+          sourceFileName: selectedFile?.name,
+        });
+
+      const saved = await saveCvAndApplyBatchFirestore({
+        cvData: extractedCv,
         currentUser,
-        sourceFileName: selectedFile?.name,
+        updatedUser,
+        updatedExperiences,
+        newLogs,
       });
 
-    if (updatedUser && onUpdateProfile) {
-      onUpdateProfile(updatedUser);
-    }
+      await onCvSaved?.({
+        cvData: extractedCv,
+        savedUser: saved.savedUser,
+        savedExperiences: saved.savedExperiences,
+        savedLogs: saved.savedLogs,
+      });
 
-    if (Array.isArray(extractedCv.experiences)) {
-      saveExperiences(updatedExperiences);
-      onExperiencesUpdated?.(updatedExperiences);
+      resetState();
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(
+          err,
+          "No se pudieron guardar los datos del CV en Firestore. Verifica tu conexión e intenta de nuevo."
+        )
+      );
+    } finally {
+      setIsSaving(false);
     }
-
-    if (newLogs.length > 0) {
-      onImportLogs(newLogs);
-    }
-
-    resetState();
-    onClose();
   }, [
     currentUser,
+    existingExperiences,
     extractedBullets,
     extractedCv,
+    isSaving,
     onClose,
-    onExperiencesUpdated,
-    onImportLogs,
-    onUpdateProfile,
+    onCvSaved,
     resetState,
     selectedFile?.name,
   ]);
 
-  const handleSaveProEmail = useCallback((email: string) => {
-    if (email && email.includes("@")) {
-      saveProWaitlistEmail(email);
+  const handleSaveProEmail = useCallback(async (email: string) => {
+    if (!email || !email.includes("@")) return;
+    setProEmailError(null);
+    try {
+      await saveProWaitlistEmailFirestore(email);
       setProEmailSaved(true);
+    } catch (err) {
+      setProEmailError(
+        formatFirestoreUiError(
+          err,
+          "No se pudo registrar tu correo en la lista de espera. Inicia sesión con Google e intenta de nuevo."
+        )
+      );
     }
   }, []);
 
@@ -422,6 +487,9 @@ export function useCvUpload({
     setIsDragging,
     processingStep,
     errorMessage,
+    isSaving,
+    saveError,
+    setSaveError,
     fallbackNotice,
     extractedCv,
     pendingFields,
@@ -439,6 +507,7 @@ export function useCvUpload({
     setProEmail,
     proEmailSaved,
     setProEmailSaved,
+    proEmailError,
     isLoadingSamplePdf,
     handleFileSelect,
     handlePasteText,

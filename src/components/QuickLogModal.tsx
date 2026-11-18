@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { X, Sparkles, Eye, Lock, Zap } from "lucide-react";
-import { InboxAchievementDraft, LogEntry } from "../types";
+import { AlertCircle, X, Sparkles, Eye, Lock, Zap, Loader2 } from "lucide-react";
+import { InboxAchievementDraft, LogEntry, WorkExperience } from "../types";
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
@@ -23,8 +23,12 @@ export {
 interface QuickLogModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => void;
+  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onCreateExperience?: (
+    expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
+  ) => Promise<WorkExperience>;
   existingLogs: LogEntry[];
+  experiences?: WorkExperience[];
   initialData?: LogEntry | null;
   initialExperienceId?: string;
   initialBulletText?: string;
@@ -35,7 +39,9 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onCreateExperience,
   existingLogs,
+  experiences = [],
   initialData,
   initialExperienceId,
   initialBulletText,
@@ -49,11 +55,13 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const form = useQuickLogForm({
     isOpen,
     existingLogs,
+    experiences,
     initialData,
     initialExperienceId,
     initialBulletText,
     initialDraft,
     onSave,
+    onCreateExperience,
     onClose,
     titleInputRef,
   });
@@ -81,7 +89,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      form.handleSubmit();
+      void form.handleSubmit();
     }
   };
 
@@ -106,9 +114,11 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
             </h2>
           </div>
           <button
+            type="button"
+            disabled={form.isSaving}
             onClick={onClose}
             aria-label={t.common.close}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-4 h-4" />
           </button>
@@ -159,6 +169,16 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         </div>
 
         <form onSubmit={form.handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
+          {form.saveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{form.saveError}</span>
+            </div>
+          )}
+
           <QuickLogTitleField
             language={language}
             titleInputRef={titleInputRef}
@@ -247,18 +267,23 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
             <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
+                disabled={form.isSaving}
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
               >
                 {t.common.cancel}
               </button>
               <button
                 type="submit"
-                disabled={!form.title.trim()}
+                disabled={!form.title.trim() || form.isSaving}
                 className="px-5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               >
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                {t.modals.saveLogBtn}
+                {form.isSaving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5 fill-current" />
+                )}
+                {form.isSaving ? "Guardando..." : t.modals.saveLogBtn}
               </button>
             </div>
           </div>

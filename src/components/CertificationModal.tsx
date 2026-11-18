@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Award, Calendar, Eye, EyeOff, Link2, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, Award, Calendar, Eye, EyeOff, Link2, Loader2, ShieldCheck, X } from "lucide-react";
 import { TechnicalCertification } from "../types";
 import { CertificationPrefillDraft } from "../hooks/useAppModals";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 interface CertificationModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface CertificationModalProps {
   onSave: (
     cert: Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt"> | TechnicalCertification,
     sourceGoalId?: string
-  ) => void;
+  ) => Promise<void> | void;
   certification?: TechnicalCertification | null;
   prefill?: CertificationPrefillDraft | null;
 }
@@ -40,6 +41,8 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
   const [skills, setSkills] = useState<string[]>([]);
   const [summary, setSummary] = useState("");
   const [isPublic, setIsPublic] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -76,6 +79,8 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
       setIsPublic(true);
     }
     setSkillsInput("");
+    setIsSaving(false);
+    setSaveError(null);
   }, [certification, prefill, isOpen]);
 
   if (!isOpen) return null;
@@ -95,29 +100,40 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
     setSkills((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !issuer.trim() || !issueDate.trim()) return;
+    if (!name.trim() || !issuer.trim() || !issueDate.trim() || isSaving) return;
 
-    const basePayload = {
-      ...(certification ? { id: certification.id, createdAt: certification.createdAt } : {}),
-      userId: certification?.userId,
-      name: name.trim(),
-      issuer: issuer.trim(),
-      issueDate: issueDate.trim(),
-      expirationDate: expirationDate.trim() || undefined,
-      credentialId: credentialId.trim() || undefined,
-      credentialUrl: credentialUrl.trim() || undefined,
-      skills,
-      summary: summary.trim() || undefined,
-      isPublic,
-    };
+    setIsSaving(true);
+    setSaveError(null);
 
-    onSave(
-      basePayload as Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt"> | TechnicalCertification,
-      prefill?.sourceGoalId
-    );
-    onClose();
+    try {
+      const basePayload = {
+        ...(certification ? { id: certification.id, createdAt: certification.createdAt } : {}),
+        userId: certification?.userId,
+        name: name.trim(),
+        issuer: issuer.trim(),
+        issueDate: issueDate.trim(),
+        expirationDate: expirationDate.trim() || undefined,
+        credentialId: credentialId.trim() || undefined,
+        credentialUrl: credentialUrl.trim() || undefined,
+        skills,
+        summary: summary.trim() || undefined,
+        isPublic,
+      };
+
+      await onSave(
+        basePayload as Omit<TechnicalCertification, "id" | "createdAt" | "updatedAt"> | TechnicalCertification,
+        prefill?.sourceGoalId
+      );
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(err, "No se pudo guardar la certificación en Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -148,15 +164,25 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
           </div>
           <button
             type="button"
+            disabled={isSaving}
             onClick={onClose}
             aria-label="Cerrar"
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+          {saveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{saveError}</span>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-slate-300 font-semibold block">
               Nombre oficial de la certificación *
@@ -352,16 +378,25 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors disabled:opacity-40"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold rounded-xl shadow-md transition-all"
+              disabled={isSaving}
+              className="px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
             >
-              {certification ? "Guardar Cambios" : "Guardar Certificación"}
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>
+                {isSaving
+                  ? "Guardando..."
+                  : certification
+                  ? "Guardar Cambios"
+                  : "Guardar Certificación"}
+              </span>
             </button>
           </div>
         </form>

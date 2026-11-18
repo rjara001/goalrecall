@@ -14,9 +14,12 @@ import {
   Eye, 
   EyeOff,
   Upload,
-  Sparkles
+  Sparkles,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { Product, LogEntry } from "../types";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 // Zero-Cost Spark Guardrail: Client-Side Canvas WebP Compressor (< 150 KB, max 1200px width)
 // Prevents consuming the 360 MB/day Firebase Hosting transfer limit
@@ -58,7 +61,7 @@ const compressImageToWebP = (file: File): Promise<{ dataUrl: string; sizeKb: num
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: Omit<Product, "id" | "createdAt"> | Product) => void;
+  onSave: (product: Omit<Product, "id" | "createdAt"> | Product) => Promise<void> | void;
   product?: Product | null;
   availableLogs?: LogEntry[];
 }
@@ -93,6 +96,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
   const [compressing, setCompressing] = useState(false);
   const [imageSizeNote, setImageSizeNote] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -133,6 +138,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setIsPublic(true);
       setSelectedLogIds([]);
     }
+    setIsSaving(false);
+    setSaveError(null);
   }, [product, isOpen]);
 
   if (!isOpen) return null;
@@ -156,27 +163,37 @@ export const ProductModal: React.FC<ProductModalProps> = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) return;
+    if (!title.trim() || !description.trim() || isSaving) return;
 
-    const payload = {
-      ...(product ? { id: product.id, createdAt: product.createdAt } : {}),
-      userId: product?.userId || "usr-guest",
-      title: title.trim(),
-      tagline: tagline.trim(),
-      badge: badge.trim() || "SaaS / Propio",
-      description: description.trim(),
-      imageUrl: imageUrl.trim() || SAMPLE_SCREENSHOTS[0],
-      liveUrl: liveUrl.trim() || undefined,
-      repoUrl: repoUrl.trim() || undefined,
-      techStack: techStack.length > 0 ? techStack : ["React", "TypeScript"],
-      isPublic,
-      relatedAchievementIds: selectedLogIds,
-    };
+    setIsSaving(true);
+    setSaveError(null);
 
-    onSave(payload as any);
-    onClose();
+    try {
+      const payload = {
+        ...(product ? { id: product.id, createdAt: product.createdAt, userId: product.userId } : {}),
+        title: title.trim(),
+        tagline: tagline.trim(),
+        badge: badge.trim() || "SaaS / Propio",
+        description: description.trim(),
+        imageUrl: imageUrl.trim() || SAMPLE_SCREENSHOTS[0],
+        liveUrl: liveUrl.trim() || undefined,
+        repoUrl: repoUrl.trim() || undefined,
+        techStack: techStack.length > 0 ? techStack : ["React", "TypeScript"],
+        isPublic,
+        relatedAchievementIds: selectedLogIds,
+      };
+
+      await onSave(payload as any);
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(err, "No se pudo guardar el producto en Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -199,8 +216,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           </div>
           <button
             type="button"
+            disabled={isSaving}
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
@@ -208,6 +226,15 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+          {saveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{saveError}</span>
+            </div>
+          )}
           {/* Row 1: Title & Badge */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2 space-y-1">
@@ -514,16 +541,25 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors disabled:opacity-40"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl shadow-md transition-all"
+              disabled={isSaving}
+              className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 text-slate-950 font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
             >
-              {product ? "Guardar Cambios" : "Crear Producto"}
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>
+                {isSaving
+                  ? "Guardando..."
+                  : product
+                  ? "Guardar Cambios"
+                  : "Crear Producto"}
+              </span>
             </button>
           </div>
         </form>

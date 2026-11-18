@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { AlertCircle } from "lucide-react";
 import {
   CareerGoal,
   CareerGoalStatus,
@@ -10,6 +11,7 @@ import {
 } from "../types";
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import {
   buildExtractedBulletSet,
   computeTotalBulletsCount,
@@ -30,16 +32,16 @@ interface TimelineViewProps {
   products?: Product[];
   certifications?: TechnicalCertification[];
   careerGoals?: CareerGoal[];
-  onTogglePublic: (id: string) => void;
+  onTogglePublic: (id: string) => Promise<void> | void;
   onEditLog: (entry: LogEntry) => void;
-  onDeleteLog: (id: string) => void;
-  onDuplicateLog: (entry: LogEntry) => void;
+  onDeleteLog: (id: string) => Promise<void> | void;
+  onDuplicateLog: (entry: LogEntry) => Promise<void> | void;
   onOpenQuickLog: () => void;
   onOpenPasteBullets: () => void;
   onOpenCvUpload: () => void;
   onAddExperience: () => void;
   onEditExperience: (exp: WorkExperience) => void;
-  onDeleteExperience: (id: string) => void;
+  onDeleteExperience: (id: string) => Promise<void> | void;
   onAddLogToExperience: (experienceId: string) => void;
   onExtractBulletToLog?: (
     experienceId: string,
@@ -47,21 +49,21 @@ interface TimelineViewProps {
     role: string,
     bullet: string,
     technologies?: string[]
-  ) => void;
-  onExtractAllBulletsForExperience?: (experienceId: string) => void;
+  ) => Promise<void> | void;
+  onExtractAllBulletsForExperience?: (experienceId: string) => Promise<void> | void;
   onOpenNewProduct?: () => void;
   onEditProduct?: (product: Product) => void;
-  onDeleteProduct?: (id: string) => void;
-  onToggleProductPublic?: (id: string) => void;
+  onDeleteProduct?: (id: string) => Promise<void> | void;
+  onToggleProductPublic?: (id: string) => Promise<void> | void;
   onOpenNewCertification?: () => void;
   onEditCertification?: (cert: TechnicalCertification) => void;
-  onDeleteCertification?: (id: string) => void;
-  onToggleCertificationPublic?: (id: string) => void;
+  onDeleteCertification?: (id: string) => Promise<void> | void;
+  onToggleCertificationPublic?: (id: string) => Promise<void> | void;
   onOpenNewCareerGoal?: () => void;
   onEditCareerGoal?: (goal: CareerGoal) => void;
-  onDeleteCareerGoal?: (id: string) => void;
-  onSetCareerGoalStatus?: (id: string, status: CareerGoalStatus) => void;
-  onToggleCareerGoalActionItem?: (goalId: string, itemId: string) => void;
+  onDeleteCareerGoal?: (id: string) => Promise<void> | void;
+  onSetCareerGoalStatus?: (id: string, status: CareerGoalStatus) => Promise<void> | void;
+  onToggleCareerGoalActionItem?: (goalId: string, itemId: string) => Promise<void> | void;
   onConvertGoalToCertification?: (goal: CareerGoal) => void;
   onConvertGoalToLog?: (goal: CareerGoal) => void;
 }
@@ -118,6 +120,17 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   >("all");
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const runMutation = async (fn: (() => Promise<void> | void) | undefined, fallbackMsg: string) => {
+    if (!fn) return;
+    setActionError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setActionError(formatFirestoreUiError(err, fallbackMsg));
+    }
+  };
 
   const toggleField = (key: string) => {
     setExpandedFields((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -187,6 +200,25 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         onOpenNewCareerGoal={onOpenNewCareerGoal}
       />
 
+      {actionError && (
+        <div
+          role="alert"
+          className="p-3.5 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-[11px] font-semibold text-red-300 hover:text-white shrink-0"
+          >
+            Ocultar
+          </button>
+        </div>
+      )}
+
       {viewMode === "by_experience" && (
         <TimelineExperiencesTab
           experiences={experiences}
@@ -198,10 +230,28 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           onOpenCvUpload={onOpenCvUpload}
           onAddExperience={onAddExperience}
           onEditExperience={onEditExperience}
-          onDeleteExperience={onDeleteExperience}
+          onDeleteExperience={(id) =>
+            void runMutation(() => onDeleteExperience(id), "No se pudo eliminar la experiencia.")
+          }
           onAddLogToExperience={onAddLogToExperience}
-          onExtractBulletToLog={onExtractBulletToLog}
-          onExtractAllBulletsForExperience={onExtractAllBulletsForExperience}
+          onExtractBulletToLog={
+            onExtractBulletToLog
+              ? (expId, company, role, bullet, technologies) =>
+                  void runMutation(
+                    () => onExtractBulletToLog(expId, company, role, bullet, technologies),
+                    "No se pudo guardar la viñeta en Firestore."
+                  )
+              : undefined
+          }
+          onExtractAllBulletsForExperience={
+            onExtractAllBulletsForExperience
+              ? (expId) =>
+                  void runMutation(
+                    () => onExtractAllBulletsForExperience(expId),
+                    "No se pudieron extraer las viñetas a Firestore."
+                  )
+              : undefined
+          }
           onJumpToCompanyLogs={(company) => {
             setSelectedClient(company);
             setViewMode("achievements");
@@ -236,10 +286,19 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           onGoToExperiencesTab={() => setViewMode("by_experience")}
           onOpenQuickLog={onOpenQuickLog}
           onAddLogToExperience={onAddLogToExperience}
-          onTogglePublic={onTogglePublic}
+          onTogglePublic={(id) =>
+            void runMutation(
+              () => onTogglePublic(id),
+              "No se pudo actualizar la visibilidad del logro."
+            )
+          }
           onEditLog={onEditLog}
-          onDeleteLog={onDeleteLog}
-          onDuplicateLog={onDuplicateLog}
+          onDeleteLog={(id) =>
+            void runMutation(() => onDeleteLog(id), "No se pudo eliminar el logro.")
+          }
+          onDuplicateLog={(entry) =>
+            void runMutation(() => onDuplicateLog(entry), "No se pudo duplicar el logro.")
+          }
         />
       )}
 
@@ -249,8 +308,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           logs={logs}
           onOpenNewProduct={onOpenNewProduct}
           onEditProduct={onEditProduct}
-          onDeleteProduct={onDeleteProduct}
-          onToggleProductPublic={onToggleProductPublic}
+          onDeleteProduct={
+            onDeleteProduct
+              ? (id) =>
+                  void runMutation(() => onDeleteProduct(id), "No se pudo eliminar el producto.")
+              : undefined
+          }
+          onToggleProductPublic={
+            onToggleProductPublic
+              ? (id) =>
+                  void runMutation(
+                    () => onToggleProductPublic(id),
+                    "No se pudo actualizar la visibilidad del producto."
+                  )
+              : undefined
+          }
         />
       )}
 
@@ -259,8 +331,24 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           certifications={certifications}
           onOpenNewCertification={onOpenNewCertification}
           onEditCertification={onEditCertification}
-          onDeleteCertification={onDeleteCertification}
-          onToggleCertificationPublic={onToggleCertificationPublic}
+          onDeleteCertification={
+            onDeleteCertification
+              ? (id) =>
+                  void runMutation(
+                    () => onDeleteCertification(id),
+                    "No se pudo eliminar la certificación."
+                  )
+              : undefined
+          }
+          onToggleCertificationPublic={
+            onToggleCertificationPublic
+              ? (id) =>
+                  void runMutation(
+                    () => onToggleCertificationPublic(id),
+                    "No se pudo actualizar la visibilidad de la certificación."
+                  )
+              : undefined
+          }
         />
       )}
 
@@ -269,9 +357,30 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           careerGoals={careerGoals}
           onOpenNewCareerGoal={onOpenNewCareerGoal}
           onEditCareerGoal={onEditCareerGoal}
-          onDeleteCareerGoal={onDeleteCareerGoal}
-          onSetCareerGoalStatus={onSetCareerGoalStatus}
-          onToggleCareerGoalActionItem={onToggleCareerGoalActionItem}
+          onDeleteCareerGoal={
+            onDeleteCareerGoal
+              ? (id) =>
+                  void runMutation(() => onDeleteCareerGoal(id), "No se pudo eliminar el objetivo.")
+              : undefined
+          }
+          onSetCareerGoalStatus={
+            onSetCareerGoalStatus
+              ? (id, status) =>
+                  void runMutation(
+                    () => onSetCareerGoalStatus(id, status),
+                    "No se pudo actualizar el estado del objetivo."
+                  )
+              : undefined
+          }
+          onToggleCareerGoalActionItem={
+            onToggleCareerGoalActionItem
+              ? (goalId, itemId) =>
+                  void runMutation(
+                    () => onToggleCareerGoalActionItem(goalId, itemId),
+                    "No se pudo actualizar el hito del objetivo."
+                  )
+              : undefined
+          }
           onConvertGoalToCertification={onConvertGoalToCertification}
           onConvertGoalToLog={onConvertGoalToLog}
         />

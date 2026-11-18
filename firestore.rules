@@ -1,0 +1,733 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global Security Primitives
+    // -------------------------------------------------------------------------
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && isVerifiedEmail() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUsernameHandle(handle) {
+      return handle is string && handle.size() >= 3 && handle.size() <= 30 && handle.matches('^[a-z0-9_\\-]+$');
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isBoundedStringList(listVal, maxLen) {
+      return listVal is list && listVal.size() <= maxLen && (listVal.size() == 0 || (listVal[0] is string && listVal[0].size() <= 200));
+    }
+
+    function isBoundedMapList(listVal, maxLen) {
+      return listVal is list && listVal.size() <= maxLen && (listVal.size() == 0 || listVal[0] is map);
+    }
+
+    function hasParentUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function hasParentUserOrBatch(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) || existsAfter(/databases/$(database)/documents/users/$(userId));
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints (Anti-Update-Gap & Shadow-Field Guards)
+    // -------------------------------------------------------------------------
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+        'id', 'name', 'email', 'avatar', 'title', 'bio', 'location',
+        'skills', 'authProvider', 'plan', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'username', 'name', 'email', 'avatar', 'title', 'bio', 'location',
+        'github', 'linkedin', 'socialLinks', 'availabilityStatus',
+        'skills', 'authProvider', 'plan', 'createdAt', 'updatedAt'
+      ])
+      && data.id == userId
+      && isValidId(data.id)
+      && isValidString(data.name, 1, 150)
+      && isValidString(data.email, 3, 254)
+      && isValidString(data.avatar, 0, 150000)
+      && isValidString(data.title, 0, 200)
+      && isValidString(data.bio, 0, 4000)
+      && isValidString(data.location, 0, 200)
+      && isBoundedMapList(data.skills, 40)
+      && data.authProvider == 'google'
+      && data.plan in ['free', 'pro']
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp
+      && (!('username' in data) || isValidUsernameHandle(data.username))
+      && (!('github' in data) || isValidString(data.github, 0, 500))
+      && (!('linkedin' in data) || isValidString(data.linkedin, 0, 500))
+      && (!('socialLinks' in data) || (
+        data.socialLinks is map
+        && data.socialLinks.keys().hasOnly([
+          'linkedin', 'github', 'portfolio', 'behance', 'dribbble',
+          'leetcode', 'wellfound', 'stackoverflow', 'techBlog', 'twitter'
+        ])
+      ))
+      && (!('availabilityStatus' in data) || isValidString(data.availabilityStatus, 0, 160));
+    }
+
+    function isValidStoredCv(data, userId, cvDocId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'contact', 'summary', 'skills', 'experiences',
+        'education', 'certifications', 'projects', 'languages', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'contact', 'summary', 'skills', 'experiences',
+        'education', 'certifications', 'projects', 'languages', 'rawTextPreview',
+        'createdAt', 'updatedAt'
+      ])
+      && data.id == cvDocId
+      && isValidId(data.id)
+      && data.userId == userId
+      && data.contact is map
+      && data.contact.keys().hasOnly(['name', 'headline', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio'])
+      && isValidString(data.summary, 0, 8000)
+      && data.skills is map
+      && data.skills.keys().hasOnly(['technical', 'frameworks', 'toolsCloud', 'softSkills'])
+      && isBoundedMapList(data.experiences, 50)
+      && isBoundedMapList(data.education, 30)
+      && isBoundedMapList(data.certifications, 50)
+      && isBoundedMapList(data.projects, 40)
+      && isBoundedMapList(data.languages, 20)
+      && (!('rawTextPreview' in data) || isValidString(data.rawTextPreview, 0, 1500))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidLogEntry(data, userId, logId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'date', 'client', 'project', 'category',
+        'title', 'impact', 'tags', 'isPublic', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'experienceId', 'originalBullet', 'date', 'client',
+        'project', 'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
+        'howApplied', 'impact', 'description', 'tags', 'isPublic', 'createdAt', 'updatedAt'
+      ])
+      && data.id == logId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.date, 4, 32)
+      && isValidString(data.client, 1, 200)
+      && isValidString(data.project, 1, 200)
+      && isValidString(data.category, 1, 120)
+      && isValidString(data.title, 1, 2000)
+      && isValidString(data.impact, 1, 3000)
+      && isBoundedStringList(data.tags, 25)
+      && data.isPublic is bool
+      && (!('experienceId' in data) || isValidString(data.experienceId, 0, 128))
+      && (!('originalBullet' in data) || isValidString(data.originalBullet, 0, 2000))
+      && (!('logro' in data) || isValidString(data.logro, 0, 2000))
+      && (!('whatWasSought' in data) || isValidString(data.whatWasSought, 0, 4000))
+      && (!('whyImportant' in data) || isValidString(data.whyImportant, 0, 4000))
+      && (!('howApplied' in data) || isValidString(data.howApplied, 0, 4000))
+      && (!('description' in data) || isValidString(data.description, 0, 10000))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkExperience(data, userId, experienceId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'company', 'role', 'startDate', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'company', 'role', 'startDate', 'endDate', 'isCurrent',
+        'location', 'summary', 'bullets', 'technologies', 'isPersonalProjects',
+        'createdAt', 'updatedAt'
+      ])
+      && data.id == experienceId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.company, 1, 200)
+      && isValidString(data.role, 1, 200)
+      && isValidString(data.startDate, 0, 40)
+      && (!('endDate' in data) || isValidString(data.endDate, 0, 40))
+      && (!('isCurrent' in data) || data.isCurrent is bool)
+      && (!('location' in data) || isValidString(data.location, 0, 200))
+      && (!('summary' in data) || isValidString(data.summary, 0, 5000))
+      && (!('bullets' in data) || (data.bullets is list && data.bullets.size() <= 60 && (data.bullets.size() == 0 || (data.bullets[0] is string && data.bullets[0].size() <= 2000))))
+      && (!('technologies' in data) || isBoundedStringList(data.technologies, 50))
+      && (!('isPersonalProjects' in data) || data.isPersonalProjects is bool)
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidProduct(data, userId, productId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'title', 'tagline', 'description', 'imageUrl',
+        'techStack', 'isPublic', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'title', 'tagline', 'description', 'imageUrl',
+        'liveUrl', 'repoUrl', 'techStack', 'isPublic', 'badge',
+        'relatedAchievementIds', 'createdAtIso', 'createdAt', 'updatedAt'
+      ])
+      && data.id == productId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.title, 1, 160)
+      && isValidString(data.tagline, 1, 300)
+      && isValidString(data.description, 0, 5000)
+      && isValidString(data.imageUrl, 0, 300000)
+      && isBoundedStringList(data.techStack, 30)
+      && data.isPublic is bool
+      && (!('liveUrl' in data) || isValidString(data.liveUrl, 0, 1000))
+      && (!('repoUrl' in data) || isValidString(data.repoUrl, 0, 1000))
+      && (!('badge' in data) || isValidString(data.badge, 0, 80))
+      && (!('relatedAchievementIds' in data) || isBoundedStringList(data.relatedAchievementIds, 50))
+      && (!('createdAtIso' in data) || isValidString(data.createdAtIso, 0, 64))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidCertification(data, userId, certificationId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'name', 'issuer', 'issueDate', 'skills', 'isPublic',
+        'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'name', 'issuer', 'issueDate', 'expirationDate',
+        'credentialId', 'credentialUrl', 'skills', 'badgeImage', 'summary',
+        'isPublic', 'createdAt', 'updatedAt'
+      ])
+      && data.id == certificationId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.name, 1, 240)
+      && isValidString(data.issuer, 1, 200)
+      && isValidString(data.issueDate, 4, 32)
+      && isBoundedStringList(data.skills, 30)
+      && data.isPublic is bool
+      && (!('expirationDate' in data) || isValidString(data.expirationDate, 0, 32))
+      && (!('credentialId' in data) || isValidString(data.credentialId, 0, 160))
+      && (!('credentialUrl' in data) || isValidString(data.credentialUrl, 0, 1000))
+      && (!('badgeImage' in data) || isValidString(data.badgeImage, 0, 200000))
+      && (!('summary' in data) || isValidString(data.summary, 0, 3000))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidCareerGoal(data, userId, goalId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'title', 'category', 'status', 'actionItems', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'title', 'category', 'targetDate', 'status',
+        'whyImportant', 'actionItems', 'notes', 'achievedDate',
+        'linkedCertificationId', 'createdAt', 'updatedAt'
+      ])
+      && data.id == goalId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.title, 1, 240)
+      && data.category in ['certification', 'study', 'academic', 'target_company', 'role_elevation', 'open_source']
+      && data.status in ['backlog', 'in_progress', 'achieved']
+      && isBoundedMapList(data.actionItems, 40)
+      && (!('targetDate' in data) || isValidString(data.targetDate, 0, 40))
+      && (!('whyImportant' in data) || isValidString(data.whyImportant, 0, 3000))
+      && (!('notes' in data) || isValidString(data.notes, 0, 5000))
+      && (!('achievedDate' in data) || isValidString(data.achievedDate, 0, 40))
+      && (!('linkedCertificationId' in data) || isValidString(data.linkedCertificationId, 0, 128))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidJobOffer(data, userId, offerId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'company', 'role', 'description',
+        'modality', 'contractType', 'status', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'company', 'role', 'description', 'url', 'location',
+        'modality', 'contractType', 'salaryExpectation', 'extraConditions',
+        'status', 'atsAnalysis', 'tailoredCv', 'interviewPrep',
+        'appliedDate', 'notes', 'createdAt', 'updatedAt'
+      ])
+      && data.id == offerId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.company, 1, 200)
+      && isValidString(data.role, 1, 200)
+      && isValidString(data.description, 0, 20000)
+      && data.modality in ['100% Remoto', 'Híbrido', 'Presencial']
+      && data.contractType in ['B2B / Contractor', 'Dependencia Directa', 'Freelance', 'Indefinido']
+      && data.status in ['saved', 'applied', 'interviewing', 'offered', 'rejected', 'accepted']
+      && (!('url' in data) || isValidString(data.url, 0, 1000))
+      && (!('location' in data) || isValidString(data.location, 0, 200))
+      && (!('salaryExpectation' in data) || data.salaryExpectation is map)
+      && (!('extraConditions' in data) || isValidString(data.extraConditions, 0, 3000))
+      && (!('atsAnalysis' in data) || data.atsAnalysis is map)
+      && (!('tailoredCv' in data) || data.tailoredCv is map)
+      && (!('interviewPrep' in data) || data.interviewPrep is map)
+      && (!('appliedDate' in data) || isValidString(data.appliedDate, 0, 40))
+      && (!('notes' in data) || isValidString(data.notes, 0, 6000))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidInboxMessage(data, userId, messageId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'name', 'email', 'message', 'date', 'read', 'replied',
+        'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'name', 'email', 'organization', 'message', 'date',
+        'read', 'replied', 'sourceType', 'sourceRef', 'sourceUrl',
+        'repositoryOrProject', 'achievementDraft', 'convertedLogId',
+        'createdAt', 'updatedAt'
+      ])
+      && data.id == messageId
+      && isValidId(data.id)
+      && data.userId == userId
+      && isValidString(data.name, 1, 160)
+      && isValidString(data.email, 0, 254)
+      && isValidString(data.message, 1, 8000)
+      && isValidString(data.date, 4, 40)
+      && data.read is bool
+      && data.replied is bool
+      && (!('organization' in data) || isValidString(data.organization, 0, 200))
+      && (!('sourceType' in data) || data.sourceType in ['visitor_message', 'git_pr', 'gitlab_mr', 'jira_issue'])
+      && (!('sourceRef' in data) || isValidString(data.sourceRef, 0, 300))
+      && (!('sourceUrl' in data) || isValidString(data.sourceUrl, 0, 1000))
+      && (!('repositoryOrProject' in data) || isValidString(data.repositoryOrProject, 0, 200))
+      && (!('achievementDraft' in data) || data.achievementDraft is map)
+      && (!('convertedLogId' in data) || isValidString(data.convertedLogId, 0, 128))
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidAiQuota(data, userId, quotaId) {
+      return data.keys().hasAll(['id', 'userId', 'monthKey', 'count', 'lastUsed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'monthKey', 'count', 'lastUsed', 'createdAt', 'updatedAt'])
+        && data.id == quotaId
+        && isValidId(data.id)
+        && data.userId == userId
+        && data.monthKey is string
+        && data.monthKey.matches('^\\d{4}-\\d{2}$')
+        && data.count is int
+        && data.count >= 0
+        && data.count <= 10000
+        && data.lastUsed is int
+        && data.lastUsed >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Strict PII-free validation for public showcase profile
+    function isValidPublicUserProfile(profile, username) {
+      return profile is map
+        && profile.keys().hasAll(['id', 'username', 'name', 'avatar', 'title', 'bio', 'location', 'skills'])
+        && profile.keys().hasOnly([
+          'id', 'username', 'name', 'avatar', 'title', 'bio', 'location',
+          'github', 'linkedin', 'socialLinks', 'availabilityStatus', 'skills'
+        ])
+        && isValidId(profile.id)
+        && profile.username == username
+        && isValidString(profile.name, 1, 150)
+        && isValidString(profile.avatar, 0, 150000)
+        && isValidString(profile.title, 0, 200)
+        && isValidString(profile.bio, 0, 4000)
+        && isValidString(profile.location, 0, 200)
+        && isBoundedMapList(profile.skills, 40)
+        && (!('github' in profile) || isValidString(profile.github, 0, 500))
+        && (!('linkedin' in profile) || isValidString(profile.linkedin, 0, 500))
+        && (!('socialLinks' in profile) || (
+          profile.socialLinks is map
+          && profile.socialLinks.keys().hasOnly([
+            'linkedin', 'github', 'portfolio', 'behance', 'dribbble',
+            'leetcode', 'wellfound', 'stackoverflow', 'techBlog', 'twitter'
+          ])
+        ))
+        && (!('availabilityStatus' in profile) || isValidString(profile.availabilityStatus, 0, 160));
+    }
+
+    function isValidPublicShowcase(data, username) {
+      return data.keys().hasAll([
+        'username', 'ownerId', 'userProfile', 'logs', 'products',
+        'certifications', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'username', 'ownerId', 'userProfile', 'logs', 'products',
+        'certifications', 'createdAt', 'updatedAt'
+      ])
+      && data.username == username
+      && isValidUsernameHandle(data.username)
+      && data.ownerId == request.auth.uid
+      && isValidPublicUserProfile(data.userProfile, username)
+      && isBoundedMapList(data.logs, 150)
+      && isBoundedMapList(data.products, 50)
+      && isBoundedMapList(data.certifications, 50)
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidProWaitlist(data, entryId) {
+      return data.keys().hasAll(['id', 'userId', 'email', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'email', 'createdAt'])
+        && data.id == entryId
+        && isValidId(data.id)
+        && data.userId == request.auth.uid
+        && isValidString(data.email, 3, 254)
+        && data.createdAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().plan == 'free'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().id == existing().id
+        && incoming().authProvider == existing().authProvider
+        && incoming().plan == existing().plan
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'username', 'name', 'email', 'avatar', 'title', 'bio', 'location',
+          'github', 'linkedin', 'socialLinks', 'availabilityStatus', 'skills', 'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Subcollection: Structured CV (/users/{userId}/cv/{cvDocId})
+      match /cv/{cvDocId} {
+        allow get: if isOwner(userId) && isValidId(cvDocId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(cvDocId)
+          && isValidStoredCv(incoming(), userId, cvDocId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(cvDocId)
+          && isValidStoredCv(incoming(), userId, cvDocId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'contact', 'summary', 'skills', 'experiences', 'education',
+            'certifications', 'projects', 'languages', 'rawTextPreview', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(cvDocId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Brag Logs (/users/{userId}/logs/{logId})
+      match /logs/{logId} {
+        allow get: if isOwner(userId) && isValidId(logId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(logId)
+          && isValidLogEntry(incoming(), userId, logId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(logId)
+          && isValidLogEntry(incoming(), userId, logId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'experienceId', 'originalBullet', 'date', 'client', 'project',
+            'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
+            'howApplied', 'impact', 'description', 'tags', 'isPublic', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(logId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Work Experiences (/users/{userId}/experiences/{experienceId})
+      match /experiences/{experienceId} {
+        allow get: if isOwner(userId) && isValidId(experienceId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(experienceId)
+          && isValidWorkExperience(incoming(), userId, experienceId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(experienceId)
+          && isValidWorkExperience(incoming(), userId, experienceId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'company', 'role', 'startDate', 'endDate', 'isCurrent', 'location',
+            'summary', 'bullets', 'technologies', 'isPersonalProjects', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(experienceId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Portfolio Products (/users/{userId}/products/{productId})
+      match /products/{productId} {
+        allow get: if isOwner(userId) && isValidId(productId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(productId)
+          && isValidProduct(incoming(), userId, productId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(productId)
+          && isValidProduct(incoming(), userId, productId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'tagline', 'description', 'imageUrl', 'liveUrl', 'repoUrl',
+            'techStack', 'isPublic', 'badge', 'relatedAchievementIds', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(productId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Technical Certifications (/users/{userId}/certifications/{certificationId})
+      match /certifications/{certificationId} {
+        allow get: if isOwner(userId) && isValidId(certificationId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(certificationId)
+          && isValidCertification(incoming(), userId, certificationId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(certificationId)
+          && isValidCertification(incoming(), userId, certificationId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'issuer', 'issueDate', 'expirationDate', 'credentialId',
+            'credentialUrl', 'skills', 'badgeImage', 'summary', 'isPublic', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(certificationId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Career Roadmap Goals (/users/{userId}/careerGoals/{goalId})
+      match /careerGoals/{goalId} {
+        allow get: if isOwner(userId) && isValidId(goalId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(goalId)
+          && isValidCareerGoal(incoming(), userId, goalId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(goalId)
+          && isValidCareerGoal(incoming(), userId, goalId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'category', 'targetDate', 'status', 'whyImportant',
+            'actionItems', 'notes', 'achievedDate', 'linkedCertificationId', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(goalId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Job Offers (/users/{userId}/offers/{offerId})
+      match /offers/{offerId} {
+        allow get: if isOwner(userId) && isValidId(offerId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(offerId)
+          && isValidJobOffer(incoming(), userId, offerId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(offerId)
+          && isValidJobOffer(incoming(), userId, offerId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'company', 'role', 'description', 'url', 'location', 'modality',
+            'contractType', 'salaryExpectation', 'extraConditions', 'status',
+            'atsAnalysis', 'tailoredCv', 'interviewPrep', 'appliedDate', 'notes', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(offerId) && hasParentUser(userId);
+      }
+
+      // Subcollection: Inbox (/users/{userId}/inbox/{messageId})
+      match /inbox/{messageId} {
+        allow get: if isOwner(userId) && isValidId(messageId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(messageId)
+          && isValidInboxMessage(incoming(), userId, messageId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(messageId)
+          && isValidInboxMessage(incoming(), userId, messageId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'read', 'replied', 'convertedLogId', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(messageId) && hasParentUser(userId);
+      }
+
+      // Subcollection: AI Quota (/users/{userId}/quotas/{quotaId})
+      match /quotas/{quotaId} {
+        allow get: if isOwner(userId) && isValidId(quotaId) && hasParentUser(userId);
+        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isOwner(userId)
+          && isValidId(quotaId)
+          && isValidAiQuota(incoming(), userId, quotaId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasParentUserOrBatch(userId);
+
+        allow update: if isOwner(userId)
+          && isValidId(quotaId)
+          && isValidAiQuota(incoming(), userId, quotaId)
+          && hasParentUser(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'monthKey', 'count', 'lastUsed', 'updatedAt'
+          ]);
+
+        allow delete: if isOwner(userId) && isValidId(quotaId) && hasParentUser(userId);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Public Showcases (/publicShowcases/{username}) - Strictly PII-Free
+    // -------------------------------------------------------------------------
+    match /publicShowcases/{username} {
+      allow get: if isValidUsernameHandle(username);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidUsernameHandle(username)
+        && isValidPublicShowcase(incoming(), username)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidUsernameHandle(username)
+        && isValidPublicShowcase(incoming(), username)
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().username == existing().username
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'userProfile', 'logs', 'products', 'certifications', 'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidUsernameHandle(username)
+        && existing().ownerId == request.auth.uid;
+    }
+
+    // -------------------------------------------------------------------------
+    // Pro Waitlist (/proWaitlist/{entryId}) - Verified Create-Only
+    // -------------------------------------------------------------------------
+    match /proWaitlist/{entryId} {
+      allow read, update, delete: if false;
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(entryId)
+        && isValidProWaitlist(incoming(), entryId)
+        && incoming().createdAt == request.time;
+    }
+  }
+}

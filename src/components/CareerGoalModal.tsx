@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { CheckSquare, Plus, Square, Target, Trash2, X } from "lucide-react";
+import { AlertCircle, CheckSquare, Loader2, Plus, Square, Target, Trash2, X } from "lucide-react";
 import {
   CareerGoal,
   CareerGoalActionItem,
   CareerGoalCategory,
   CareerGoalStatus,
 } from "../types";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 
 interface CareerGoalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (
     goal: Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal
-  ) => void;
+  ) => Promise<void> | void;
   goal?: CareerGoal | null;
 }
 
@@ -45,6 +46,8 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
   const [notes, setNotes] = useState("");
   const [actionItems, setActionItems] = useState<CareerGoalActionItem[]>([]);
   const [newActionInput, setNewActionInput] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,6 +70,8 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
       setActionItems([]);
     }
     setNewActionInput("");
+    setIsSaving(false);
+    setSaveError(null);
   }, [goal, isOpen]);
 
   if (!isOpen) return null;
@@ -93,33 +98,44 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
     setActionItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || isSaving) return;
 
-    const payload = {
-      ...(goal
-        ? {
-            id: goal.id,
-            createdAt: goal.createdAt,
-            achievedDate: goal.achievedDate,
-            linkedCertificationId: goal.linkedCertificationId,
-          }
-        : {}),
-      userId: goal?.userId,
-      title: title.trim(),
-      category,
-      status,
-      targetDate: targetDate.trim() || undefined,
-      whyImportant: whyImportant.trim() || undefined,
-      actionItems,
-      notes: notes.trim() || undefined,
-    };
+    setIsSaving(true);
+    setSaveError(null);
 
-    onSave(
-      payload as Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal
-    );
-    onClose();
+    try {
+      const payload = {
+        ...(goal
+          ? {
+              id: goal.id,
+              createdAt: goal.createdAt,
+              achievedDate: goal.achievedDate,
+              linkedCertificationId: goal.linkedCertificationId,
+            }
+          : {}),
+        userId: goal?.userId,
+        title: title.trim(),
+        category,
+        status,
+        targetDate: targetDate.trim() || undefined,
+        whyImportant: whyImportant.trim() || undefined,
+        actionItems,
+        notes: notes.trim() || undefined,
+      };
+
+      await onSave(
+        payload as Omit<CareerGoal, "id" | "createdAt" | "updatedAt"> | CareerGoal
+      );
+      onClose();
+    } catch (err) {
+      setSaveError(
+        formatFirestoreUiError(err, "No se pudo guardar el objetivo profesional en Firestore.")
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -146,15 +162,25 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
           </div>
           <button
             type="button"
+            disabled={isSaving}
             onClick={onClose}
             aria-label="Cerrar"
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+          {saveError && (
+            <div
+              role="alert"
+              className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{saveError}</span>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-slate-300 font-semibold block">
               Meta u objetivo profesional *
@@ -310,16 +336,25 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-xl transition-colors disabled:opacity-40"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 text-slate-950 font-bold rounded-xl shadow-md transition-all"
+              disabled={isSaving}
+              className="px-5 py-2 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
             >
-              {goal ? "Guardar Cambios" : "Guardar Objetivo"}
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>
+                {isSaving
+                  ? "Guardando..."
+                  : goal
+                  ? "Guardar Cambios"
+                  : "Guardar Objetivo"}
+              </span>
             </button>
           </div>
         </form>

@@ -1,6 +1,5 @@
 import { TechnicalCertification } from "../../types";
-import { STORAGE_KEYS } from "./keys";
-import { notifyCloudSync, workspaceState } from "./workspaceState";
+import { workspaceState } from "./workspaceState";
 
 export type CertificationValidityStatus =
   | "active"
@@ -27,23 +26,6 @@ export const getCertificationValidityStatus = (
 };
 
 export const getStoredCertifications = (): TechnicalCertification[] => {
-  if (workspaceState.certifications.length > 0) {
-    return workspaceState.certifications;
-  }
-  if (typeof localStorage !== "undefined") {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.CERTIFICATIONS);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          workspaceState.certifications = parsed;
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore invalid storage payload
-    }
-  }
   return workspaceState.certifications;
 };
 
@@ -51,17 +33,6 @@ export const saveCertifications = (
   certifications: TechnicalCertification[]
 ): void => {
   workspaceState.certifications = certifications;
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(
-        STORAGE_KEYS.CERTIFICATIONS,
-        JSON.stringify(certifications)
-      );
-    } catch {
-      // ignore quota failure
-    }
-  }
-  notifyCloudSync();
 };
 
 export const addCertification = (

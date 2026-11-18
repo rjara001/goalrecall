@@ -18,7 +18,7 @@ interface EcosystemIngestPanelProps {
   defaultGitHubHandle?: string;
   onIngestSuggestions: (
     suggestions: VisitorMessage[]
-  ) => { addedCount: number; skippedCount: number };
+  ) => Promise<{ addedCount: number; skippedCount: number }> | { addedCount: number; skippedCount: number };
 }
 
 export const EcosystemIngestPanel: React.FC<EcosystemIngestPanelProps> = ({
@@ -98,7 +98,7 @@ export const EcosystemIngestPanel: React.FC<EcosystemIngestPanelProps> = ({
         return;
       }
 
-      const result = onIngestSuggestions(suggestions);
+      const result = await onIngestSuggestions(suggestions);
       setLastSyncNote(
         result.addedCount > 0
           ? `${result.addedCount} borrador(es) agregados al Inbox.`
@@ -128,7 +128,7 @@ export const EcosystemIngestPanel: React.FC<EcosystemIngestPanelProps> = ({
         setErrorMsg(data.error || "No se pudo generar la muestra de ingesta.");
         return;
       }
-      const result = onIngestSuggestions(data.suggestions || []);
+      const result = await onIngestSuggestions(data.suggestions || []);
       setLastSyncNote(
         result.addedCount > 0
           ? `${result.addedCount} borradores de muestra (PR #142 + CORE-418) cargados.`

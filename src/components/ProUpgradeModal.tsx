@@ -7,7 +7,8 @@ interface ProUpgradeModalProps {
   proEmail: string;
   onProEmailChange: (email: string) => void;
   proEmailSaved: boolean;
-  onSaveProEmail: (email: string) => void;
+  proEmailError?: string | null;
+  onSaveProEmail: (email: string) => Promise<void> | void;
   onUpgradeToPro?: () => Promise<void>;
 }
 
@@ -19,9 +20,10 @@ const PRO_FEATURES = [
 ];
 
 export const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
-  isOpen, onClose, proEmail, onProEmailChange, proEmailSaved, onSaveProEmail, onUpgradeToPro,
+  isOpen, onClose, proEmail, onProEmailChange, proEmailSaved, proEmailError, onSaveProEmail, onUpgradeToPro,
 }) => {
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
 
   if (!isOpen) return null;
 
@@ -84,13 +86,29 @@ export const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
               <p className="font-semibold text-white mb-0.5">Únete a la lista de espera con 50% de descuento:</p>
               <p className="text-[11px] text-slate-300">Déjanos tu correo para notificarte el lanzamiento y recibir tu descuento preferencial.</p>
             </div>
+            {proEmailError && (
+              <div className="p-2.5 rounded-lg bg-red-950/70 border border-red-700/70 text-red-200 text-xs">
+                {proEmailError}
+              </div>
+            )}
             {proEmailSaved ? (
               <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 <span>¡Listo! Registramos tu correo con prioridad de acceso.</span>
               </div>
             ) : (
-              <form onSubmit={(e) => { e.preventDefault(); onSaveProEmail(proEmail); }} className="flex gap-2">
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsSavingEmail(true);
+                  try {
+                    await onSaveProEmail(proEmail);
+                  } finally {
+                    setIsSavingEmail(false);
+                  }
+                }}
+                className="flex gap-2"
+              >
                 <input
                   type="email"
                   required
@@ -101,10 +119,11 @@ export const ProUpgradeModal: React.FC<ProUpgradeModalProps> = ({
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-900/30"
+                  disabled={isSavingEmail}
+                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-900/30"
                 >
                   <Crown className="w-3.5 h-3.5 text-amber-300" />
-                  Anotarme
+                  {isSavingEmail ? "Guardando..." : "Anotarme"}
                 </button>
               </form>
             )}

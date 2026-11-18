@@ -1,0 +1,310 @@
+{
+  "entities": {
+    "UserProfileDoc": {
+      "title": "UserProfileDoc",
+      "description": "Private authenticated user profile including PII (email) and career preferences.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "username": { "type": "string", "minLength": 3, "maxLength": 30, "pattern": "^[a-z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "avatar": { "type": "string", "maxLength": 150000 },
+        "title": { "type": "string", "maxLength": 200 },
+        "bio": { "type": "string", "maxLength": 4000 },
+        "location": { "type": "string", "maxLength": 200 },
+        "github": { "type": "string", "maxLength": 500 },
+        "linkedin": { "type": "string", "maxLength": 500 },
+        "socialLinks": { "type": "object", "description": "Map of external employment profile URLs." },
+        "availabilityStatus": { "type": "string", "maxLength": 160 },
+        "skills": { "type": "array", "description": "Bounded array of user skill objects (max 40)." },
+        "authProvider": { "type": "string", "enum": ["google"] },
+        "plan": { "type": "string", "enum": ["free", "pro"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "avatar", "title", "bio", "location", "skills", "authProvider", "plan", "createdAt", "updatedAt"]
+    },
+    "StoredCvDoc": {
+      "title": "StoredCvDoc",
+      "description": "Structured CV document extracted and reviewed by the user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contact": { "type": "object", "description": "Contact header extracted from the CV." },
+        "summary": { "type": "string", "maxLength": 8000 },
+        "skills": { "type": "object", "description": "Categorized skill arrays extracted from the CV." },
+        "experiences": { "type": "array", "description": "Bounded list of CV work experiences (max 50)." },
+        "education": { "type": "array", "description": "Bounded list of CV education entries (max 30)." },
+        "certifications": { "type": "array", "description": "Bounded list of CV certifications (max 50)." },
+        "projects": { "type": "array", "description": "Bounded list of CV projects (max 40)." },
+        "languages": { "type": "array", "description": "Bounded list of spoken languages (max 20)." },
+        "rawTextPreview": { "type": "string", "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "contact", "summary", "skills", "experiences", "education", "certifications", "projects", "languages", "createdAt", "updatedAt"]
+    },
+    "LogEntryDoc": {
+      "title": "LogEntryDoc",
+      "description": "Career achievement / brag log entry in private vault or public showcase.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "experienceId": { "type": "string", "maxLength": 128 },
+        "originalBullet": { "type": "string", "maxLength": 2000 },
+        "date": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "client": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "project": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "logro": { "type": "string", "maxLength": 2000 },
+        "whatWasSought": { "type": "string", "maxLength": 4000 },
+        "whyImportant": { "type": "string", "maxLength": 4000 },
+        "howApplied": { "type": "string", "maxLength": 4000 },
+        "impact": { "type": "string", "minLength": 1, "maxLength": 3000 },
+        "description": { "type": "string", "maxLength": 10000 },
+        "tags": { "type": "array", "description": "Bounded array of tag strings (max 25)." },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "date", "client", "project", "category", "title", "impact", "tags", "isPublic", "createdAt", "updatedAt"]
+    },
+    "WorkExperienceDoc": {
+      "title": "WorkExperienceDoc",
+      "description": "Work experience or company container linked to log entries.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "company": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "role": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "startDate": { "type": "string", "maxLength": 40 },
+        "endDate": { "type": "string", "maxLength": 40 },
+        "isCurrent": { "type": "boolean" },
+        "location": { "type": "string", "maxLength": 200 },
+        "summary": { "type": "string", "maxLength": 5000 },
+        "bullets": { "type": "array", "description": "Bounded list of textual CV bullets (max 60)." },
+        "technologies": { "type": "array", "description": "Bounded list of technology tags (max 50)." },
+        "isPersonalProjects": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "company", "role", "startDate", "createdAt", "updatedAt"]
+    },
+    "ProductDoc": {
+      "title": "ProductDoc",
+      "description": "Product or project displayed in user showcase portfolio.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "tagline": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "imageUrl": { "type": "string", "maxLength": 300000 },
+        "liveUrl": { "type": "string", "maxLength": 1000 },
+        "repoUrl": { "type": "string", "maxLength": 1000 },
+        "techStack": { "type": "array", "description": "Bounded array of tech names (max 30)." },
+        "isPublic": { "type": "boolean" },
+        "badge": { "type": "string", "maxLength": 80 },
+        "relatedAchievementIds": { "type": "array", "description": "Bounded array of linked log IDs (max 50)." },
+        "createdAtIso": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "tagline", "description", "imageUrl", "techStack", "isPublic", "createdAt", "updatedAt"]
+    },
+    "CertificationDoc": {
+      "title": "CertificationDoc",
+      "description": "Technical credential or certification earned by the user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "issueDate": { "type": "string", "minLength": 4, "maxLength": 32 },
+        "expirationDate": { "type": "string", "maxLength": 32 },
+        "credentialId": { "type": "string", "maxLength": 160 },
+        "credentialUrl": { "type": "string", "maxLength": 1000 },
+        "skills": { "type": "array", "description": "Bounded list of skill tags (max 30)." },
+        "badgeImage": { "type": "string", "maxLength": 200000 },
+        "summary": { "type": "string", "maxLength": 3000 },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "issuer", "issueDate", "skills", "isPublic", "createdAt", "updatedAt"]
+    },
+    "CareerGoalDoc": {
+      "title": "CareerGoalDoc",
+      "description": "Private career roadmap item with status and action checklist.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "category": { "type": "string", "enum": ["certification", "study", "academic", "target_company", "role_elevation", "open_source"] },
+        "targetDate": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["backlog", "in_progress", "achieved"] },
+        "whyImportant": { "type": "string", "maxLength": 3000 },
+        "actionItems": { "type": "array", "description": "Bounded list of action item objects (max 40)." },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "achievedDate": { "type": "string", "maxLength": 40 },
+        "linkedCertificationId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "category", "status", "actionItems", "createdAt", "updatedAt"]
+    },
+    "JobOfferDoc": {
+      "title": "JobOfferDoc",
+      "description": "Tracked job opportunity with ATS matching, tailored CV, and interview prep.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "company": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "role": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 20000 },
+        "url": { "type": "string", "maxLength": 1000 },
+        "location": { "type": "string", "maxLength": 200 },
+        "modality": { "type": "string", "enum": ["100% Remoto", "Híbrido", "Presencial"] },
+        "contractType": { "type": "string", "enum": ["B2B / Contractor", "Dependencia Directa", "Freelance", "Indefinido"] },
+        "salaryExpectation": { "type": "object", "description": "Structured salary range object." },
+        "extraConditions": { "type": "string", "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["saved", "applied", "interviewing", "offered", "rejected", "accepted"] },
+        "atsAnalysis": { "type": "object", "description": "ATS score and matched/missing keywords." },
+        "tailoredCv": { "type": "object", "description": "Selected experience and log IDs for this offer." },
+        "interviewPrep": { "type": "object", "description": "Interview cheat sheet and Q&A." },
+        "appliedDate": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 6000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "company", "role", "description", "modality", "contractType", "status", "createdAt", "updatedAt"]
+    },
+    "InboxMessageDoc": {
+      "title": "InboxMessageDoc",
+      "description": "Recruiter visitor message or imported GitHub/GitLab/Jira suggestion.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 254 },
+        "organization": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "date": { "type": "string", "maxLength": 40 },
+        "read": { "type": "boolean" },
+        "replied": { "type": "boolean" },
+        "sourceType": { "type": "string", "enum": ["visitor_message", "git_pr", "gitlab_mr", "jira_issue"] },
+        "sourceRef": { "type": "string", "maxLength": 300 },
+        "sourceUrl": { "type": "string", "maxLength": 1000 },
+        "repositoryOrProject": { "type": "string", "maxLength": 200 },
+        "achievementDraft": { "type": "object", "description": "Pre-populated draft from integration suggestion." },
+        "convertedLogId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "email", "message", "date", "read", "replied", "createdAt", "updatedAt"]
+    },
+    "AiQuotaDoc": {
+      "title": "AiQuotaDoc",
+      "description": "Monthly AI extraction usage and cooldown tracker per user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "monthKey": { "type": "string", "pattern": "^\\d{4}-\\d{2}$" },
+        "count": { "type": "integer" },
+        "lastUsed": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "monthKey", "count", "lastUsed", "createdAt", "updatedAt"]
+    },
+    "PublicShowcaseDoc": {
+      "title": "PublicShowcaseDoc",
+      "description": "Public showcase keyed by lowercase username; strictly isolates PII (no email/phone).",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "minLength": 3, "maxLength": 30, "pattern": "^[a-z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userProfile": { "type": "object", "description": "Sanitized public profile without email or private fields." },
+        "logs": { "type": "array", "description": "Bounded list of public LogEntry objects (max 150)." },
+        "products": { "type": "array", "description": "Bounded list of public Product objects (max 50)." },
+        "certifications": { "type": "array", "description": "Bounded list of public Certification objects (max 50)." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "ownerId", "userProfile", "logs", "products", "certifications", "createdAt", "updatedAt"]
+    },
+    "ProWaitlistDoc": {
+      "title": "ProWaitlistDoc",
+      "description": "Pro plan waitlist registration submitted by authenticated users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 254 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfileDoc" },
+      "description": "Private user profile and PII root document owned exclusively by request.auth.uid == userId."
+    },
+    "/users/{userId}/cv/{cvDocId}": {
+      "schema": { "$ref": "#/entities/StoredCvDoc" },
+      "description": "Structured CV snapshots (primary doc id: current) owned by userId."
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": { "$ref": "#/entities/LogEntryDoc" },
+      "description": "Individual brag log / achievement entries owned by userId."
+    },
+    "/users/{userId}/experiences/{experienceId}": {
+      "schema": { "$ref": "#/entities/WorkExperienceDoc" },
+      "description": "Career work experience containers owned by userId."
+    },
+    "/users/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/ProductDoc" },
+      "description": "Portfolio products owned by userId."
+    },
+    "/users/{userId}/certifications/{certificationId}": {
+      "schema": { "$ref": "#/entities/CertificationDoc" },
+      "description": "Technical certifications owned by userId."
+    },
+    "/users/{userId}/careerGoals/{goalId}": {
+      "schema": { "$ref": "#/entities/CareerGoalDoc" },
+      "description": "Private career roadmap goals owned by userId."
+    },
+    "/users/{userId}/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/JobOfferDoc" },
+      "description": "Private job offer tracking and ATS prep documents owned by userId."
+    },
+    "/users/{userId}/inbox/{messageId}": {
+      "schema": { "$ref": "#/entities/InboxMessageDoc" },
+      "description": "Inbox notifications and integration suggestions owned by userId."
+    },
+    "/users/{userId}/quotas/{quotaId}": {
+      "schema": { "$ref": "#/entities/AiQuotaDoc" },
+      "description": "AI quota usage record (primary doc id: ai) owned by userId."
+    },
+    "/publicShowcases/{username}": {
+      "schema": { "$ref": "#/entities/PublicShowcaseDoc" },
+      "description": "Public showcase keyed by lowercase handle; single-doc get allowed publicly without PII, writes restricted to verified ownerId."
+    },
+    "/proWaitlist/{entryId}": {
+      "schema": { "$ref": "#/entities/ProWaitlistDoc" },
+      "description": "Pro waitlist email signups (create-only by verified authenticated users; zero client read/list)."
+    }
+  }
+}

@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LogEntry, Product, TechnicalCertification, UserProfile } from "../types";
-import {
-  getStoredCertifications,
-  getStoredLogs,
-  getStoredProducts,
-  getStoredUser,
-  STORAGE_KEYS,
-} from "../utils/storage";
+import { auth } from "../firebase";
+import { getPublicShowcaseFirestore } from "../utils/firestore/repository";
 import { parseSharedDeckFromUrl } from "../utils/publicDeckShare";
 
 export type ActiveView = "landing" | "quarters" | "public" | "features" | "docs" | "offers";
@@ -53,7 +48,7 @@ export const extractPublicUsernameFromLocation = (pathname: string, hash: string
 export const resolveInitialActiveView = (
   pathname: string,
   hash: string,
-  hasStoredUser: boolean
+  hasAuthenticatedUser: boolean
 ): ActiveView => {
   const p = pathname.toLowerCase();
   const h = hash.toLowerCase();
@@ -65,19 +60,7 @@ export const resolveInitialActiveView = (
   if (p === "/public" || h === "#public" || h.includes("#deck=")) return "public";
   if (p === "/quarters" || h === "#quarters") return "quarters";
 
-  return hasStoredUser ? "quarters" : "landing";
-};
-
-const hasPersistedUserSync = (): boolean => {
-  if (typeof window === "undefined") return false;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.USER);
-    if (!stored) return false;
-    const u = JSON.parse(stored);
-    return Boolean(u && (u.id || u.email || u.name));
-  } catch {
-    return false;
-  }
+  return hasAuthenticatedUser ? "quarters" : "landing";
 };
 
 export const useAppRouting = () => {
@@ -86,9 +69,12 @@ export const useAppRouting = () => {
     return resolveInitialActiveView(
       window.location.pathname,
       window.location.hash,
-      hasPersistedUserSync()
+      Boolean(auth?.currentUser?.emailVerified)
     );
   });
+
+  const activeViewRef = useRef<ActiveView>(activeView);
+  activeViewRef.current = activeView;
 
   const [activeQuartersTab, setActiveQuartersTab] = useState<QuartersTab>("timeline");
   const [sharedDeck, setSharedDeck] = useState<SharedDeckState | null>(null);
@@ -109,51 +95,28 @@ export const useAppRouting = () => {
     const clean = targetUsername.toLowerCase().trim();
     if (!clean) return;
 
-    const localUser = getStoredUser();
-    if (
-      localUser &&
-      ((localUser.username && localUser.username.toLowerCase() === clean) ||
-        (localUser.email && localUser.email.split("@")[0].toLowerCase() === clean))
-    ) {
-      const localLogs = getStoredLogs();
-      const localProducts = getStoredProducts();
-      const localCerts = getStoredCertifications();
-      setSharedDeck({
-        userProfile: localUser,
-        logs: localLogs.filter((l) => l.isPublic),
-        products: localProducts.filter((p) => p.isPublic !== false),
-        certifications: localCerts.filter((c) => c.isPublic !== false),
-      });
-      setUsernameLookupError(null);
-      setIsLoadingPublicUser(false);
-      setActiveView("public");
-      return;
-    }
-
     setIsLoadingPublicUser(true);
     setUsernameLookupError(null);
 
     try {
-      const res = await fetch(`/api/public/u/${encodeURIComponent(clean)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && data.userProfile) {
-          setSharedDeck({
-            userProfile: data.userProfile,
-            logs: data.logs || [],
-            products: data.products || [],
-            certifications: data.certifications || [],
-          });
-          setUsernameLookupError(null);
-          setActiveView("public");
-          return;
-        }
+      const data = await getPublicShowcaseFirestore(clean);
+      if (data && data.userProfile) {
+        setSharedDeck({
+          userProfile: data.userProfile,
+          logs: data.logs || [],
+          products: data.products || [],
+          certifications: data.certifications || [],
+        });
+        setUsernameLookupError(null);
+        setActiveView("public");
+        return;
       }
+
       setUsernameLookupError(`No se encontró la vitrina pública para el usuario "@${clean}".`);
       setSharedDeck(null);
       setActiveView("public");
     } catch (err) {
-      console.error("Error loading public showcase by username:", err);
+      console.error("Error loading public showcase from Firestore:", err);
       setUsernameLookupError(`No fue posible cargar la vitrina para el usuario "@${clean}".`);
       setSharedDeck(null);
       setActiveView("public");
@@ -181,7 +144,7 @@ export const useAppRouting = () => {
 
       const username = extractPublicUsernameFromLocation(p, h);
       if (username) {
-        loadPublicShowcaseByUsername(username);
+        void loadPublicShowcaseByUsername(username);
         return;
       }
 
@@ -213,7 +176,7 @@ export const useAppRouting = () => {
         window.location.hash
       );
       if (username) {
-        loadPublicShowcaseByUsername(username);
+        void loadPublicShowcaseByUsername(username);
         return;
       }
 
@@ -241,13 +204,17 @@ export const useAppRouting = () => {
       } else if (p === "/quarters" || h === "#quarters") {
         setActiveView("quarters");
       } else {
-        setActiveView(getStoredUser() ? "quarters" : "landing");
+        setActiveView(auth?.currentUser?.emailVerified ? "quarters" : "landing");
       }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [loadPublicShowcaseByUsername]);
+
+  const shouldRedirectLandingToQuarters = useCallback(() => {
+    return activeViewRef.current === "landing";
+  }, []);
 
   return {
     activeView,
@@ -261,5 +228,6 @@ export const useAppRouting = () => {
     isLoadingPublicUser,
     handleNavigateView,
     clearSharedDeckAndGoHome,
+    shouldRedirectLandingToQuarters,
   };
 };

@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { Check, Info, AlertTriangle, Lock } from "lucide-react";
+import { Check, Info, AlertTriangle, Lock, Loader2, Compass } from "lucide-react";
 import { Navbar } from "./components/Navbar";
 import { LandingPage } from "./components/LandingPage";
 import { TimelineView } from "./components/TimelineView";
@@ -10,7 +10,6 @@ import { FeaturesView } from "./components/FeaturesView";
 import { OffersView } from "./components/OffersView";
 import { AppModals } from "./components/AppModals";
 import { AppFooter } from "./components/AppFooter";
-import { INITIAL_USER } from "./utils/storage";
 import { useI18n } from "./i18n";
 import { APP_VERSION as FALLBACK_APP_VERSION } from "./constants/version";
 import { useToast } from "./hooks/useToast";
@@ -43,6 +42,7 @@ export default function App() {
     showToast,
     onAuthenticatedNavigate: handleAuthenticatedNavigate,
     onLoggedOutNavigate: handleLoggedOutNavigate,
+    shouldRedirectLandingToQuarters: routing.shouldRedirectLandingToQuarters,
   });
 
   const handleGoToQuartersTimeline = () => {
@@ -103,7 +103,17 @@ export default function App() {
         )}
 
         {routing.activeView === "quarters" &&
-          (!workspace.user ? (
+          (!workspace.isAuthReady || workspace.isHydrating ? (
+            <div className="py-24 text-center max-w-md mx-auto space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+              <h3 className="text-base font-bold text-white">Sincronizando tu Bóveda Privada...</h3>
+              <p className="text-xs text-slate-400">
+                Verificando sesión de Google y cargando registros desde Cloud Firestore.
+              </p>
+            </div>
+          ) : !workspace.user ? (
             <div className="py-20 text-center max-w-md mx-auto space-y-6">
               <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
                 <Lock className="w-7 h-7" />
@@ -279,6 +289,33 @@ export default function App() {
                 )}
               </div>
             </div>
+          ) : !routing.sharedDeck && !workspace.user ? (
+            <div className="py-20 text-center max-w-md mx-auto space-y-6">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto">
+                <Compass className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">Tu Vitrina Pública te espera</h3>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  Inicia sesión con Google para previsualizar y publicar tu vitrina pública, o abre un enlace{" "}
+                  <span className="font-mono text-cyan-300">/u/handle</span> de un perfil publicado en Firestore.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => modals.setIsAuthOpen(true)}
+                  className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-sm"
+                >
+                  {t.app.signInToAccess}
+                </button>
+                <button
+                  onClick={() => routing.handleNavigateView("landing")}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                >
+                  {t.app.backToHome}
+                </button>
+              </div>
+            </div>
           ) : (
             <PublicDeck
               logs={routing.sharedDeck ? routing.sharedDeck.logs : workspace.logs}
@@ -289,7 +326,7 @@ export default function App() {
                   : workspace.certifications
               }
               userProfile={
-                routing.sharedDeck ? routing.sharedDeck.userProfile : workspace.user || INITIAL_USER
+                (routing.sharedDeck ? routing.sharedDeck.userProfile : workspace.user)!
               }
               onSendVisitorMessage={workspace.handleSendVisitorMessage}
               onBackToLanding={routing.clearSharedDeckAndGoHome}
@@ -352,52 +389,53 @@ export default function App() {
       <AppModals
         user={workspace.user}
         logs={workspace.logs}
+        experiences={workspace.experiences}
+        inbox={workspace.inbox}
+        jobOffers={workspace.jobOffers}
         products={workspace.products}
         certifications={workspace.certifications}
+        careerGoals={workspace.careerGoals}
+        aiQuota={workspace.aiQuota}
+        onAiQuotaUpdated={workspace.setAiQuota}
         isQuickLogOpen={modals.isQuickLogOpen}
         editingLog={modals.editingLog}
         initialExperienceIdForLog={modals.initialExperienceIdForLog}
         initialBulletTextForLog={modals.initialBulletTextForLog}
         initialDraftForLog={modals.initialDraftForLog}
         onCloseQuickLog={modals.closeQuickLog}
-        onSaveLog={(entryData) => {
-          if (
-            workspace.handleSaveLog(
-              entryData,
-              modals.editingLog,
-              modals.sourceInboxMessageIdForLog
-            )
-          ) {
+        onSaveLog={async (entryData) => {
+          const wasEditing = await workspace.handleSaveLog(
+            entryData,
+            modals.editingLog,
+            modals.sourceInboxMessageIdForLog
+          );
+          if (wasEditing) {
             modals.setEditingLog(null);
           }
         }}
+        onCreateQuickExperience={workspace.handleCreateQuickExperience}
         isExperienceModalOpen={modals.isExperienceModalOpen}
         editingExperience={modals.editingExperience}
         onCloseExperienceModal={modals.closeExperienceModal}
-        onSaveExperience={(expData, newLogBulletsToCreate) => {
-          workspace.handleSaveExperience(expData, newLogBulletsToCreate);
-          modals.closeExperienceModal();
-        }}
+        onSaveExperience={(expData, newLogBulletsToCreate) =>
+          workspace.handleSaveExperience(expData, newLogBulletsToCreate)
+        }
         isCvUploadOpen={modals.isCvUploadOpen}
         onCloseCvUpload={() => modals.setIsCvUploadOpen(false)}
+        onCvSaved={workspace.handleCvAppliedState}
         onImportBatchLogs={workspace.handleImportBatchLogs}
-        onExperiencesUpdated={workspace.setExperiences}
         onUpdateProfile={workspace.handleUpdateProfile}
         isPasteBulletsOpen={modals.isPasteBulletsOpen}
         onClosePasteBullets={() => modals.setIsPasteBulletsOpen(false)}
         onOpenCvModal={() => modals.setIsCvUploadOpen(true)}
         isAuthOpen={modals.isAuthOpen}
         onCloseAuth={() => modals.setIsAuthOpen(false)}
-        onLogin={workspace.handleLogin}
+        onLogin={workspace.handleLoginWithFirebaseUser}
         onLogout={workspace.handleLogout}
         onOpenAvatarModal={() => modals.setIsAvatarModalOpen(true)}
-        onLoginDev={() => {
-          workspace.handleLoginDev();
-          modals.setIsAuthOpen(false);
-        }}
         isSettingsOpen={modals.isSettingsOpen}
         onCloseSettings={() => modals.setIsSettingsOpen(false)}
-        onDataChanged={workspace.reloadDataFromStorage}
+        onImportBackupData={workspace.handleImportBackupData}
         isAvatarModalOpen={modals.isAvatarModalOpen}
         onCloseAvatarModal={() => modals.setIsAvatarModalOpen(false)}
         onSaveAvatar={workspace.handleUpdateAvatar}
@@ -413,13 +451,13 @@ export default function App() {
         editingCertification={modals.editingCertification}
         certificationPrefill={modals.certificationPrefill}
         onCloseCertificationModal={modals.closeCertificationModal}
-        onSaveCertification={(certData, sourceGoalId) =>
-          workspace.handleSaveCertification(
+        onSaveCertification={async (certData, sourceGoalId) => {
+          await workspace.handleSaveCertification(
             certData,
             Boolean(modals.editingCertification),
             sourceGoalId
-          )
-        }
+          );
+        }}
         isCareerGoalModalOpen={modals.isCareerGoalModalOpen}
         editingCareerGoal={modals.editingCareerGoal}
         onCloseCareerGoalModal={modals.closeCareerGoalModal}
@@ -429,10 +467,18 @@ export default function App() {
       />
 
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl animate-in slide-in-from-bottom-4 duration-200">
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl animate-in slide-in-from-bottom-4 duration-200 ${
+            toast.type === "error"
+              ? "bg-red-950/95 border-red-700/80"
+              : "bg-slate-900 border-slate-700"
+          }`}
+          role={toast.type === "error" ? "alert" : "status"}
+        >
           {toast.type === "success" && <Check className="w-4 h-4 text-emerald-400" />}
           {toast.type === "info" && <Info className="w-4 h-4 text-cyan-400" />}
           {toast.type === "warning" && <AlertTriangle className="w-4 h-4 text-amber-400" />}
+          {toast.type === "error" && <AlertTriangle className="w-4 h-4 text-red-400" />}
           <span className="text-xs font-medium text-slate-100">{toast.message}</span>
         </div>
       )}

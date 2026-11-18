@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { X, Compass } from "lucide-react";
+import { User as FirebaseAuthUser } from "firebase/auth";
 import { UserProfile } from "../types";
-import {
-  INITIAL_USER,
-  authenticateCustomAccount,
-  registerCustomAccount,
-} from "../utils/storage";
 import { useI18n } from "../i18n";
 import {
   auth,
   googleProvider,
   signInWithPopup,
   signInWithRedirect,
+  signOut,
   isFirebaseConfigured,
 } from "../firebase";
 import {
@@ -19,12 +16,9 @@ import {
   shouldUseRedirectFallback,
   isUserCancellation,
 } from "../utils/authErrors";
+import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { useUsernameAvailability } from "../hooks/useUsernameAvailability";
-import {
-  AVATAR_PRESETS,
-  AUTH_TEXTS,
-  sanitizeUsernameHandle,
-} from "./auth/authLocales";
+import { AUTH_TEXTS, sanitizeUsernameHandle } from "./auth/authLocales";
 import { AuthenticatedProfileView } from "./auth/AuthenticatedProfileView";
 import { UnauthenticatedAuthView } from "./auth/UnauthenticatedAuthView";
 
@@ -32,11 +26,10 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: UserProfile | null;
-  onLogin: (user: UserProfile) => void;
-  onLogout: () => void;
-  onUpdateProfile: (user: UserProfile) => void;
+  onLogin: (fbUser: FirebaseAuthUser) => Promise<void>;
+  onLogout: () => Promise<void> | void;
+  onUpdateProfile: (user: UserProfile) => Promise<void>;
   onOpenAvatarModal?: () => void;
-  onLoginDev?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -47,31 +40,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLogout,
   onUpdateProfile,
   onOpenAvatarModal,
-  onLoginDev,
 }) => {
   const { t, language } = useI18n();
   const at = AUTH_TEXTS[language] || AUTH_TEXTS.en;
 
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  const [signupName, setSignupName] = useState("");
-  const [signupUsername, setSignupUsername] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPassword, setSignupPassword] = useState("");
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
-  const [signupTitle, setSignupTitle] = useState("");
-  const [signupAvatar, setSignupAvatar] = useState(AVATAR_PRESETS[0].url);
-  const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [signupError, setSignupError] = useState<string | null>(null);
-
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [editName, setEditName] = useState(currentUser?.name || "");
   const [editUsername, setEditUsername] = useState(currentUser?.username || "");
   const [editTitle, setEditTitle] = useState(currentUser?.title || "");
@@ -89,21 +67,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [currentUser]);
 
   useEffect(() => {
-    setLoginError(null);
-    setSignupError(null);
-    setGoogleError(null);
-  }, [authMode]);
-
-  const signupUsernameStatus = useUsernameAvailability({
-    enabled: authMode === "signup",
-    username: signupUsername,
-  });
+    if (isOpen) {
+      setGoogleError(null);
+      setProfileSaveError(null);
+    }
+  }, [isOpen]);
 
   const editUsernameStatus = useUsernameAvailability({
     enabled: isEditingProfile,
     username: editUsername,
     currentUsername: currentUser?.username,
-    userKey: currentUser?.email || currentUser?.id || "",
+    userKey: currentUser?.id || "",
   });
 
   if (!isOpen) return null;
@@ -119,53 +93,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
-      const userHandle = sanitizeUsernameHandle(
-        fbUser.email?.split("@")[0] ||
-          fbUser.displayName ||
-          fbUser.uid.substring(0, 8)
-      );
 
-      const googleUserProfile: UserProfile = {
-        ...INITIAL_USER,
-        id: "google-" + fbUser.uid,
-        username:
-          userHandle.length >= 3
-            ? userHandle
-            : `user_${fbUser.uid.substring(0, 6)}`,
-        name: fbUser.displayName || fbUser.email?.split("@")[0] || "Usuario",
-        email: fbUser.email || "",
-        avatar: fbUser.photoURL || INITIAL_USER.avatar,
-        title: "",
-        bio: "",
-        location: "",
-        github: "",
-        linkedin: "",
-        skills: [],
-        authProvider: "google",
-        isCustom: false,
-        createdAt: Date.now(),
-      };
+      if (!fbUser.emailVerified) {
+        await signOut(auth).catch(() => undefined);
+        setGoogleError(
+          "Tu cuenta de Google debe tener el correo electrónico verificado para iniciar sesión."
+        );
+        return;
+      }
 
-      onLogin(googleUserProfile);
+      await onLogin(fbUser);
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[AuthModal] Google Sign In error:", err);
 
-      if (shouldUseRedirectFallback(err?.code || err?.message) && auth && googleProvider) {
+      const errObj = err as { code?: string; message?: string };
+      if (
+        shouldUseRedirectFallback(errObj?.code || errObj?.message) &&
+        auth &&
+        googleProvider
+      ) {
         try {
           await signInWithRedirect(auth, googleProvider);
           return;
         } catch (redirectErr) {
-          console.error("[AuthModal] signInWithRedirect fallback also failed:", redirectErr);
+          console.error(
+            "[AuthModal] signInWithRedirect fallback also failed:",
+            redirectErr
+          );
         }
       }
 
-      if (isUserCancellation(err?.code || err?.message)) {
+      if (isUserCancellation(errObj?.code || errObj?.message)) {
         setGoogleError(t.auth.popupClosedByUser);
       } else {
         const errorInfo = describeAuthError(err);
+        const authStrings = t.auth as unknown as Record<string, string>;
         const localizedMsg =
-          (t.auth as any)[errorInfo.key] || errorInfo.fallbackMessage;
+          authStrings[errorInfo.key] ||
+          formatFirestoreUiError(err, errorInfo.fallbackMessage);
         setGoogleError(localizedMsg);
       }
     } finally {
@@ -173,62 +139,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleCustomLogin = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError(null);
-    const result = authenticateCustomAccount(loginEmail, loginPassword);
-    if (!result.success || !result.user) {
-      setLoginError(result.error || "Error al autenticar credenciales.");
-      return;
-    }
-    onLogin(result.user);
-    onClose();
-  };
-
-  const handleCustomRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSignupError(null);
-
-    if (signupPassword !== signupConfirmPassword) {
-      setSignupError("Las contraseñas no coinciden. Por favor verifícalas.");
-      return;
-    }
-    if (signupPassword.length < 4) {
-      setSignupError("La contraseña debe tener al menos 4 caracteres.");
+    if (!currentUser || isSavingProfile) return;
+    if (editUsernameStatus.available === false) {
+      setProfileSaveError(editUsernameStatus.reason || "El handle /u/ no está disponible.");
       return;
     }
 
-    const result = registerCustomAccount({
-      name: signupName,
-      email: signupEmail,
-      password: signupPassword,
-      username: signupUsername ? sanitizeUsernameHandle(signupUsername) : undefined,
-      title: signupTitle || "Senior Software Engineer",
-      avatar: signupAvatar,
-    });
+    setIsSavingProfile(true);
+    setProfileSaveError(null);
 
-    if (!result.success || !result.user) {
-      setSignupError(result.error || "No se pudo registrar la cuenta.");
-      return;
+    try {
+      const cleanUsername = sanitizeUsernameHandle(editUsername.trim());
+      await onUpdateProfile({
+        ...currentUser,
+        name: editName.trim() || currentUser.name,
+        username: cleanUsername || currentUser.username,
+        title: editTitle.trim(),
+        bio: editBio.trim(),
+        location: editLocation.trim(),
+      });
+      setIsEditingProfile(false);
+    } catch (err) {
+      setProfileSaveError(
+        formatFirestoreUiError(err, "No se pudo actualizar tu perfil en Firestore.")
+      );
+    } finally {
+      setIsSavingProfile(false);
     }
-
-    onLogin(result.user);
-    onClose();
-  };
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
-    const cleanUsername = sanitizeUsernameHandle(editUsername.trim());
-    onUpdateProfile({
-      ...currentUser,
-      name: editName.trim() || currentUser.name,
-      username: cleanUsername || currentUser.username,
-      title: editTitle.trim() || currentUser.title,
-      bio: editBio.trim() || currentUser.bio,
-      location: editLocation.trim() || currentUser.location,
-    });
-    setIsEditingProfile(false);
   };
 
   return (
@@ -249,14 +188,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-[11px] text-slate-400">
                 {currentUser
                   ? `${at.connectedAs} ${currentUser.name}`
-                  : t.auth.quickDemo}
+                  : "Autenticación verificada con Google y Cloud Firestore"}
               </p>
             </div>
           </div>
 
           <button
+            type="button"
+            disabled={isGoogleLoading || isSavingProfile}
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
           >
             <X className="w-4 h-4" />
           </button>
@@ -272,8 +213,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               tCommonSave={t.common.save}
               onOpenAvatarModal={onOpenAvatarModal}
               onLogoutAndClose={() => {
-                onLogout();
-                onClose();
+                void Promise.resolve(onLogout()).finally(() => onClose());
               }}
               isEditingProfile={isEditingProfile}
               setIsEditingProfile={setIsEditingProfile}
@@ -288,45 +228,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setEditLocation={setEditLocation}
               editBio={editBio}
               setEditBio={setEditBio}
+              isSavingProfile={isSavingProfile}
+              profileSaveError={profileSaveError}
               onSaveProfile={handleSaveProfile}
             />
           ) : (
             <UnauthenticatedAuthView
               at={at}
               tAuth={t.auth}
-              authMode={authMode}
-              setAuthMode={setAuthMode}
               isGoogleLoading={isGoogleLoading}
               googleError={googleError}
               onGoogleLogin={handleGoogleLogin}
-              onLoginDev={onLoginDev}
-              loginEmail={loginEmail}
-              setLoginEmail={setLoginEmail}
-              loginPassword={loginPassword}
-              setLoginPassword={setLoginPassword}
-              showLoginPassword={showLoginPassword}
-              setShowLoginPassword={setShowLoginPassword}
-              loginError={loginError}
-              onCustomLogin={handleCustomLogin}
-              signupName={signupName}
-              setSignupName={setSignupName}
-              signupEmail={signupEmail}
-              setSignupEmail={setSignupEmail}
-              signupUsername={signupUsername}
-              setSignupUsername={setSignupUsername}
-              signupUsernameStatus={signupUsernameStatus}
-              signupTitle={signupTitle}
-              setSignupTitle={setSignupTitle}
-              signupPassword={signupPassword}
-              setSignupPassword={setSignupPassword}
-              signupConfirmPassword={signupConfirmPassword}
-              setSignupConfirmPassword={setSignupConfirmPassword}
-              showSignupPassword={showSignupPassword}
-              setShowSignupPassword={setShowSignupPassword}
-              signupAvatar={signupAvatar}
-              setSignupAvatar={setSignupAvatar}
-              signupError={signupError}
-              onCustomRegister={handleCustomRegister}
             />
           )}
         </div>

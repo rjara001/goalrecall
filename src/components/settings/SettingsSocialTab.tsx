@@ -11,6 +11,7 @@ import {
   Globe,
   Layers,
   Linkedin,
+  Loader2,
   Minus,
   Palette,
   Plus,
@@ -39,6 +40,8 @@ interface SettingsSocialTabProps {
   setUsername: (val: string) => void;
   usernameStatus: UsernameStatusState;
   saveSuccess: boolean;
+  isSaving?: boolean;
+  saveError?: string | null;
   isOtherNetworksOpen: boolean;
   setIsOtherNetworksOpen: (val: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -57,6 +60,8 @@ export const SettingsSocialTab: React.FC<SettingsSocialTabProps> = ({
   setUsername,
   usernameStatus,
   saveSuccess,
+  isSaving = false,
+  saveError = null,
   isOtherNetworksOpen,
   setIsOtherNetworksOpen,
   onSubmit,
@@ -125,6 +130,16 @@ export const SettingsSocialTab: React.FC<SettingsSocialTabProps> = ({
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
+      {saveError && (
+        <div
+          role="alert"
+          className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 flex items-start gap-2 animate-in fade-in"
+        >
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <span className="font-medium text-xs">{saveError}</span>
+        </div>
+      )}
+
       {saveSuccess && (
         <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 flex items-center gap-2 animate-in fade-in">
           <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -405,11 +420,20 @@ export const SettingsSocialTab: React.FC<SettingsSocialTabProps> = ({
       <div className="pt-2">
         <button
           type="submit"
-          disabled={usernameStatus.available === false}
+          disabled={isSaving || usernameStatus.checking || usernameStatus.available === false}
           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl transition-all text-xs shadow-md shadow-cyan-500/20"
         >
-          <Check className="w-4 h-4 stroke-[3]" />
-          <span>{st.saveBtn}</span>
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Guardando en Firestore...</span>
+            </>
+          ) : (
+            <>
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>{st.saveBtn}</span>
+            </>
+          )}
         </button>
       </div>
     </form>

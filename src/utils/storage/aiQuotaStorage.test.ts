@@ -6,26 +6,13 @@ import {
   getAiUsage,
   getProWaitlistEmails,
   recordAiUsage,
+  resetInMemoryAiQuotaForTests,
   saveProWaitlistEmail,
 } from "./aiQuotaStorage";
-import { STORAGE_KEYS } from "./keys";
-
-function installMemoryLocalStorage() {
-  const store = new Map<string, string>();
-  Object.defineProperty(globalThis, "localStorage", {
-    value: {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, val: string) => store.set(key, String(val)),
-      removeItem: (key: string) => store.delete(key),
-      clear: () => store.clear(),
-    },
-    configurable: true,
-  });
-}
 
 describe("aiQuotaStorage", () => {
   beforeEach(() => {
-    installMemoryLocalStorage();
+    resetInMemoryAiQuotaForTests();
   });
 
   it("enforces free monthly AI limit and cooldown window", () => {
@@ -48,13 +35,12 @@ describe("aiQuotaStorage", () => {
 
   it("resets usage counter automatically when month changes", () => {
     const jan = new Date("2026-01-15T12:00:00.000Z");
-    localStorage.setItem(
-      STORAGE_KEYS.AI_USAGE,
-      JSON.stringify({ monthKey: "2026-01", count: 3, lastUsed: jan.getTime() })
-    );
-
     const feb = new Date("2026-02-01T12:00:00.000Z");
-    const usage = getAiUsage(feb);
+    const usage = getAiUsage(feb, {
+      monthKey: "2026-01",
+      count: 3,
+      lastUsed: jan.getTime(),
+    });
     expect(usage.monthKey).toBe("2026-02");
     expect(usage.count).toBe(0);
   });
