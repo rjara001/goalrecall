@@ -272,7 +272,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
       
       {/* Top Banner: Motor de Ofertas & Postulaciones (Fase 2) */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-[#0C1222] to-slate-900 border border-indigo-900/40 relative overflow-hidden shadow-2xl">
-        <div className="absolute -right-12 -top-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-12 -top-12 w-80 h-80 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.16),transparent_70%)] pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-800/60 text-indigo-300 text-xs font-semibold">
@@ -854,7 +854,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
 
       {/* MODAL: Nueva Oferta Laboral */}
       {isNewOfferModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] isolate flex items-center justify-center p-4 bg-slate-950/85 animate-in fade-in duration-150">
           <div className="bg-[#0B101D] border border-indigo-900/60 rounded-3xl p-6 sm:p-8 max-w-xl w-full space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             
             <button

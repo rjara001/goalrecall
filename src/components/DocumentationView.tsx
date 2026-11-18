@@ -103,7 +103,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
             </button>
             <div className="h-4 w-[1px] bg-slate-800" />
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-cyan-400" />
               <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
                 {dl.badge}
               </span>
@@ -140,7 +140,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
 
         {/* Hero Header */}
         <div className="relative p-6 sm:p-10 rounded-3xl bg-gradient-to-br from-slate-900 via-[#0B1324] to-slate-900 border border-cyan-900/40 overflow-hidden shadow-2xl">
-          <div className="absolute -right-16 -top-16 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -right-16 -top-16 w-96 h-96 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.14),transparent_70%)] pointer-events-none" />
           <div className="relative z-10 max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 text-xs font-medium">
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
@@ -166,7 +166,7 @@ export const DocumentationView: React.FC<DocumentationViewProps> = ({
           
           {/* Sidebar Menu */}
           <div className="lg:col-span-1 space-y-2">
-            <div className="sticky top-20 p-3 bg-slate-900/70 border border-slate-800/80 rounded-2xl space-y-1">
+            <div className="sticky top-20 z-10 isolate p-3 bg-slate-900 border border-slate-800/80 rounded-2xl space-y-1">
               <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400 px-3 py-1 font-semibold">
                 {dl.navTitle}
               </p>

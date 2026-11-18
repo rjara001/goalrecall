@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [isProfileMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-40 bg-[#090D16]/95 backdrop-blur-md border-b border-slate-800/80 px-4 lg:px-8 py-2.5 transition-colors">
+    <header className="sticky top-0 z-40 isolate bg-[#090D16] border-b border-slate-800/80 px-4 lg:px-8 py-2.5 transition-colors">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         
         {/* Zone 1: Wordmark Brand */}
@@ -99,7 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex items-center gap-2.5 shrink-0 text-left group"
         >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/30 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/10 group-hover:border-cyan-400 transition-colors">
-            <Compass className="w-4 h-4 animate-pulse" />
+            <Compass className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">

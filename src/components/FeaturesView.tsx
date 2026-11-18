@@ -122,7 +122,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
     <div className="min-h-screen bg-[#070A11] text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
       
       {/* Top Banner Navigation Bar */}
-      <div className="sticky top-0 z-30 bg-[#090D16]/95 backdrop-blur-md border-b border-slate-800/90 px-4 sm:px-8 py-3">
+      <div className="sticky top-0 z-30 isolate bg-[#090D16] border-b border-slate-800/90 px-4 sm:px-8 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
@@ -185,7 +185,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
             </div>
             {user && (
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-950/70 border border-purple-800/60 text-purple-300 text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span>{language === "es" ? "Sesión activa:" : "Active user:"} <strong className="text-white">{user.name}</strong></span>
               </div>
             )}
@@ -789,7 +789,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
       <section className="py-16 px-4 sm:px-8 border-t border-slate-800 bg-gradient-to-b from-[#090D18] to-[#060910]">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 mx-auto shadow-lg shadow-cyan-950/40">
-            <Compass className="w-6 h-6 animate-pulse" />
+            <Compass className="w-6 h-6" />
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">

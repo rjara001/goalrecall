@@ -137,7 +137,7 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[60] isolate flex items-center justify-center p-4 bg-black/85 animate-in fade-in duration-150">
       <div
         className="bg-[#0B111E] border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
         role="dialog"
