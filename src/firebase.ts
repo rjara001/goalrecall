@@ -52,22 +52,41 @@ if (typeof window !== "undefined") {
         : getFirestore(app);
       auth = getAuth(app);
 
+      const isLoopbackHost =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1");
+
       const useEmulator =
         typeof import.meta !== "undefined" &&
         import.meta.env &&
-        import.meta.env.VITE_EMULATOR === "true";
+        (import.meta.env.VITE_EMULATOR === "true" ||
+          import.meta.env.VITE_FIREBASE_USE_EMULATOR === "true") &&
+        isLoopbackHost;
 
       if (useEmulator) {
-        const authHost = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_HOST;
-        const authPort = import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_PORT;
-        if (authHost && authPort) {
-          connectAuthEmulator(auth, `http://${authHost}:${authPort}`);
-        }
-        const fsHost = import.meta.env.VITE_FIREBASE_EMULATOR_FIRESTORE_HOST;
-        const fsPort = Number(import.meta.env.VITE_FIREBASE_EMULATOR_FIRESTORE_PORT);
-        if (fsHost && Number.isFinite(fsPort)) {
-          connectFirestoreEmulator(db, fsHost, fsPort);
-        }
+        // Dynamically align host with browser hostname (localhost vs 127.0.0.1)
+        // to prevent Cross-Origin isolation blocks ("No matching frame") in Auth popup.
+        const currentHost = window.location.hostname;
+        const authHost =
+          currentHost === "localhost"
+            ? "localhost"
+            : import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_HOST || currentHost;
+        const authPort =
+          import.meta.env.VITE_FIREBASE_EMULATOR_AUTH_PORT || "9199";
+
+        connectAuthEmulator(auth, `http://${authHost}:${authPort}`, {
+          disableWarnings: true,
+        });
+
+        const fsHost =
+          currentHost === "localhost"
+            ? "localhost"
+            : import.meta.env.VITE_FIREBASE_EMULATOR_FIRESTORE_HOST || currentHost;
+        const fsPort =
+          Number(import.meta.env.VITE_FIREBASE_EMULATOR_FIRESTORE_PORT) || 8180;
+
+        connectFirestoreEmulator(db, fsHost, fsPort);
       }
 
       googleProvider = new GoogleAuthProvider();
@@ -110,6 +129,5 @@ export {
   signInWithRedirect,
   getRedirectResult,
   onAuthStateChanged,
-  firebaseSignOut,
   firebaseSignOut as signOut,
 };
