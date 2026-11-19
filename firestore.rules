@@ -30,6 +30,10 @@ service cloud.firestore {
       return isSignedIn() && isVerifiedEmail() && request.auth.uid == userId;
     }
 
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
     function isValidId(id) {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -462,20 +466,19 @@ service cloud.firestore {
 
       // Subcollection: Brag Logs (/users/{userId}/logs/{logId})
       match /logs/{logId} {
-        allow get: if isOwner(userId) && isValidId(logId) && hasParentUser(userId);
-        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow get: if isSelf(userId) && isValidId(logId) && hasParentUser(userId);
+        allow list: if isSelf(userId) && resource.data.userId == request.auth.uid;
 
-        allow create: if isOwner(userId)
+        allow create: if isSelf(userId)
           && isValidId(logId)
           && isValidLogEntry(incoming(), userId, logId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && hasParentUserOrBatch(userId);
 
-        allow update: if isOwner(userId)
+        allow update: if isSelf(userId)
           && isValidId(logId)
           && isValidLogEntry(incoming(), userId, logId)
-          && hasParentUser(userId)
           && incoming().id == existing().id
           && incoming().userId == existing().userId
           && incoming().createdAt == existing().createdAt
@@ -486,25 +489,24 @@ service cloud.firestore {
             'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'updatedAt'
           ]);
 
-        allow delete: if isOwner(userId) && isValidId(logId) && hasParentUser(userId);
+        allow delete: if isSelf(userId) && isValidId(logId) && hasParentUser(userId);
       }
 
       // Subcollection: Work Experiences (/users/{userId}/experiences/{experienceId})
       match /experiences/{experienceId} {
-        allow get: if isOwner(userId) && isValidId(experienceId) && hasParentUser(userId);
-        allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+        allow get: if isSelf(userId) && isValidId(experienceId) && hasParentUser(userId);
+        allow list: if isSelf(userId) && resource.data.userId == request.auth.uid;
 
-        allow create: if isOwner(userId)
+        allow create: if isSelf(userId)
           && isValidId(experienceId)
           && isValidWorkExperience(incoming(), userId, experienceId)
           && incoming().createdAt == request.time
           && incoming().updatedAt == request.time
           && hasParentUserOrBatch(userId);
 
-        allow update: if isOwner(userId)
+        allow update: if isSelf(userId)
           && isValidId(experienceId)
           && isValidWorkExperience(incoming(), userId, experienceId)
-          && hasParentUser(userId)
           && incoming().id == existing().id
           && incoming().userId == existing().userId
           && incoming().createdAt == existing().createdAt
@@ -514,7 +516,7 @@ service cloud.firestore {
             'summary', 'bullets', 'technologies', 'isPersonalProjects', 'updatedAt'
           ]);
 
-        allow delete: if isOwner(userId) && isValidId(experienceId) && hasParentUser(userId);
+        allow delete: if isSelf(userId) && isValidId(experienceId) && hasParentUser(userId);
       }
 
       // Subcollection: Portfolio Products (/users/{userId}/products/{productId})
