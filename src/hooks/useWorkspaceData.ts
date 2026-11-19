@@ -47,6 +47,7 @@ import {
   updateInboxMessageStatusFirestore,
   updateJobOfferFirestore,
   updateLogFirestore,
+  updateLogMetadataFirestore,
   updateProductFirestore,
 } from "../utils/firestore/repository";
 import {
@@ -488,8 +489,7 @@ export const useWorkspaceData = ({
       const target = stateRef.current.logs.find((l) => l.id === id);
       if (!target) return;
       try {
-        const updated = await updateLogFirestore({
-          ...target,
+        const updated = await updateLogMetadataFirestore(target, {
           isPublic: !target.isPublic,
         });
         const nextLogs = stateRef.current.logs.map((l) =>
@@ -529,7 +529,11 @@ export const useWorkspaceData = ({
       );
 
       try {
-        const updated = await updateLogFirestore(nextCandidate, syncList);
+        const updated = await updateLogMetadataFirestore(
+          target,
+          { includeInCv: nextIncludeInCv },
+          syncList
+        );
         const nextLogs = stateRef.current.logs.map((l) =>
           l.id === id ? updated : l
         );
@@ -770,13 +774,18 @@ export const useWorkspaceData = ({
           });
 
           const companyChanged = existing && existing.company !== fullExp.company;
-          const logsToUpdate: LogEntry[] = [];
+          const contentEditedLogs: LogEntry[] = [];
+          const metadataOnlyLogs: LogEntry[] = [];
           stateRef.current.logs.forEach((l) => {
             const edited = editedById.get(l.id);
             if (edited) {
-              logsToUpdate.push(edited);
+              if (edited.title !== l.title) {
+                contentEditedLogs.push(edited);
+              } else {
+                metadataOnlyLogs.push(edited);
+              }
             } else if (companyChanged && doesLogBelongToExperience(l, existing)) {
-              logsToUpdate.push({
+              metadataOnlyLogs.push({
                 ...l,
                 experienceId: l.experienceId || fullExp.id,
                 client: fullExp.company,
@@ -786,8 +795,9 @@ export const useWorkspaceData = ({
 
           const res = await updateExperienceFirestore(
             fullExp,
-            logsToUpdate,
-            newLogBulletsToCreate
+            contentEditedLogs,
+            newLogBulletsToCreate,
+            metadataOnlyLogs
           );
 
           const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
@@ -851,7 +861,6 @@ export const useWorkspaceData = ({
               ...l,
               experienceId: fallback.id,
               client: fallback.company,
-              updatedAt: Date.now(),
             }))
         : [];
 

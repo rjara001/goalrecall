@@ -9,6 +9,8 @@ import {
   buildJobOfferCreatePayload,
   buildLogEntryCreatePayload,
   buildLogEntryUpdatePayload,
+  buildLogMetadataUpdatePayload,
+  buildLogSortOrderUpdatePayload,
   buildProductCreatePayload,
   buildProductUpdatePayload,
   buildPublicShowcaseCreatePayload,
@@ -400,5 +402,55 @@ describe("Firestore sanitizer payloads", () => {
     expect((showcase.logs as LogEntry[]).map((l) => l.id)).toEqual(["l1"]);
     expect((showcase.products as Product[]).map((p) => p.id)).toEqual(["p1"]);
     expect((showcase.certifications as TechnicalCertification[]).map((c) => c.id)).toEqual(["c1"]);
+  });
+
+  it("never falls back updatedAt to Date.now() on read and preserves updatedAt on sortOrder/metadata updates", () => {
+    const withCreatedOnly = docToLogEntry(
+      { title: "Legacy log", impact: "x", createdAt: 1700000000000 },
+      "log-legacy-created"
+    );
+    expect(withCreatedOnly.createdAt).toBe(1700000000000);
+    expect(withCreatedOnly.updatedAt).toBe(1700000000000);
+
+    const withNeitherTimestamp = docToLogEntry(
+      { title: "Bare legacy log", impact: "x", updatedAt: null },
+      "log-legacy-none"
+    );
+    expect(withNeitherTimestamp.createdAt).toBe(0);
+    expect(withNeitherTimestamp.updatedAt).toBe(0);
+
+    const sortOrderPayload = buildLogSortOrderUpdatePayload(2.8) as Record<string, unknown>;
+    expect(sortOrderPayload).toEqual({ sortOrder: 2 });
+    expect("updatedAt" in sortOrderPayload).toBe(false);
+    expect("title" in sortOrderPayload).toBe(false);
+    expect("includeInCv" in sortOrderPayload).toBe(false);
+
+    const metadataPayload = buildLogMetadataUpdatePayload({
+      isPublic: true,
+      includeInCv: false,
+      experienceId: "exp-1",
+      client: "Acme Corp",
+    }) as Record<string, unknown>;
+    assertNoUndefinedDeep(metadataPayload);
+    expect(metadataPayload).toEqual({
+      isPublic: true,
+      includeInCv: false,
+      experienceId: "exp-1",
+      client: "Acme Corp",
+    });
+    expect("updatedAt" in metadataPayload).toBe(false);
+
+    const partialMetadata = buildLogMetadataUpdatePayload({ isPublic: false }) as Record<string, unknown>;
+    expect(partialMetadata).toEqual({ isPublic: false });
+    expect("updatedAt" in partialMetadata).toBe(false);
+
+    const explicitSavePayload = buildLogEntryUpdatePayload({ title: "Edited title" }) as Record<string, unknown>;
+    expect(explicitSavePayload.updatedAt).toEqual(serverTimestamp());
+
+    const noTouchSavePayload = buildLogEntryUpdatePayload(
+      { title: "Unmodified timestamp" },
+      { touchUpdatedAt: false }
+    ) as Record<string, unknown>;
+    expect("updatedAt" in noTouchSavePayload).toBe(false);
   });
 });

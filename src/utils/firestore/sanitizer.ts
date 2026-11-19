@@ -182,10 +182,15 @@ export function sanitizeUserSkills(
 
 export function timestampToMillis(value: unknown, fallback = Date.now()): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : fallback;
+  }
   if (value && typeof value === "object") {
-    const maybeTs = value as { toMillis?: () => number; seconds?: number };
+    const maybeTs = value as { toMillis?: () => number; seconds?: number; _seconds?: number };
     if (typeof maybeTs.toMillis === "function") return maybeTs.toMillis();
     if (typeof maybeTs.seconds === "number") return maybeTs.seconds * 1000;
+    if (typeof maybeTs._seconds === "number") return maybeTs._seconds * 1000;
   }
   if (typeof value === "string") {
     const parsed = Date.parse(value);
@@ -509,14 +514,53 @@ export function buildLogEntryCreatePayload(
   };
 }
 
-export function buildLogEntryUpdatePayload(entry: Partial<LogEntry>) {
-  return {
+export function buildLogEntryUpdatePayload(
+  entry: Partial<LogEntry>,
+  options: { touchUpdatedAt?: boolean } = {}
+) {
+  const { touchUpdatedAt = true } = options;
+  const payload: Record<string, unknown> = {
     ...buildLogFields(entry),
-    updatedAt: serverTimestamp(),
+  };
+  if (touchUpdatedAt) {
+    payload.updatedAt = serverTimestamp();
+  }
+  return payload;
+}
+
+export function buildLogSortOrderUpdatePayload(sortOrder: number) {
+  const clamped = Number.isFinite(sortOrder)
+    ? Math.max(0, Math.min(100000, Math.trunc(sortOrder)))
+    : 0;
+  return {
+    sortOrder: clamped,
   };
 }
 
+export function buildLogMetadataUpdatePayload(updates: {
+  isPublic?: boolean;
+  includeInCv?: boolean;
+  experienceId?: string;
+  client?: string;
+}) {
+  const out: Record<string, unknown> = {};
+  if (typeof updates.isPublic === "boolean") {
+    out.isPublic = updates.isPublic;
+  }
+  if (typeof updates.includeInCv === "boolean") {
+    out.includeInCv = updates.includeInCv;
+  }
+  if (typeof updates.experienceId === "string") {
+    out.experienceId = clampString(updates.experienceId, 128);
+  }
+  if (typeof updates.client === "string") {
+    out.client = nonEmptyString(updates.client, 200, "General");
+  }
+  return out;
+}
+
 export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntry {
+  const createdAt = timestampToMillis(raw.createdAt, 0);
   return {
     id,
     userId: typeof raw.userId === "string" ? raw.userId : undefined,
@@ -540,8 +584,8 @@ export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntr
       typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
         ? Math.max(0, Math.min(100000, Math.trunc(raw.sortOrder)))
         : undefined,
-    createdAt: timestampToMillis(raw.createdAt),
-    updatedAt: timestampToMillis(raw.updatedAt),
+    createdAt,
+    updatedAt: timestampToMillis(raw.updatedAt, createdAt),
   };
 }
 
@@ -602,6 +646,7 @@ export function buildWorkExperienceUpdatePayload(exp: Partial<WorkExperience>) {
 }
 
 export function docToWorkExperience(raw: Record<string, unknown>, id: string): WorkExperience {
+  const createdAt = timestampToMillis(raw.createdAt, 0);
   return {
     id,
     userId: typeof raw.userId === "string" ? raw.userId : undefined,
@@ -620,8 +665,8 @@ export function docToWorkExperience(raw: Record<string, unknown>, id: string): W
       : undefined,
     isPersonalProjects:
       typeof raw.isPersonalProjects === "boolean" ? raw.isPersonalProjects : undefined,
-    createdAt: timestampToMillis(raw.createdAt),
-    updatedAt: timestampToMillis(raw.updatedAt),
+    createdAt,
+    updatedAt: timestampToMillis(raw.updatedAt, createdAt),
   };
 }
 
@@ -798,8 +843,8 @@ export function docToCertification(
     summary:
       typeof raw.summary === "string" && raw.summary.length > 0 ? raw.summary : undefined,
     isPublic: raw.isPublic !== false,
-    createdAt: timestampToMillis(raw.createdAt),
-    updatedAt: timestampToMillis(raw.updatedAt),
+    createdAt: timestampToMillis(raw.createdAt, 0),
+    updatedAt: timestampToMillis(raw.updatedAt, timestampToMillis(raw.createdAt, 0)),
   };
 }
 
@@ -910,8 +955,8 @@ export function docToCareerGoal(raw: Record<string, unknown>, id: string): Caree
       typeof raw.linkedCertificationId === "string" && raw.linkedCertificationId.length > 0
         ? raw.linkedCertificationId
         : undefined,
-    createdAt: timestampToMillis(raw.createdAt),
-    updatedAt: timestampToMillis(raw.updatedAt),
+    createdAt: timestampToMillis(raw.createdAt, 0),
+    updatedAt: timestampToMillis(raw.updatedAt, timestampToMillis(raw.createdAt, 0)),
   };
 }
 
@@ -1028,8 +1073,8 @@ export function docToJobOffer(raw: Record<string, unknown>, id: string): JobOffe
         : undefined,
     appliedDate: typeof raw.appliedDate === "string" ? raw.appliedDate : undefined,
     notes: typeof raw.notes === "string" ? raw.notes : undefined,
-    createdAt: timestampToMillis(raw.createdAt),
-    updatedAt: timestampToMillis(raw.updatedAt),
+    createdAt: timestampToMillis(raw.createdAt, 0),
+    updatedAt: timestampToMillis(raw.updatedAt, timestampToMillis(raw.createdAt, 0)),
   };
 }
 
@@ -1232,8 +1277,12 @@ function sanitizePublicLogs(logs: LogEntry[]) {
         description: typeof l.description === "string" ? clampString(l.description, 6000) : undefined,
         tags: sanitizeBoundedStringList(l.tags, 25, 200),
         isPublic: true,
-        createdAt: Number.isFinite(l.createdAt) ? l.createdAt : Date.now(),
-        updatedAt: Number.isFinite(l.updatedAt) ? l.updatedAt : Date.now(),
+        createdAt: Number.isFinite(l.createdAt) ? l.createdAt : 0,
+        updatedAt: Number.isFinite(l.updatedAt)
+          ? l.updatedAt
+          : Number.isFinite(l.createdAt)
+          ? l.createdAt
+          : 0,
       })
     );
 }

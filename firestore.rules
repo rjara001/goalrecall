@@ -483,7 +483,15 @@ service cloud.firestore {
           && incoming().id == existing().id
           && incoming().userId == existing().userId
           && incoming().createdAt == existing().createdAt
-          && incoming().updatedAt == request.time
+          && (
+            incoming().updatedAt == request.time
+            || (
+              incoming().updatedAt == existing().updatedAt
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'sortOrder', 'isPublic', 'includeInCv', 'experienceId', 'client'
+              ])
+            )
+          )
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'experienceId', 'originalBullet', 'date', 'client', 'project',
             'category', 'title', 'logro', 'whatWasSought', 'whyImportant',

@@ -40,6 +40,8 @@ import {
   buildJobOfferUpdatePayload,
   buildLogEntryCreatePayload,
   buildLogEntryUpdatePayload,
+  buildLogMetadataUpdatePayload,
+  buildLogSortOrderUpdatePayload,
   buildProductCreatePayload,
   buildProductUpdatePayload,
   buildProWaitlistPayload,
@@ -521,6 +523,50 @@ export async function updateLogFirestore(
   }
 }
 
+export async function updateLogMetadataFirestore(
+  entry: LogEntry,
+  updates: {
+    isPublic?: boolean;
+    includeInCv?: boolean;
+    experienceId?: string;
+    client?: string;
+  },
+  parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<LogEntry> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const now = Date.now();
+  const logId = sanitizeDocId(entry.id, "log");
+  const path = `users/${uid}/logs/${logId}`;
+  const metadataPayload = buildLogMetadataUpdatePayload(updates);
+  const updated: LogEntry = {
+    ...entry,
+    ...updates,
+    id: logId,
+    userId: uid,
+    includeInCv:
+      typeof updates.includeInCv === "boolean"
+        ? updates.includeInCv
+        : entry.includeInCv,
+  };
+
+  try {
+    if (parentExpsToSync && parentExpsToSync.length > 0) {
+      const batch = writeBatch(firestore);
+      if (Object.keys(metadataPayload).length > 0) {
+        batch.update(doc(firestore, "users", uid, "logs", logId), metadataPayload);
+      }
+      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+      await batch.commit();
+    } else if (Object.keys(metadataPayload).length > 0) {
+      await updateDoc(doc(firestore, "users", uid, "logs", logId), metadataPayload);
+    }
+    return updated;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 export async function deleteLogFirestore(
   logId: string,
   parentExpsToSync?: ExperienceProjectionSync[]
@@ -594,18 +640,21 @@ export async function reorderLogsBatchFirestore(
   const batch = writeBatch(firestore);
   const persisted: LogEntry[] = [];
 
-  logsToUpdate.forEach((entry) => {
+  logsToUpdate.forEach((entry, index) => {
     const safeId = sanitizeDocId(entry.id, "log");
+    const nextSortOrder =
+      typeof entry.sortOrder === "number" && Number.isFinite(entry.sortOrder)
+        ? Math.max(0, Math.min(100000, Math.trunc(entry.sortOrder)))
+        : index;
     const nextEntry: LogEntry = {
       ...entry,
       id: safeId,
       userId: uid,
-      includeInCv: entry.includeInCv !== false,
-      updatedAt: now,
+      sortOrder: nextSortOrder,
     };
     batch.update(
       doc(firestore, "users", uid, "logs", safeId),
-      buildLogEntryUpdatePayload(nextEntry)
+      buildLogSortOrderUpdatePayload(nextSortOrder)
     );
     persisted.push(nextEntry);
   });
@@ -691,7 +740,8 @@ export async function createExperienceFirestore(
 export async function updateExperienceFirestore(
   updatedExp: WorkExperience,
   logsToUpdate: LogEntry[],
-  newLogBulletsToCreate?: string[]
+  newLogBulletsToCreate?: string[],
+  metadataOnlyLogs: LogEntry[] = []
 ): Promise<{
   experience: WorkExperience;
   updatedLogs: LogEntry[];
@@ -728,6 +778,28 @@ export async function updateExperienceFirestore(
       doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
       buildLogEntryUpdatePayload(nextLog)
     );
+    updatedLogs.push(nextLog);
+  }
+
+  for (const log of metadataOnlyLogs) {
+    const nextLog: LogEntry = {
+      ...log,
+      experienceId: log.experienceId || expId,
+      client: savedExp.company,
+    };
+    const metadataPayload = buildLogMetadataUpdatePayload({
+      experienceId: nextLog.experienceId,
+      client: nextLog.client,
+      ...(typeof nextLog.includeInCv === "boolean"
+        ? { includeInCv: nextLog.includeInCv }
+        : {}),
+    });
+    if (Object.keys(metadataPayload).length > 0) {
+      batch.update(
+        doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
+        metadataPayload
+      );
+    }
     updatedLogs.push(nextLog);
   }
 
@@ -784,10 +856,16 @@ export async function deleteExperienceFirestore(
 
   batch.delete(doc(firestore, "users", uid, "experiences", safeId));
   for (const log of reassignedLogs) {
-    batch.update(
-      doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
-      buildLogEntryUpdatePayload(log)
-    );
+    const metadataPayload = buildLogMetadataUpdatePayload({
+      experienceId: log.experienceId,
+      client: log.client,
+    });
+    if (Object.keys(metadataPayload).length > 0) {
+      batch.update(
+        doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
+        metadataPayload
+      );
+    }
   }
 
   try {
