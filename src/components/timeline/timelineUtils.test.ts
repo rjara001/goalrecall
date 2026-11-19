@@ -3,6 +3,7 @@ import {
   cleanExperienceBullets,
   computeTotalBulletsCount,
   filterTimelineLogs,
+  formatLogUpdatedAt,
   groupLogsByExperience,
 } from "./timelineUtils";
 import { LogEntry, WorkExperience } from "../../types";
@@ -108,5 +109,19 @@ describe("timelineUtils", () => {
     const grouped = groupLogsByExperience(exps, logs);
     expect(grouped.result[0].logs.map((l) => l.id)).toEqual(["l1", "l2"]);
     expect(grouped.unassigned.map((l) => l.id)).toEqual(["l3"]);
+  });
+
+  test("formatLogUpdatedAt formats valid timestamps and rejects empty/invalid ones", () => {
+    expect(formatLogUpdatedAt(undefined, "es")).toBeNull();
+    expect(formatLogUpdatedAt(0, "es")).toBeNull();
+    expect(formatLogUpdatedAt(NaN, "es")).toBeNull();
+
+    const ts = new Date("2026-11-19T14:35:00Z").getTime();
+    const esLabel = formatLogUpdatedAt(ts, "es");
+    const enLabel = formatLogUpdatedAt(ts, "en");
+    expect(esLabel).toContain("Actualizado:");
+    expect(esLabel).toContain("2026");
+    expect(enLabel).toContain("Updated:");
+    expect(enLabel).toContain("2026");
   });
 });

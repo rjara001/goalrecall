@@ -157,3 +157,27 @@ export const groupLogsByExperience = (
   const unassigned = filteredLogs.filter((l) => !assignedLogIds.has(l.id));
   return { result, unassigned };
 };
+
+export const formatLogUpdatedAt = (
+  updatedAt?: number,
+  language: string = "es"
+): string | null => {
+  if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null;
+  }
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) return null;
+  const locale = language === "en" ? "en-US" : "es";
+  const dateStr = date.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+  const timeStr = date.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const prefix = language === "en" ? "Updated" : "Actualizado";
+  return `${prefix}: ${dateStr} · ${timeStr}`;
+};

@@ -18,12 +18,14 @@ import {
   Zap,
 } from "lucide-react";
 import { LogEntry, WorkExperience } from "../../types";
+import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import {
   getExperienceBulletItems,
   getExperienceChildLogs,
   isLogIncludedInCv,
 } from "../../utils/bulletToLogMapper";
+import { formatLogUpdatedAt } from "./timelineUtils";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -67,6 +69,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onExtractAllBulletsForExperience,
   onJumpToCompanyLogs,
 }) => {
+  const { language } = useI18n();
   const [expandedHiddenDrawer, setExpandedHiddenDrawer] = useState<Record<string, boolean>>({});
 
   const toggleHiddenDrawer = (expId: string) => {
@@ -262,6 +265,9 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     <div className="space-y-2">
                       {bulletItems.map((item) => {
                         const childLog = item.log;
+                        const updatedLabel = childLog
+                          ? formatLogUpdatedAt(childLog.updatedAt, language)
+                          : null;
                         return (
                           <div
                             key={item.key}
@@ -271,9 +277,16 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                               <span className="text-cyan-400 font-bold text-base leading-none select-none mt-0.5">
                                 •
                               </span>
-                              <p className="text-slate-200/95 leading-relaxed break-words">
-                                {item.text}
-                              </p>
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <p className="text-slate-200/95 leading-relaxed break-words">
+                                  {item.text}
+                                </p>
+                                {updatedLabel && (
+                                  <p className="text-[11px] italic text-slate-400/90 tabular-nums">
+                                    {updatedLabel}
+                                  </p>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center pl-4 sm:pl-0">
@@ -370,14 +383,26 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
 
                       {isHiddenDrawerOpen && (
                         <div className="p-2.5 pt-1 border-t border-slate-800/70 space-y-1.5">
-                          {hiddenFromCvLogs.map((hiddenLog) => (
-                            <div
-                              key={hiddenLog.id}
-                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/60 text-xs"
-                            >
-                              <span className="text-slate-400 line-clamp-2 flex-1">
-                                {hiddenLog.title}
-                              </span>
+                          {hiddenFromCvLogs.map((hiddenLog) => {
+                            const hiddenUpdatedLabel = formatLogUpdatedAt(
+                              hiddenLog.updatedAt,
+                              language
+                            );
+                            return (
+                              <div
+                                key={hiddenLog.id}
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/60 text-xs"
+                              >
+                                <div className="flex-1 min-w-0 space-y-0.5">
+                                  <p className="text-slate-400 line-clamp-2">
+                                    {hiddenLog.title}
+                                  </p>
+                                  {hiddenUpdatedLabel && (
+                                    <p className="text-[11px] italic text-slate-500 tabular-nums">
+                                      {hiddenUpdatedLabel}
+                                    </p>
+                                  )}
+                                </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 {onEditLog && (
                                   <button
@@ -401,7 +426,8 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                 )}
                               </div>
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       )}
                     </div>
