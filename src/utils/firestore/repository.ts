@@ -67,7 +67,10 @@ import {
   sanitizeDocId,
   sanitizeUsernameHandle,
 } from "./sanitizer";
-import { inferCategoryForSavedExperienceBullet } from "../bulletToLogMapper";
+import {
+  compareLogEntriesByOrder,
+  inferCategoryForSavedExperienceBullet,
+} from "../bulletToLogMapper";
 
 export interface ExperienceProjectionSync {
   experience: WorkExperience;
@@ -273,7 +276,7 @@ export async function loadWorkspaceFromFirestore(
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  logs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  logs.sort(compareLogEntriesByOrder);
   experiences.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   certifications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   careerGoals.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -577,6 +580,43 @@ export async function createLogsBatchFirestore(
     return created;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `users/${uid}/logs`);
+  }
+}
+
+export async function reorderLogsBatchFirestore(
+  logsToUpdate: LogEntry[],
+  parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<LogEntry[]> {
+  if (logsToUpdate.length === 0) return [];
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const now = Date.now();
+  const batch = writeBatch(firestore);
+  const persisted: LogEntry[] = [];
+
+  logsToUpdate.forEach((entry) => {
+    const safeId = sanitizeDocId(entry.id, "log");
+    const nextEntry: LogEntry = {
+      ...entry,
+      id: safeId,
+      userId: uid,
+      includeInCv: entry.includeInCv !== false,
+      updatedAt: now,
+    };
+    batch.update(
+      doc(firestore, "users", uid, "logs", safeId),
+      buildLogEntryUpdatePayload(nextEntry)
+    );
+    persisted.push(nextEntry);
+  });
+
+  appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+
+  try {
+    await batch.commit();
+    return persisted;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${uid}/logs`);
   }
 }
 

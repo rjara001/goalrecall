@@ -467,6 +467,9 @@ function buildLogFields(entry: Partial<LogEntry>) {
   if (typeof entry.includeInCv === "boolean") {
     out.includeInCv = entry.includeInCv;
   }
+  if (typeof entry.sortOrder === "number" && Number.isFinite(entry.sortOrder)) {
+    out.sortOrder = Math.max(0, Math.min(100000, Math.trunc(entry.sortOrder)));
+  }
   if (typeof entry.experienceId === "string") {
     out.experienceId = clampString(entry.experienceId, 128);
   }
@@ -533,6 +536,10 @@ export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntr
     description: typeof raw.description === "string" ? raw.description : undefined,
     tags: sanitizeBoundedStringList(raw.tags, 25, 200),
     isPublic: Boolean(raw.isPublic),
+    sortOrder:
+      typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
+        ? Math.max(0, Math.min(100000, Math.trunc(raw.sortOrder)))
+        : undefined,
     createdAt: timestampToMillis(raw.createdAt),
     updatedAt: timestampToMillis(raw.updatedAt),
   };

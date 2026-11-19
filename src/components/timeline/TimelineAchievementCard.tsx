@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   Copy,
   Edit3,
@@ -6,6 +6,7 @@ import {
   EyeOff,
   FileText,
   Globe,
+  GripVertical,
   HelpCircle,
   Layers,
   Lock,
@@ -15,8 +16,10 @@ import {
   Zap,
 } from "lucide-react";
 import { LogEntry } from "../../types";
+import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import { isLogIncludedInCv } from "../../utils/bulletToLogMapper";
+import { formatRelativeUpdatedTime, isRecentlyUpdatedLog } from "./timelineUtils";
 
 interface TimelineAchievementCardProps {
   log: LogEntry;
@@ -29,6 +32,15 @@ interface TimelineAchievementCardProps {
   onDuplicateLog: (entry: LogEntry) => void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
+  isDraggable?: boolean;
+  isDragging?: boolean;
+  dropIndicator?: "before" | "after" | null;
+  onDragStartCard?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOverCard?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDropCard?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEndCard?: () => void;
+  nowMs?: number;
+  isFocused?: boolean;
 }
 
 export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = ({
@@ -42,19 +54,88 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
   onDuplicateLog,
   onEditLog,
   onDeleteLog,
+  isDraggable = false,
+  isDragging = false,
+  dropIndicator = null,
+  onDragStartCard,
+  onDragOverCard,
+  onDropCard,
+  onDragEndCard,
+  nowMs = Date.now(),
+  isFocused = false,
 }) => {
+  const { language } = useI18n();
   const includedInCv = isLogIncludedInCv(log);
+  const isRecent = isRecentlyUpdatedLog(log, nowMs);
+  const relativeUpdated = isRecent
+    ? formatRelativeUpdatedTime(log.updatedAt, nowMs, language)
+    : null;
+  const ignoreDragStartRef = useRef(false);
+
+  const handlePointerDownCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+    const targetEl = e.target as HTMLElement | null;
+    ignoreDragStartRef.current = Boolean(
+      targetEl?.closest("button, a, input, select, textarea, [data-no-drag='true']")
+    );
+  };
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!isDraggable || ignoreDragStartRef.current) {
+      e.preventDefault();
+      return;
+    }
+    onDragStartCard?.(e);
+  };
+
+  const handleDragEnd = () => {
+    ignoreDragStartRef.current = false;
+    onDragEndCard?.();
+  };
 
   return (
-    <div className="p-4 bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all group">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs">
-        <div className="flex items-center gap-2 text-slate-400 font-medium">
-          <span className="text-slate-200 font-semibold">{log.project}</span>
-          <span aria-hidden="true" className="text-slate-600">
-            ·
-          </span>
-          <span className="font-mono text-slate-400">{log.date}</span>
-        </div>
+    <div className="space-y-1.5">
+      {dropIndicator === "before" && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
+      <div
+        data-log-id={log.id}
+        draggable={isDraggable}
+        onPointerDownCapture={isDraggable ? handlePointerDownCapture : undefined}
+        onDragStart={isDraggable ? handleDragStart : undefined}
+        onDragOver={isDraggable ? onDragOverCard : undefined}
+        onDrop={isDraggable ? onDropCard : undefined}
+        onDragEnd={isDraggable ? handleDragEnd : undefined}
+        className={`p-4 hover:bg-slate-900 border rounded-xl transition-all group ${
+          isDragging
+            ? "opacity-50 border-cyan-500/60 bg-slate-900/80"
+            : isFocused
+              ? "border-cyan-400 ring-2 ring-cyan-400/70 bg-slate-900"
+              : isRecent
+                ? "border-cyan-500/45 bg-slate-900/95"
+                : "border-slate-800 hover:border-slate-700/80 bg-slate-900/80"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-slate-400 font-medium">
+            {isDraggable && (
+              <span
+                className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 shrink-0 select-none"
+                title="Arrastrar con el mouse para subir o bajar este logro"
+              >
+                <GripVertical className="w-4 h-4" />
+              </span>
+            )}
+            <span className="text-slate-200 font-semibold">{log.project}</span>
+            <span aria-hidden="true" className="text-slate-600">
+              ·
+            </span>
+            <span className="font-mono text-slate-400">{log.date}</span>
+            {isRecent && relativeUpdated && (
+              <span className="text-[10px] font-mono tabular-nums text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                {language === "en"
+                  ? `Recent · ${relativeUpdated}`
+                  : `Reciente · ${relativeUpdated}`}
+              </span>
+            )}
+          </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700/60">
@@ -222,6 +303,7 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
           {log.tags.map((tag) => (
             <span
               key={tag}
+              data-no-drag="true"
               onClick={() => onSelectTag(tag)}
               className="text-[10px] font-mono text-cyan-400/90 bg-cyan-950/30 border border-cyan-800/30 px-2 py-0.5 rounded hover:border-cyan-500 cursor-pointer transition-colors"
             >
@@ -300,6 +382,8 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
           </button>
         </div>
       </div>
+      </div>
+      {dropIndicator === "after" && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
     </div>
   );
 };

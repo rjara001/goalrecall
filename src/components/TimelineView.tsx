@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import {
   CareerGoal,
@@ -17,7 +17,10 @@ import {
   computeTotalBulletsCount,
   DEFAULT_PRESET_CATEGORIES,
   filterTimelineLogs,
+  getLatestUpdatedLogs,
+  getRecentlyEditedLogs,
   groupLogsByExperience,
+  RECENT_EDIT_WINDOW_MS,
 } from "./timeline/timelineUtils";
 import { TimelineStatsHeader, TimelineViewMode } from "./timeline/TimelineStatsHeader";
 import { TimelineExperiencesTab } from "./timeline/TimelineExperiencesTab";
@@ -34,6 +37,12 @@ interface TimelineViewProps {
   careerGoals?: CareerGoal[];
   onTogglePublic: (id: string) => Promise<void> | void;
   onToggleIncludeInCv?: (id: string) => Promise<void> | void;
+  onReorderLogs?: (
+    sourceLogId: string,
+    targetLogId: string,
+    position: "before" | "after",
+    experienceId?: string
+  ) => Promise<void> | void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => Promise<void> | void;
   onDuplicateLog: (entry: LogEntry) => Promise<void> | void;
@@ -78,6 +87,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   experiences,
   onTogglePublic,
   onToggleIncludeInCv,
+  onReorderLogs,
   onEditLog,
   onDeleteLog,
   onDuplicateLog,
@@ -123,6 +133,50 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+  const scrollTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setNowMs(Date.now());
+  }, [logs]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60_000);
+    return () => {
+      window.clearInterval(intervalId);
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+      if (scrollTimerRef.current !== null) {
+        window.clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  const focusLogElement = (logId: string) => {
+    setHighlightedLogId(logId);
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    if (scrollTimerRef.current !== null) {
+      window.clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = window.setTimeout(() => {
+      const target = Array.from(document.querySelectorAll("[data-log-id]")).find(
+        (el) => el.getAttribute("data-log-id") === logId
+      );
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 70);
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedLogId((current) => (current === logId ? null : current));
+    }, 1800);
+  };
 
   const runMutation = async (fn: (() => Promise<void> | void) | undefined, fallbackMsg: string) => {
     if (!fn) return;
@@ -178,6 +232,16 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     [experiences, filteredLogs]
   );
 
+  const recentlyEditedLogs = useMemo(
+    () => getRecentlyEditedLogs(logs, nowMs, RECENT_EDIT_WINDOW_MS, 10),
+    [logs, nowMs]
+  );
+
+  const fallbackRecentLogs = useMemo(
+    () => (recentlyEditedLogs.length === 0 ? getLatestUpdatedLogs(logs, 3) : []),
+    [logs, recentlyEditedLogs.length]
+  );
+
   const totalPublicCount = logs.filter((l) => l.isPublic).length;
   const totalPrivateCount = logs.filter((l) => !l.isPublic).length;
 
@@ -227,6 +291,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           logs={logs}
           totalBulletsCount={totalBulletsCount}
           extractedBulletSet={extractedBulletSet}
+          nowMs={nowMs}
+          recentlyEditedLogs={recentlyEditedLogs}
+          fallbackRecentLogs={fallbackRecentLogs}
+          highlightedLogId={highlightedLogId}
+          onFocusLog={focusLogElement}
           tl={tl}
           onOpenPasteBullets={onOpenPasteBullets}
           onOpenCvUpload={onOpenCvUpload}
@@ -243,6 +312,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   void runMutation(
                     () => onToggleIncludeInCv(id),
                     "No se pudo actualizar la inclusión en CV."
+                  )
+              : undefined
+          }
+          onReorderLogs={
+            onReorderLogs
+              ? (sourceId, targetId, position, expId) =>
+                  void runMutation(
+                    () => onReorderLogs(sourceId, targetId, position, expId),
+                    "No se pudo reordenar el logro."
                   )
               : undefined
           }
@@ -294,6 +372,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           setDateRange={setDateRange}
           expandedFields={expandedFields}
           onToggleField={toggleField}
+          nowMs={nowMs}
+          recentlyEditedLogs={recentlyEditedLogs}
+          fallbackRecentLogs={fallbackRecentLogs}
+          highlightedLogId={highlightedLogId}
+          onFocusLog={focusLogElement}
           tl={tl}
           onGoToExperiencesTab={() => setViewMode("by_experience")}
           onOpenQuickLog={onOpenQuickLog}
@@ -310,6 +393,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                   void runMutation(
                     () => onToggleIncludeInCv(id),
                     "No se pudo actualizar la inclusión en CV."
+                  )
+              : undefined
+          }
+          onReorderLogs={
+            onReorderLogs
+              ? (sourceId, targetId, position, expId) =>
+                  void runMutation(
+                    () => onReorderLogs(sourceId, targetId, position, expId),
+                    "No se pudo reordenar el logro."
                   )
               : undefined
           }

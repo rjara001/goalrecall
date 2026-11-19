@@ -1,8 +1,11 @@
-import React from "react";
-import { Building, FolderGit2, Plus, Search, Tag as TagIcon, Zap } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { Building, FolderGit2, GripVertical, Plus, Search, Tag as TagIcon, Zap } from "lucide-react";
 import { LogCategory, LogEntry, WorkExperience } from "../../types";
+import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import { TimelineAchievementCard } from "./TimelineAchievementCard";
+import { RecentEditedLogsSelector } from "./RecentEditedLogsSelector";
+import { formatRelativeUpdatedTime, isRecentlyUpdatedLog } from "./timelineUtils";
 
 interface TimelineAchievementsTabProps {
   logs: LogEntry[];
@@ -35,9 +38,20 @@ interface TimelineAchievementsTabProps {
   onAddLogToExperience: (experienceId: string) => void;
   onTogglePublic: (id: string) => void;
   onToggleIncludeInCv?: (id: string) => void;
+  onReorderLogs?: (
+    sourceLogId: string,
+    targetLogId: string,
+    position: "before" | "after",
+    experienceId?: string
+  ) => void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
   onDuplicateLog: (entry: LogEntry) => void;
+  nowMs: number;
+  recentlyEditedLogs: LogEntry[];
+  fallbackRecentLogs: LogEntry[];
+  highlightedLogId: string | null;
+  onFocusLog: (logId: string) => void;
 }
 
 export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = ({
@@ -68,10 +82,102 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
   onAddLogToExperience,
   onTogglePublic,
   onToggleIncludeInCv,
+  onReorderLogs,
   onEditLog,
   onDeleteLog,
   onDuplicateLog,
+  nowMs,
+  recentlyEditedLogs,
+  fallbackRecentLogs,
+  highlightedLogId,
+  onFocusLog,
 }) => {
+  const { language } = useI18n();
+  const [draggedCard, setDraggedCard] = useState<{
+    logId: string;
+    groupKey: string;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    logId: string;
+    groupKey: string;
+    position: "before" | "after";
+  } | null>(null);
+  const ignoreUnassignedDragRef = useRef(false);
+
+  const resetDragState = () => {
+    setDraggedCard(null);
+    setDropTarget(null);
+    ignoreUnassignedDragRef.current = false;
+  };
+
+  const handleCardDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    logId: string,
+    groupKey: string
+  ) => {
+    if (!onReorderLogs) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", logId);
+    setDraggedCard({ logId, groupKey });
+    setDropTarget(null);
+  };
+
+  const handleCardDragOver = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetLogId: string,
+    groupKey: string
+  ) => {
+    if (!draggedCard || draggedCard.groupKey !== groupKey) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedCard.logId === targetLogId) {
+      if (dropTarget !== null) setDropTarget(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position: "before" | "after" =
+      e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDropTarget((prev) =>
+      prev &&
+      prev.logId === targetLogId &&
+      prev.groupKey === groupKey &&
+      prev.position === position
+        ? prev
+        : { logId: targetLogId, groupKey, position }
+    );
+  };
+
+  const handleCardDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetLogId: string,
+    groupKey: string,
+    experienceId?: string
+  ) => {
+    e.preventDefault();
+    if (
+      !onReorderLogs ||
+      !draggedCard ||
+      draggedCard.groupKey !== groupKey ||
+      draggedCard.logId === targetLogId
+    ) {
+      resetDragState();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position: "before" | "after" =
+      dropTarget && dropTarget.logId === targetLogId && dropTarget.groupKey === groupKey
+        ? dropTarget.position
+        : e.clientY < rect.top + rect.height / 2
+          ? "before"
+          : "after";
+    const sourceLogId = draggedCard.logId;
+    resetDragState();
+    onReorderLogs(sourceLogId, targetLogId, position, experienceId);
+  };
+
   const handleResetFilters = () => {
     setSearch("");
     setSelectedClient("all");
@@ -79,6 +185,14 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
     setSelectedTag("all");
     setSelectedVisibility("all");
     setDateRange("all");
+  };
+
+  const handleSelectRecentLog = (selectedLog: LogEntry) => {
+    const isCurrentlyVisible = filteredLogs.some((item) => item.id === selectedLog.id);
+    if (!isCurrentlyVisible) {
+      handleResetFilters();
+    }
+    onFocusLog(selectedLog.id);
   };
 
   return (
@@ -145,6 +259,15 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
               <option value="30d">{tl.time30d}</option>
               <option value="90d">{tl.time90d}</option>
             </select>
+
+            <RecentEditedLogsSelector
+              recentLogs={recentlyEditedLogs}
+              fallbackLogs={fallbackRecentLogs}
+              experiences={experiences}
+              nowMs={nowMs}
+              language={language}
+              onSelectLog={handleSelectRecentLog}
+            />
           </div>
         </div>
 
@@ -282,22 +405,48 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                 </div>
 
                 <div className="p-4 sm:p-5 space-y-3 bg-[#080C14]/40">
+                  {onReorderLogs && expLogs.length > 1 && (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <GripVertical className="w-3.5 h-3.5 text-slate-500" />
+                      <span>
+                        Arrastra cualquier logro con el mouse para subirlo o bajarlo en esta experiencia y en tu CV
+                      </span>
+                    </p>
+                  )}
                   <div className="grid grid-cols-1 gap-3">
-                    {expLogs.map((log) => (
-                      <TimelineAchievementCard
-                        key={log.id}
-                        log={log}
-                        tl={tl}
-                        expandedFields={expandedFields}
-                        onToggleField={onToggleField}
-                        onSelectTag={setSelectedTag}
-                        onTogglePublic={onTogglePublic}
-                        onToggleIncludeInCv={onToggleIncludeInCv}
-                        onDuplicateLog={onDuplicateLog}
-                        onEditLog={onEditLog}
-                        onDeleteLog={onDeleteLog}
-                      />
-                    ))}
+                    {expLogs.map((log) => {
+                      const canDrag = Boolean(onReorderLogs && expLogs.length > 1);
+                      const isDragging =
+                        draggedCard?.logId === log.id && draggedCard?.groupKey === exp.id;
+                      const cardDropIndicator =
+                        dropTarget?.logId === log.id && dropTarget?.groupKey === exp.id
+                          ? dropTarget.position
+                          : null;
+                      return (
+                        <TimelineAchievementCard
+                          key={log.id}
+                          log={log}
+                          tl={tl}
+                          nowMs={nowMs}
+                          isFocused={highlightedLogId === log.id}
+                          expandedFields={expandedFields}
+                          onToggleField={onToggleField}
+                          onSelectTag={setSelectedTag}
+                          onTogglePublic={onTogglePublic}
+                          onToggleIncludeInCv={onToggleIncludeInCv}
+                          onDuplicateLog={onDuplicateLog}
+                          onEditLog={onEditLog}
+                          onDeleteLog={onDeleteLog}
+                          isDraggable={canDrag}
+                          isDragging={isDragging}
+                          dropIndicator={cardDropIndicator}
+                          onDragStartCard={(e) => handleCardDragStart(e, log.id, exp.id)}
+                          onDragOverCard={(e) => handleCardDragOver(e, log.id, exp.id)}
+                          onDropCard={(e) => handleCardDrop(e, log.id, exp.id, exp.id)}
+                          onDragEndCard={resetDragState}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -316,27 +465,112 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
               </div>
 
               <div className="grid grid-cols-1 gap-2.5">
-                {experienceGroups.unassigned.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div>
-                      <p className="font-semibold text-white">{log.title}</p>
-                      <p className="text-slate-400 text-[11px] font-mono">
-                        {log.client} · {log.project} · {log.date}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => onEditLog(log)}
-                        className="px-2.5 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800 rounded-md hover:bg-cyan-900/50"
+                {experienceGroups.unassigned.map((log) => {
+                  const canDragUnassigned = Boolean(
+                    onReorderLogs && experienceGroups.unassigned.length > 1
+                  );
+                  const isDraggingUnassigned =
+                    draggedCard?.logId === log.id &&
+                    draggedCard?.groupKey === "__unassigned__";
+                  const showBefore =
+                    dropTarget?.logId === log.id &&
+                    dropTarget?.groupKey === "__unassigned__" &&
+                    dropTarget?.position === "before";
+                  const showAfter =
+                    dropTarget?.logId === log.id &&
+                    dropTarget?.groupKey === "__unassigned__" &&
+                    dropTarget?.position === "after";
+                  const isUnassignedRecent = isRecentlyUpdatedLog(log, nowMs);
+                  const unassignedRel = isUnassignedRecent
+                    ? formatRelativeUpdatedTime(log.updatedAt, nowMs, language)
+                    : null;
+                  const isUnassignedFocused = highlightedLogId === log.id;
+                  return (
+                    <div key={log.id} className="space-y-1">
+                      {showBefore && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
+                      <div
+                        data-log-id={log.id}
+                        draggable={canDragUnassigned}
+                        onPointerDownCapture={
+                          canDragUnassigned
+                            ? (e) => {
+                                const targetEl = e.target as HTMLElement | null;
+                                ignoreUnassignedDragRef.current = Boolean(
+                                  targetEl?.closest("button, a, input, select, textarea")
+                                );
+                              }
+                            : undefined
+                        }
+                        onDragStart={
+                          canDragUnassigned
+                            ? (e) => {
+                                if (ignoreUnassignedDragRef.current) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                handleCardDragStart(e, log.id, "__unassigned__");
+                              }
+                            : undefined
+                        }
+                        onDragOver={
+                          canDragUnassigned
+                            ? (e) => handleCardDragOver(e, log.id, "__unassigned__")
+                            : undefined
+                        }
+                        onDrop={
+                          canDragUnassigned
+                            ? (e) => handleCardDrop(e, log.id, "__unassigned__", undefined)
+                            : undefined
+                        }
+                        onDragEnd={canDragUnassigned ? resetDragState : undefined}
+                        className={`p-3 bg-slate-900 border rounded-xl flex items-center justify-between gap-3 text-xs transition-colors ${
+                          isDraggingUnassigned
+                            ? "opacity-50 border-cyan-500/60"
+                            : isUnassignedFocused
+                              ? "border-cyan-400 ring-2 ring-cyan-400/70"
+                              : isUnassignedRecent
+                                ? "border-cyan-500/45"
+                                : "border-slate-800"
+                        }`}
                       >
-                        {tl.assignCompanyBtn}
-                      </button>
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          {canDragUnassigned && (
+                            <span
+                              className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
+                              title="Arrastrar con el mouse para reordenar"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </span>
+                          )}
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-white">{log.title}</p>
+                              {isUnassignedRecent && unassignedRel && (
+                                <span className="text-[10px] font-mono tabular-nums text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                  {language === "en"
+                                    ? `Recent · ${unassignedRel}`
+                                    : `Reciente · ${unassignedRel}`}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-slate-400 text-[11px] font-mono">
+                              {log.client} · {log.project} · {log.date}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => onEditLog(log)}
+                            className="px-2.5 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800 rounded-md hover:bg-cyan-900/50"
+                          >
+                            {tl.assignCompanyBtn}
+                          </button>
+                        </div>
+                      </div>
+                      {showAfter && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowRight,
   Briefcase,
@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileUp,
+  GripVertical,
   MapPin,
   Plus,
   Sparkles,
@@ -21,11 +22,17 @@ import { LogEntry, WorkExperience } from "../../types";
 import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import {
+  doesLogBelongToExperience,
   getExperienceBulletItems,
   getExperienceChildLogs,
   isLogIncludedInCv,
 } from "../../utils/bulletToLogMapper";
-import { formatLogUpdatedAt } from "./timelineUtils";
+import {
+  formatLogUpdatedAt,
+  formatRelativeUpdatedTime,
+  isRecentlyUpdatedLog,
+} from "./timelineUtils";
+import { RecentEditedLogsSelector } from "./RecentEditedLogsSelector";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -41,6 +48,12 @@ interface TimelineExperiencesTabProps {
   onAddLogToExperience: (experienceId: string) => void;
   onEditLog?: (entry: LogEntry) => void;
   onToggleIncludeInCv?: (id: string) => void;
+  onReorderLogs?: (
+    sourceLogId: string,
+    targetLogId: string,
+    position: "before" | "after",
+    experienceId?: string
+  ) => void;
   onExtractBulletToLog?: (
     experienceId: string,
     company: string,
@@ -50,6 +63,11 @@ interface TimelineExperiencesTabProps {
   ) => void;
   onExtractAllBulletsForExperience?: (experienceId: string) => void;
   onJumpToCompanyLogs: (company: string) => void;
+  nowMs: number;
+  recentlyEditedLogs: LogEntry[];
+  fallbackRecentLogs: LogEntry[];
+  highlightedLogId: string | null;
+  onFocusLog: (logId: string) => void;
 }
 
 export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
@@ -65,15 +83,131 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onAddLogToExperience,
   onEditLog,
   onToggleIncludeInCv,
+  onReorderLogs,
   onExtractBulletToLog,
   onExtractAllBulletsForExperience,
   onJumpToCompanyLogs,
+  nowMs,
+  recentlyEditedLogs,
+  fallbackRecentLogs,
+  highlightedLogId,
+  onFocusLog,
 }) => {
   const { language } = useI18n();
   const [expandedHiddenDrawer, setExpandedHiddenDrawer] = useState<Record<string, boolean>>({});
+  const [draggedItem, setDraggedItem] = useState<{
+    logId: string;
+    expId: string;
+    scope: "cv" | "hidden";
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    logId: string;
+    expId: string;
+    scope: "cv" | "hidden";
+    position: "before" | "after";
+  } | null>(null);
+  const ignoreDragStartRef = useRef(false);
 
   const toggleHiddenDrawer = (expId: string) => {
     setExpandedHiddenDrawer((prev) => ({ ...prev, [expId]: !prev[expId] }));
+  };
+
+  const handleSelectRecentLog = (selectedLog: LogEntry) => {
+    const matchedExp = experiences.find((exp) => doesLogBelongToExperience(selectedLog, exp));
+    if (matchedExp && !isLogIncludedInCv(selectedLog)) {
+      setExpandedHiddenDrawer((prev) => ({ ...prev, [matchedExp.id]: true }));
+    }
+    onFocusLog(selectedLog.id);
+  };
+
+  const resetDragState = () => {
+    setDraggedItem(null);
+    setDropTarget(null);
+    ignoreDragStartRef.current = false;
+  };
+
+  const handleRowPointerDownCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+    const targetEl = e.target as HTMLElement | null;
+    ignoreDragStartRef.current = Boolean(
+      targetEl?.closest("button, a, input, select, textarea")
+    );
+  };
+
+  const handleRowDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    logId: string,
+    expId: string,
+    scope: "cv" | "hidden"
+  ) => {
+    if (!onReorderLogs || ignoreDragStartRef.current) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", logId);
+    setDraggedItem({ logId, expId, scope });
+    setDropTarget(null);
+  };
+
+  const handleRowDragOver = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetLogId: string,
+    expId: string,
+    scope: "cv" | "hidden"
+  ) => {
+    if (!draggedItem || draggedItem.expId !== expId || draggedItem.scope !== scope) {
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (draggedItem.logId === targetLogId) {
+      if (dropTarget !== null) setDropTarget(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position: "before" | "after" =
+      e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDropTarget((prev) =>
+      prev &&
+      prev.logId === targetLogId &&
+      prev.expId === expId &&
+      prev.scope === scope &&
+      prev.position === position
+        ? prev
+        : { logId: targetLogId, expId, scope, position }
+    );
+  };
+
+  const handleRowDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetLogId: string,
+    expId: string,
+    scope: "cv" | "hidden"
+  ) => {
+    e.preventDefault();
+    if (
+      !onReorderLogs ||
+      !draggedItem ||
+      draggedItem.expId !== expId ||
+      draggedItem.scope !== scope ||
+      draggedItem.logId === targetLogId
+    ) {
+      resetDragState();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position: "before" | "after" =
+      dropTarget &&
+      dropTarget.logId === targetLogId &&
+      dropTarget.expId === expId &&
+      dropTarget.scope === scope
+        ? dropTarget.position
+        : e.clientY < rect.top + rect.height / 2
+          ? "before"
+          : "after";
+    const sourceLogId = draggedItem.logId;
+    resetDragState();
+    onReorderLogs(sourceLogId, targetLogId, position, expId);
   };
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -91,7 +225,15 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
           <p className="text-xs text-slate-400 mt-1">{tl.structureFromCvDesc}</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <RecentEditedLogsSelector
+            recentLogs={recentlyEditedLogs}
+            fallbackLogs={fallbackRecentLogs}
+            experiences={experiences}
+            nowMs={nowMs}
+            language={language}
+            onSelectLog={handleSelectRecentLog}
+          />
           <button
             type="button"
             onClick={onOpenPasteBullets}
@@ -263,31 +405,109 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                 <div className="space-y-3 pt-1">
                   {bulletItems.length > 0 ? (
                     <div className="space-y-2">
+                      {onReorderLogs && bulletItems.filter((item) => item.log !== null).length > 1 && (
+                        <p className="text-[11px] text-slate-500 flex items-center gap-1.5 pl-1">
+                          <GripVertical className="w-3 h-3 text-slate-500" />
+                          <span>Arrastra los logros con el mouse para subir o bajar su orden</span>
+                        </p>
+                      )}
                       {bulletItems.map((item) => {
                         const childLog = item.log;
+                        const canDrag = Boolean(childLog && onReorderLogs);
+                        const isDragging =
+                          Boolean(childLog) &&
+                          draggedItem?.logId === childLog?.id &&
+                          draggedItem?.expId === exp.id &&
+                          draggedItem?.scope === "cv";
+                        const showDropBefore =
+                          Boolean(childLog) &&
+                          dropTarget?.logId === childLog?.id &&
+                          dropTarget?.expId === exp.id &&
+                          dropTarget?.scope === "cv" &&
+                          dropTarget?.position === "before";
+                        const showDropAfter =
+                          Boolean(childLog) &&
+                          dropTarget?.logId === childLog?.id &&
+                          dropTarget?.expId === exp.id &&
+                          dropTarget?.scope === "cv" &&
+                          dropTarget?.position === "after";
                         const updatedLabel = childLog
                           ? formatLogUpdatedAt(childLog.updatedAt, language)
                           : null;
+                        const isRecent = Boolean(childLog && isRecentlyUpdatedLog(childLog, nowMs));
+                        const relativeUpdated = isRecent && childLog
+                          ? formatRelativeUpdatedTime(childLog.updatedAt, nowMs, language)
+                          : null;
+                        const isFocused = Boolean(childLog && highlightedLogId === childLog.id);
                         return (
-                          <div
-                            key={item.key}
-                            className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl bg-slate-950/40 border border-slate-800/60 hover:border-slate-700/80 transition-colors"
-                          >
-                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                              <span className="text-cyan-400 font-bold text-base leading-none select-none mt-0.5">
-                                •
-                              </span>
-                              <div className="min-w-0 flex-1 space-y-0.5">
-                                <p className="text-slate-200/95 leading-relaxed break-words">
-                                  {item.text}
-                                </p>
-                                {updatedLabel && (
-                                  <p className="text-[11px] italic text-slate-400/90 tabular-nums">
-                                    {updatedLabel}
-                                  </p>
+                          <div key={item.key} className="space-y-1">
+                            {showDropBefore && (
+                              <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />
+                            )}
+                            <div
+                              data-log-id={childLog?.id}
+                              draggable={canDrag}
+                              onPointerDownCapture={canDrag ? handleRowPointerDownCapture : undefined}
+                              onDragStart={
+                                childLog && onReorderLogs
+                                  ? (e) => handleRowDragStart(e, childLog.id, exp.id, "cv")
+                                  : undefined
+                              }
+                              onDragOver={
+                                childLog && onReorderLogs
+                                  ? (e) => handleRowDragOver(e, childLog.id, exp.id, "cv")
+                                  : undefined
+                              }
+                              onDrop={
+                                childLog && onReorderLogs
+                                  ? (e) => handleRowDrop(e, childLog.id, exp.id, "cv")
+                                  : undefined
+                              }
+                              onDragEnd={canDrag ? resetDragState : undefined}
+                              className={`flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl border transition-colors ${
+                                isDragging
+                                  ? "opacity-50 border-cyan-500/60 bg-slate-950/40"
+                                  : isFocused
+                                    ? "border-cyan-400 bg-cyan-950/35 ring-2 ring-cyan-400/70"
+                                    : isRecent
+                                      ? "border-cyan-500/40 bg-cyan-950/15 hover:border-cyan-400/60"
+                                      : "bg-slate-950/40 border-slate-800/60 hover:border-slate-700/80"
+                              }`}
+                            >
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                {canDrag && (
+                                  <span
+                                    className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
+                                    title="Arrastrar con el mouse para reordenar"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </span>
                                 )}
+                                <span className="text-cyan-400 font-bold text-base leading-none select-none mt-0.5">
+                                  •
+                                </span>
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <p className="text-slate-200/95 leading-relaxed break-words">
+                                    {item.text}
+                                  </p>
+                                  {(updatedLabel || (isRecent && relativeUpdated)) && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {updatedLabel && (
+                                        <p className="text-[11px] italic text-slate-400/90 tabular-nums">
+                                          {updatedLabel}
+                                        </p>
+                                      )}
+                                      {isRecent && relativeUpdated && (
+                                        <span className="text-[10px] font-mono tabular-nums text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                          {language === "en"
+                                            ? `Recent · ${relativeUpdated}`
+                                            : `Reciente · ${relativeUpdated}`}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
                             <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center pl-4 sm:pl-0">
                               {childLog ? (
@@ -343,6 +563,10 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                 </button>
                               )}
                             </div>
+                            </div>
+                            {showDropAfter && (
+                              <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />
+                            )}
                           </div>
                         );
                       })}
@@ -384,49 +608,126 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                       {isHiddenDrawerOpen && (
                         <div className="p-2.5 pt-1 border-t border-slate-800/70 space-y-1.5">
                           {hiddenFromCvLogs.map((hiddenLog) => {
+                            const canDragHidden = Boolean(onReorderLogs);
+                            const isDraggingHidden =
+                              draggedItem?.logId === hiddenLog.id &&
+                              draggedItem?.expId === exp.id &&
+                              draggedItem?.scope === "hidden";
+                            const showHiddenBefore =
+                              dropTarget?.logId === hiddenLog.id &&
+                              dropTarget?.expId === exp.id &&
+                              dropTarget?.scope === "hidden" &&
+                              dropTarget?.position === "before";
+                            const showHiddenAfter =
+                              dropTarget?.logId === hiddenLog.id &&
+                              dropTarget?.expId === exp.id &&
+                              dropTarget?.scope === "hidden" &&
+                              dropTarget?.position === "after";
                             const hiddenUpdatedLabel = formatLogUpdatedAt(
                               hiddenLog.updatedAt,
                               language
                             );
+                            const isHiddenRecent = isRecentlyUpdatedLog(hiddenLog, nowMs);
+                            const hiddenRelative = isHiddenRecent
+                              ? formatRelativeUpdatedTime(hiddenLog.updatedAt, nowMs, language)
+                              : null;
+                            const isHiddenFocused = highlightedLogId === hiddenLog.id;
                             return (
-                              <div
-                                key={hiddenLog.id}
-                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/60 text-xs"
-                              >
-                                <div className="flex-1 min-w-0 space-y-0.5">
-                                  <p className="text-slate-400 line-clamp-2">
-                                    {hiddenLog.title}
-                                  </p>
-                                  {hiddenUpdatedLabel && (
-                                    <p className="text-[11px] italic text-slate-500 tabular-nums">
-                                      {hiddenUpdatedLabel}
-                                    </p>
-                                  )}
-                                </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {onEditLog && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onEditLog(hiddenLog)}
-                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                    <span>Editar</span>
-                                  </button>
+                              <div key={hiddenLog.id} className="space-y-1">
+                                {showHiddenBefore && (
+                                  <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />
                                 )}
-                                {onToggleIncludeInCv && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onToggleIncludeInCv(hiddenLog.id)}
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/70 px-2 py-1 rounded-md transition-colors"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>Incluir en CV</span>
-                                  </button>
+                                <div
+                                  data-log-id={hiddenLog.id}
+                                  draggable={canDragHidden}
+                                  onPointerDownCapture={
+                                    canDragHidden ? handleRowPointerDownCapture : undefined
+                                  }
+                                  onDragStart={
+                                    canDragHidden
+                                      ? (e) => handleRowDragStart(e, hiddenLog.id, exp.id, "hidden")
+                                      : undefined
+                                  }
+                                  onDragOver={
+                                    canDragHidden
+                                      ? (e) => handleRowDragOver(e, hiddenLog.id, exp.id, "hidden")
+                                      : undefined
+                                  }
+                                  onDrop={
+                                    canDragHidden
+                                      ? (e) => handleRowDrop(e, hiddenLog.id, exp.id, "hidden")
+                                      : undefined
+                                  }
+                                  onDragEnd={canDragHidden ? resetDragState : undefined}
+                                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg border text-xs transition-colors ${
+                                    isDraggingHidden
+                                      ? "opacity-50 border-cyan-500/60 bg-slate-900/60"
+                                      : isHiddenFocused
+                                        ? "border-cyan-400 bg-cyan-950/35 ring-2 ring-cyan-400/70"
+                                        : isHiddenRecent
+                                          ? "border-cyan-500/40 bg-cyan-950/15"
+                                          : "border-slate-800/60 bg-slate-900/60"
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                                    {canDragHidden && (
+                                      <span
+                                        className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
+                                        title="Arrastrar con el mouse para reordenar"
+                                      >
+                                        <GripVertical className="w-3.5 h-3.5" />
+                                      </span>
+                                    )}
+                                    <div className="flex-1 min-w-0 space-y-0.5">
+                                      <p className="text-slate-400 line-clamp-2">
+                                        {hiddenLog.title}
+                                      </p>
+                                      {(hiddenUpdatedLabel || (isHiddenRecent && hiddenRelative)) && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {hiddenUpdatedLabel && (
+                                            <p className="text-[11px] italic text-slate-500 tabular-nums">
+                                              {hiddenUpdatedLabel}
+                                            </p>
+                                          )}
+                                          {isHiddenRecent && hiddenRelative && (
+                                            <span className="text-[10px] font-mono tabular-nums text-cyan-300 bg-cyan-950/60 border border-cyan-700/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                              {language === "en"
+                                                ? `Recent · ${hiddenRelative}`
+                                                : `Reciente · ${hiddenRelative}`}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {onEditLog && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onEditLog(hiddenLog)}
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
+                                      >
+                                        <Edit3 className="w-3 h-3" />
+                                        <span>Editar</span>
+                                      </button>
+                                    )}
+                                    {onToggleIncludeInCv && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onToggleIncludeInCv(hiddenLog.id)}
+                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/70 px-2 py-1 rounded-md transition-colors"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                        <span>Incluir en CV</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                {showHiddenAfter && (
+                                  <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />
                                 )}
                               </div>
-                            </div>
-                          );
+                            );
                           })}
                         </div>
                       )}

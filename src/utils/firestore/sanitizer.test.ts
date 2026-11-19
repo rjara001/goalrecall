@@ -151,6 +151,35 @@ describe("Firestore sanitizer payloads", () => {
 
     const parsedWithoutFlag = docToLogEntry({ title: "Legacy log", impact: "x" }, "log-2");
     expect(parsedWithoutFlag.includeInCv).toBeUndefined();
+    expect(parsedWithoutFlag.sortOrder).toBeUndefined();
+
+    const orderedCreate = buildLogEntryCreatePayload(
+      {
+        title: "Ordered achievement",
+        impact: "High",
+        sortOrder: 3.9,
+      },
+      "uid-1",
+      "log-ordered"
+    ) as Record<string, unknown>;
+    assertNoUndefinedDeep(orderedCreate);
+    expect(orderedCreate.sortOrder).toBe(3);
+
+    const clampedNegative = buildLogEntryUpdatePayload({
+      title: "Clamped low",
+      sortOrder: -5,
+    }) as Record<string, unknown>;
+    assertNoUndefinedDeep(clampedNegative);
+    expect(clampedNegative.sortOrder).toBe(0);
+
+    const clampedHigh = buildLogEntryUpdatePayload({
+      title: "Clamped high",
+      sortOrder: 999999,
+    }) as Record<string, unknown>;
+    expect(clampedHigh.sortOrder).toBe(100000);
+
+    const parsedOrdered = docToLogEntry({ title: "Ordered", impact: "x", sortOrder: 4.7 }, "log-3");
+    expect(parsedOrdered.sortOrder).toBe(4);
 
     const expPayload = buildWorkExperienceCreatePayload(
       {

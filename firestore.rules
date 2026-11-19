@@ -137,7 +137,7 @@ service cloud.firestore {
       && data.keys().hasOnly([
         'id', 'userId', 'experienceId', 'originalBullet', 'date', 'client',
         'project', 'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
-        'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'createdAt', 'updatedAt'
+        'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'createdAt', 'updatedAt'
       ])
       && data.id == logId
       && isValidId(data.id)
@@ -151,6 +151,7 @@ service cloud.firestore {
       && isBoundedStringList(data.tags, 25)
       && data.isPublic is bool
       && (!('includeInCv' in data) || data.includeInCv is bool)
+      && (!('sortOrder' in data) || (data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 100000))
       && (!('experienceId' in data) || isValidString(data.experienceId, 0, 128))
       && (!('originalBullet' in data) || isValidString(data.originalBullet, 0, 2000))
       && (!('logro' in data) || isValidString(data.logro, 0, 2000))
@@ -486,7 +487,7 @@ service cloud.firestore {
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'experienceId', 'originalBullet', 'date', 'client', 'project',
             'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
-            'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'updatedAt'
+            'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'updatedAt'
           ]);
 
         allow delete: if isSelf(userId) && isValidId(logId) && hasParentUser(userId);

@@ -14,6 +14,7 @@ import {
   doesLogBelongToExperience,
   findLegacyUnlinkedBullets,
   getExperienceChildLogs,
+  reorderLogsWithinGroup,
 } from "../utils/bulletToLogMapper";
 import { ParsedBackupBundle } from "../utils/storage/backupStorage";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
@@ -37,6 +38,7 @@ import {
   ExperienceProjectionSync,
   importBackupBundleToFirestore,
   loadWorkspaceFromFirestore,
+  reorderLogsBatchFirestore,
   saveUserProfileFirestore,
   syncPublicShowcaseFirestore,
   updateCareerGoalFirestore,
@@ -546,6 +548,69 @@ export const useWorkspaceData = ({
         const msg = formatFirestoreUiError(
           err,
           "No se pudo actualizar la inclusión en CV del logro."
+        );
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    [computeAffectedExperienceSyncs, syncShowcaseIfPublished]
+  );
+
+  const handleReorderLogs = useCallback(
+    async (
+      sourceLogId: string,
+      targetLogId: string,
+      position: "before" | "after",
+      experienceId?: string
+    ) => {
+      const prevLogs = stateRef.current.logs;
+      const prevExperiences = stateRef.current.experiences;
+
+      const targetExp = experienceId
+        ? prevExperiences.find((e) => e.id === experienceId)
+        : undefined;
+
+      const groupLogs = targetExp
+        ? getExperienceChildLogs(targetExp, prevLogs)
+        : prevLogs.filter(
+            (l) => !prevExperiences.some((exp) => doesLogBelongToExperience(l, exp))
+          );
+
+      const reordered = reorderLogsWithinGroup(
+        prevLogs,
+        groupLogs,
+        sourceLogId,
+        targetLogId,
+        position
+      );
+      if (!reordered) return;
+
+      const { nextLogs, changedLogs } = reordered;
+      const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+        changedLogs,
+        nextLogs,
+        prevExperiences
+      );
+
+      setLogs(nextLogs);
+      if (syncList.length > 0) {
+        setExperiences(nextExperiences);
+      }
+
+      try {
+        const persisted = await reorderLogsBatchFirestore(changedLogs, syncList);
+        const persistedMap = new Map(persisted.map((l) => [l.id, l]));
+        const syncedLogs = nextLogs.map((l) => persistedMap.get(l.id) || l);
+        setLogs(syncedLogs);
+        if (changedLogs.some((l) => l.isPublic)) {
+          await syncShowcaseIfPublished({ logs: syncedLogs });
+        }
+      } catch (err) {
+        setLogs(prevLogs);
+        setExperiences(prevExperiences);
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo guardar el nuevo orden de los logros en Firestore."
         );
         showToastRef.current(msg, "error");
         throw new Error(msg);
@@ -1482,6 +1547,7 @@ export const useWorkspaceData = ({
     handleSaveLog,
     handleTogglePublic,
     handleToggleIncludeInCv,
+    handleReorderLogs,
     handleDeleteLog,
     handleDuplicateLog,
     handleImportBatchLogs,

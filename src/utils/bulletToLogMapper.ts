@@ -39,10 +39,65 @@ export const doesLogBelongToExperience = (
   return log.client.trim().toLowerCase() === exp.company.trim().toLowerCase();
 };
 
+export const compareLogEntriesByOrder = (a: LogEntry, b: LogEntry): number => {
+  const hasA = typeof a.sortOrder === "number" && Number.isFinite(a.sortOrder);
+  const hasB = typeof b.sortOrder === "number" && Number.isFinite(b.sortOrder);
+  if (hasA && hasB && a.sortOrder !== b.sortOrder) {
+    return (a.sortOrder as number) - (b.sortOrder as number);
+  }
+  if (hasA !== hasB) {
+    return hasA ? -1 : 1;
+  }
+  return (b.createdAt || 0) - (a.createdAt || 0);
+};
+
 export const getExperienceChildLogs = (
   exp: WorkExperience,
   logs: LogEntry[]
-): LogEntry[] => logs.filter((l) => doesLogBelongToExperience(l, exp));
+): LogEntry[] =>
+  logs
+    .filter((l) => doesLogBelongToExperience(l, exp))
+    .sort(compareLogEntriesByOrder);
+
+export const reorderLogsWithinGroup = (
+  allLogs: LogEntry[],
+  groupLogs: LogEntry[],
+  sourceLogId: string,
+  targetLogId: string,
+  position: "before" | "after"
+): { nextLogs: LogEntry[]; changedLogs: LogEntry[] } | null => {
+  if (sourceLogId === targetLogId) return null;
+  const orderedGroup = [...groupLogs].sort(compareLogEntriesByOrder);
+  const sourceIdx = orderedGroup.findIndex((l) => l.id === sourceLogId);
+  const targetIdx = orderedGroup.findIndex((l) => l.id === targetLogId);
+  if (sourceIdx === -1 || targetIdx === -1) return null;
+
+  const [moved] = orderedGroup.splice(sourceIdx, 1);
+  const newTargetIdx = orderedGroup.findIndex((l) => l.id === targetLogId);
+  if (newTargetIdx === -1) return null;
+  const insertAt = position === "before" ? newTargetIdx : newTargetIdx + 1;
+  orderedGroup.splice(insertAt, 0, moved);
+
+  const orderMap = new Map<string, number>();
+  orderedGroup.forEach((log, idx) => {
+    orderMap.set(log.id, idx);
+  });
+
+  const changedLogs: LogEntry[] = [];
+  const nextLogs = allLogs.map((log) => {
+    const newOrder = orderMap.get(log.id);
+    if (newOrder === undefined) return log;
+    const updated: LogEntry = { ...log, sortOrder: newOrder };
+    if (log.sortOrder !== newOrder) {
+      changedLogs.push(updated);
+    }
+    return updated;
+  });
+
+  if (changedLogs.length === 0) return null;
+  nextLogs.sort(compareLogEntriesByOrder);
+  return { nextLogs, changedLogs };
+};
 
 export const findLegacyUnlinkedBullets = (
   exp: WorkExperience,

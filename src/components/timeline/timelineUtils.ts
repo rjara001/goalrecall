@@ -1,6 +1,7 @@
 import { LogCategory, LogEntry, WorkExperience } from "../../types";
 import {
   cleanLegacyBulletText,
+  compareLogEntriesByOrder,
   doesLogBelongToExperience,
   findLegacyUnlinkedBullets,
   getExperienceChildLogs,
@@ -59,12 +60,13 @@ export const cleanExperienceBullets = (
   exp: WorkExperience,
   expLogs: LogEntry[]
 ): string[] => {
-  const activeLogBullets = expLogs
+  const orderedExpLogs = [...expLogs].sort(compareLogEntriesByOrder);
+  const activeLogBullets = orderedExpLogs
     .filter(isLogIncludedInCv)
     .map((l) => (l.title || l.logro || l.impact || "").trim())
     .filter(Boolean);
 
-  const legacyUnlinked = findLegacyUnlinkedBullets(exp, expLogs);
+  const legacyUnlinked = findLegacyUnlinkedBullets(exp, orderedExpLogs);
   const seen = new Set(activeLogBullets.map((b) => normalizeBulletText(b)));
   const combined = [...activeLogBullets];
 
@@ -149,12 +151,16 @@ export const groupLogsByExperience = (
   const assignedLogIds = new Set<string>();
 
   experiences.forEach((exp) => {
-    const matched = filteredLogs.filter((l) => doesLogBelongToExperience(l, exp));
+    const matched = filteredLogs
+      .filter((l) => doesLogBelongToExperience(l, exp))
+      .sort(compareLogEntriesByOrder);
     matched.forEach((l) => assignedLogIds.add(l.id));
     result.push({ experience: exp, logs: matched });
   });
 
-  const unassigned = filteredLogs.filter((l) => !assignedLogIds.has(l.id));
+  const unassigned = filteredLogs
+    .filter((l) => !assignedLogIds.has(l.id))
+    .sort(compareLogEntriesByOrder);
   return { result, unassigned };
 };
 
@@ -181,3 +187,77 @@ export const formatLogUpdatedAt = (
   const prefix = language === "en" ? "Updated" : "Actualizado";
   return `${prefix}: ${dateStr} · ${timeStr}`;
 };
+
+export const RECENT_EDIT_WINDOW_MS = 8 * 60 * 60 * 1000;
+
+export const isRecentlyUpdatedLog = (
+  log: { updatedAt?: number },
+  nowMs: number = Date.now(),
+  windowMs: number = RECENT_EDIT_WINDOW_MS
+): boolean => {
+  const updatedAt = log.updatedAt;
+  if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return false;
+  }
+  if (updatedAt > nowMs + 60_000) {
+    return false;
+  }
+  const ageMs = Math.max(0, nowMs - updatedAt);
+  return ageMs <= windowMs;
+};
+
+export const getRecentlyEditedLogs = (
+  logs: LogEntry[],
+  nowMs: number = Date.now(),
+  windowMs: number = RECENT_EDIT_WINDOW_MS,
+  limit: number = 10
+): LogEntry[] => {
+  return logs
+    .filter((log) => isRecentlyUpdatedLog(log, nowMs, windowMs))
+    .sort((a, b) => {
+      const diff = (b.updatedAt || 0) - (a.updatedAt || 0);
+      if (diff !== 0) return diff;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    })
+    .slice(0, Math.max(1, limit));
+};
+
+export const getLatestUpdatedLogs = (
+  logs: LogEntry[],
+  limit: number = 3
+): LogEntry[] => {
+  return logs
+    .filter(
+      (log) =>
+        typeof log.updatedAt === "number" &&
+        Number.isFinite(log.updatedAt) &&
+        log.updatedAt > 0
+    )
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, Math.max(1, limit));
+};
+
+export const formatRelativeUpdatedTime = (
+  updatedAt?: number,
+  nowMs: number = Date.now(),
+  language: string = "es"
+): string | null => {
+  if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt) || updatedAt <= 0) {
+    return null;
+  }
+  const diffMs = Math.max(0, nowMs - updatedAt);
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) {
+    return language === "en" ? "just now" : "hace un momento";
+  }
+  if (mins < 60) {
+    return language === "en" ? `${mins}m ago` : `hace ${mins} min`;
+  }
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) {
+    return language === "en" ? `${hours}h ago` : `hace ${hours} h`;
+  }
+  const days = Math.floor(hours / 24);
+  return language === "en" ? `${days}d ago` : `hace ${days} d`;
+};
+

@@ -4,7 +4,12 @@ import {
   computeTotalBulletsCount,
   filterTimelineLogs,
   formatLogUpdatedAt,
+  formatRelativeUpdatedTime,
+  getLatestUpdatedLogs,
+  getRecentlyEditedLogs,
   groupLogsByExperience,
+  isRecentlyUpdatedLog,
+  RECENT_EDIT_WINDOW_MS,
 } from "./timelineUtils";
 import { LogEntry, WorkExperience } from "../../types";
 
@@ -123,5 +128,69 @@ describe("timelineUtils", () => {
     expect(esLabel).toContain("2026");
     expect(enLabel).toContain("Updated:");
     expect(enLabel).toContain("2026");
+  });
+
+  test("cleanExperienceBullets and groupLogsByExperience preserve custom sortOrder", () => {
+    const exp = makeExp({ id: "exp-1", company: "Acme Corp" });
+    const logs = [
+      makeLog({ id: "l-second", experienceId: "exp-1", title: "Second item", sortOrder: 1, createdAt: 999 }),
+      makeLog({ id: "l-first", experienceId: "exp-1", title: "First item", sortOrder: 0, createdAt: 1 }),
+      makeLog({ id: "u-second", experienceId: undefined, client: "Other", title: "Unassigned 2", sortOrder: 1 }),
+      makeLog({ id: "u-first", experienceId: undefined, client: "Other", title: "Unassigned 1", sortOrder: 0 }),
+    ];
+
+    const grouped = groupLogsByExperience([exp], logs);
+    expect(grouped.result[0].logs.map((l) => l.id)).toEqual(["l-first", "l-second"]);
+    expect(grouped.unassigned.map((l) => l.id)).toEqual(["u-first", "u-second"]);
+    expect(cleanExperienceBullets(exp, grouped.result[0].logs)).toEqual([
+      "First item",
+      "Second item",
+    ]);
+  });
+
+  test("isRecentlyUpdatedLog enforces the exact 8-hour window around nowMs", () => {
+    const nowMs = new Date("2026-11-19T12:00:00Z").getTime();
+    expect(isRecentlyUpdatedLog({ updatedAt: nowMs - 1000 }, nowMs)).toBe(true);
+    expect(isRecentlyUpdatedLog({ updatedAt: nowMs - RECENT_EDIT_WINDOW_MS }, nowMs)).toBe(true);
+    expect(isRecentlyUpdatedLog({ updatedAt: nowMs - RECENT_EDIT_WINDOW_MS - 1 }, nowMs)).toBe(false);
+    expect(isRecentlyUpdatedLog({ updatedAt: 0 }, nowMs)).toBe(false);
+    expect(isRecentlyUpdatedLog({ updatedAt: undefined }, nowMs)).toBe(false);
+  });
+
+  test("getRecentlyEditedLogs and getLatestUpdatedLogs sort newest first and respect limits", () => {
+    const nowMs = new Date("2026-11-19T12:00:00Z").getTime();
+    const hour = 60 * 60 * 1000;
+    const logs = [
+      makeLog({ id: "old-9h", updatedAt: nowMs - 9 * hour }),
+      makeLog({ id: "recent-2h", updatedAt: nowMs - 2 * hour }),
+      makeLog({ id: "recent-10m", updatedAt: nowMs - 10 * 60_000 }),
+      makeLog({ id: "recent-5h", updatedAt: nowMs - 5 * hour }),
+      makeLog({ id: "old-2d", updatedAt: nowMs - 48 * hour }),
+    ];
+
+    expect(getRecentlyEditedLogs(logs, nowMs).map((l) => l.id)).toEqual([
+      "recent-10m",
+      "recent-2h",
+      "recent-5h",
+    ]);
+    expect(getRecentlyEditedLogs(logs, nowMs, RECENT_EDIT_WINDOW_MS, 2).map((l) => l.id)).toEqual([
+      "recent-10m",
+      "recent-2h",
+    ]);
+    expect(getLatestUpdatedLogs([logs[0], logs[4]], 3).map((l) => l.id)).toEqual([
+      "old-9h",
+      "old-2d",
+    ]);
+  });
+
+  test("formatRelativeUpdatedTime formats Spanish and English relative labels cleanly", () => {
+    const nowMs = new Date("2026-11-19T12:00:00Z").getTime();
+    expect(formatRelativeUpdatedTime(undefined, nowMs, "es")).toBeNull();
+    expect(formatRelativeUpdatedTime(nowMs - 20_000, nowMs, "es")).toBe("hace un momento");
+    expect(formatRelativeUpdatedTime(nowMs - 20_000, nowMs, "en")).toBe("just now");
+    expect(formatRelativeUpdatedTime(nowMs - 18 * 60_000, nowMs, "es")).toBe("hace 18 min");
+    expect(formatRelativeUpdatedTime(nowMs - 18 * 60_000, nowMs, "en")).toBe("18m ago");
+    expect(formatRelativeUpdatedTime(nowMs - 3 * 3600_000, nowMs, "es")).toBe("hace 3 h");
+    expect(formatRelativeUpdatedTime(nowMs - 3 * 3600_000, nowMs, "en")).toBe("3h ago");
   });
 });

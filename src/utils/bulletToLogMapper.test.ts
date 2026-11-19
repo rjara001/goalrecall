@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildLogFromExtractedBullet,
   buildLogFromSavedExperienceBullet,
+  compareLogEntriesByOrder,
   deriveExperienceBulletsFromLogs,
   findLegacyUnlinkedBullets,
   getExperienceBulletItems,
@@ -9,6 +10,7 @@ import {
   inferCategoryForExtractedBullet,
   inferCategoryForSavedExperienceBullet,
   isLogIncludedInCv,
+  reorderLogsWithinGroup,
 } from "./bulletToLogMapper";
 import { LogEntry, WorkExperience } from "../types";
 
@@ -186,5 +188,74 @@ describe("bulletToLogMapper", () => {
       "New edited achievement bullet in Bitacora",
       "Legacy unlinked production migration",
     ]);
+  });
+
+  test("compareLogEntriesByOrder places ordered items before unordered ones and sorts ascending", () => {
+    const base = {
+      date: "2026-01-01",
+      client: "Acme",
+      project: "API",
+      category: "Feature ✨" as const,
+      title: "Log",
+      impact: "Impact",
+      tags: [],
+      isPublic: false,
+      updatedAt: 1,
+    };
+    const unorderedNewer: LogEntry = { ...base, id: "u-new", createdAt: 500 };
+    const unorderedOlder: LogEntry = { ...base, id: "u-old", createdAt: 100 };
+    const second: LogEntry = { ...base, id: "ord-2", sortOrder: 2, createdAt: 50 };
+    const first: LogEntry = { ...base, id: "ord-0", sortOrder: 0, createdAt: 10 };
+
+    const sorted = [unorderedOlder, second, unorderedNewer, first].sort(compareLogEntriesByOrder);
+    expect(sorted.map((l) => l.id)).toEqual(["ord-0", "ord-2", "u-new", "u-old"]);
+  });
+
+  test("reorderLogsWithinGroup moves items before/after, normalizes sortOrder, leaves other groups untouched, and rejects invalid/noop moves", () => {
+    const makeLog = (id: string, expId: string, sortOrder?: number, createdAt = 1): LogEntry => ({
+      id,
+      experienceId: expId,
+      date: "2026-01-01",
+      client: expId === "exp-1" ? "Acme" : "Beta",
+      project: "Core",
+      category: "Feature ✨",
+      title: `Title ${id}`,
+      impact: `Impact ${id}`,
+      tags: [],
+      isPublic: false,
+      sortOrder,
+      createdAt,
+      updatedAt: 1,
+    });
+
+    const a = makeLog("a", "exp-1", undefined, 300);
+    const b = makeLog("b", "exp-1", undefined, 200);
+    const c = makeLog("c", "exp-1", undefined, 100);
+    const other = makeLog("other", "exp-2", 5, 50);
+    const allLogs = [a, b, c, other];
+
+    // Move c before a -> [c, a, b]
+    const moveUp = reorderLogsWithinGroup(allLogs, [a, b, c], "c", "a", "before");
+    expect(moveUp).not.toBeNull();
+    expect(moveUp?.nextLogs.filter((l) => l.experienceId === "exp-1").map((l) => [l.id, l.sortOrder])).toEqual([
+      ["c", 0],
+      ["a", 1],
+      ["b", 2],
+    ]);
+    // Other experience untouched
+    expect(moveUp?.nextLogs.find((l) => l.id === "other")?.sortOrder).toBe(5);
+    expect(moveUp?.changedLogs.some((l) => l.id === "other")).toBe(false);
+
+    // Move c after b -> [a, b, c]
+    const moveDown = reorderLogsWithinGroup(moveUp!.nextLogs, moveUp!.nextLogs.filter((l) => l.experienceId === "exp-1"), "c", "b", "after");
+    expect(moveDown?.nextLogs.filter((l) => l.experienceId === "exp-1").map((l) => [l.id, l.sortOrder])).toEqual([
+      ["a", 0],
+      ["b", 1],
+      ["c", 2],
+    ]);
+
+    // Same-target or missing item returns null
+    expect(reorderLogsWithinGroup(allLogs, [a, b, c], "a", "a", "before")).toBeNull();
+    expect(reorderLogsWithinGroup(allLogs, [a, b, c], "missing", "a", "before")).toBeNull();
   });
 });

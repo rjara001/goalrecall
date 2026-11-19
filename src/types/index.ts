@@ -66,6 +66,7 @@ export interface LogEntry {
   
   tags: string[];
   isPublic: boolean; // Default false (Bóveda Privada / Confidencial). If true, appears in Public Deck & First Mate
+  sortOrder?: number; // Índice manual no negativo para ordenar logros dentro de su Experiencia y Bitácora
   createdAt: number;
   updatedAt: number;
 }

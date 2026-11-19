@@ -148,6 +148,7 @@ export default function App() {
                   careerGoals={workspace.careerGoals}
                   onTogglePublic={workspace.handleTogglePublic}
                   onToggleIncludeInCv={workspace.handleToggleIncludeInCv}
+                  onReorderLogs={workspace.handleReorderLogs}
                   onEditLog={modals.openEditLog}
                   onDeleteLog={workspace.handleDeleteLog}
                   onDuplicateLog={workspace.handleDuplicateLog}
