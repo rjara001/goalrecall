@@ -13,7 +13,7 @@ import {
   ClipboardList,
   Loader2
 } from "lucide-react";
-import { LogEntry } from "../types";
+import { LogEntry, WorkExperience } from "../types";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
@@ -23,6 +23,7 @@ interface PasteBulletsModalProps {
   onClose: () => void;
   onImportLogs: (logs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => Promise<void> | void;
   onOpenCvModal?: () => void;
+  experiences?: WorkExperience[];
 }
 
 export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
@@ -30,17 +31,28 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
   onClose,
   onImportLogs,
   onOpenCvModal,
+  experiences = [],
 }) => {
   const { t, language } = useI18n();
   const ml = MODALS_LOCALES[language]?.pasteBullets || MODALS_LOCALES.en.pasteBullets;
   const [rawText, setRawText] = useState("");
-  const [defaultClient, setDefaultClient] = useState("Cliente General");
-  const [defaultProject, setDefaultProject] = useState("Core Platform");
+  const [selectedExpId, setSelectedExpId] = useState<string>(experiences[0]?.id || "general");
+  const [defaultClient, setDefaultClient] = useState(experiences[0]?.company || "Cliente General");
+  const [defaultProject, setDefaultProject] = useState(experiences[0]?.role || "Core Platform");
   const [defaultCategory, setDefaultCategory] = useState<LogEntry["category"]>("Feature ✨");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleExperienceChange = (nextExpId: string) => {
+    setSelectedExpId(nextExpId);
+    const matched = experiences.find((e) => e.id === nextExpId);
+    if (matched) {
+      setDefaultClient(matched.company);
+      setDefaultProject(matched.role || "General");
+    }
+  };
 
   // Split lines into potential bullet items (by bullet points •, -, *, or line breaks)
   const lines = rawText
@@ -55,21 +67,26 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
     setSaveError(null);
 
     try {
+      const targetExp = experiences.find((e) => e.id === selectedExpId);
       const newLogs: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[] = lines.map((line) => {
         // Basic smart metric heuristic
         const metricMatch = line.match(/(\d+[\%|\$|k|ms|s|x|min|hr|req]+|reduc|increas|mejor|optimi)[^\,\.\;]*/i);
         const impactText = metricMatch ? metricMatch[0] : ml.defaultImpact;
 
         return {
+          experienceId: targetExp?.id,
           date: new Date().toISOString().substring(0, 10),
-          client: defaultClient.trim() || "Cliente General",
-          project: defaultProject.trim() || "Core Platform",
+          client: (targetExp?.company || defaultClient).trim() || "Cliente General",
+          project: defaultProject.trim() || targetExp?.role || "Core Platform",
           category: defaultCategory,
-          title: line, // Logro multilínea completo (la viñeta cargada)
+          title: line,
+          logro: line,
+          originalBullet: line,
           description: line,
           impact: impactText,
           tags: ["#Importado", "#Viñeta"],
-          isPublic: false, // Default strictly to private vault (Bóveda Privada)
+          isPublic: false,
+          includeInCv: true,
         };
       });
 
@@ -129,8 +146,30 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
               <span>{saveError}</span>
             </div>
           )}
+
           {/* Metadata defaults */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+            {experiences.length > 0 && (
+              <div className="sm:col-span-3">
+                <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Vincular a Experiencia Laboral</span>
+                </label>
+                <select
+                  value={selectedExpId}
+                  onChange={(e) => handleExperienceChange(e.target.value)}
+                  className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-medium focus:outline-none focus:border-cyan-500 text-xs"
+                >
+                  {experiences.map((exp) => (
+                    <option key={exp.id} value={exp.id}>
+                      {exp.company} — {exp.role}
+                    </option>
+                  ))}
+                  <option value="general">Sin experiencia asignada (Cliente manual)</option>
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
                 <Building className="w-3.5 h-3.5 text-cyan-400" />
@@ -148,7 +187,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             <div>
               <label className="block text-slate-400 font-semibold mb-1 flex items-center gap-1.5">
                 <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Proyecto</span>
+                <span>Proyecto / Rol</span>
               </label>
               <input
                 type="text"
@@ -166,7 +205,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
               </label>
               <select
                 value={defaultCategory}
-                onChange={(e) => setDefaultCategory(e.target.value as any)}
+                onChange={(e) => setDefaultCategory(e.target.value as LogEntry["category"])}
                 className="w-full bg-[#080C14] border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-medium focus:outline-none focus:border-cyan-500 text-xs"
               >
                 <option value="Feature ✨">Feature ✨</option>

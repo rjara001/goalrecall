@@ -2,9 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
   buildLogFromExtractedBullet,
   buildLogFromSavedExperienceBullet,
+  deriveExperienceBulletsFromLogs,
+  findLegacyUnlinkedBullets,
+  getExperienceBulletItems,
   healExperiencesFromLogs,
   inferCategoryForExtractedBullet,
   inferCategoryForSavedExperienceBullet,
+  isLogIncludedInCv,
 } from "./bulletToLogMapper";
 import { LogEntry, WorkExperience } from "../types";
 
@@ -91,6 +95,7 @@ describe("bulletToLogMapper", () => {
     expect(log?.title).toBe("Led migration of core billing engine to distributed event workers across regions");
     expect(log?.tags).toEqual(["#Nodejs", "#TypeScript", "#AWS", "#Kafka"]);
     expect(log?.isPublic).toBe(false);
+    expect(log?.includeInCv).toBe(true);
     expect(log?.date).toBe("2025-01-15");
   });
 
@@ -108,5 +113,78 @@ describe("bulletToLogMapper", () => {
     expect(entry.date).toBe("2024-01-01");
     expect(entry.experienceId).toBe("exp-9");
     expect(entry.isPublic).toBe(false);
+    expect(entry.includeInCv).toBe(true);
+  });
+
+  test("deriveExperienceBulletsFromLogs uses live log.title, honors includeInCv, and prevents hidden logs from resurfacing as legacy strings", () => {
+    const exp: WorkExperience = {
+      id: "exp-1",
+      company: "Acme Corp",
+      role: "Staff Engineer",
+      startDate: "2023",
+      bullets: [
+        "Old bullet text before edit",
+        "Hidden bullet kept in logbook only",
+        "Legacy unlinked production migration",
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const logs: LogEntry[] = [
+      {
+        id: "log-1",
+        experienceId: "exp-1",
+        originalBullet: "Old bullet text before edit",
+        title: "New edited achievement bullet in Bitacora",
+        date: "2024-02-01",
+        client: "Acme Corp",
+        project: "Core",
+        category: "Architecture 🏗️",
+        impact: "-40% latency",
+        tags: [],
+        isPublic: false,
+        includeInCv: true,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      {
+        id: "log-2",
+        experienceId: "exp-1",
+        originalBullet: "Hidden bullet kept in logbook only",
+        title: "Hidden bullet kept in logbook only",
+        date: "2024-03-01",
+        client: "Acme Corp",
+        project: "Core",
+        category: "Fix 🐛",
+        impact: "Fixed memory leak",
+        tags: [],
+        isPublic: false,
+        includeInCv: false,
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ];
+
+    expect(isLogIncludedInCv(logs[0])).toBe(true);
+    expect(isLogIncludedInCv(logs[1])).toBe(false);
+    expect(isLogIncludedInCv({ ...logs[1], includeInCv: undefined })).toBe(true);
+
+    expect(findLegacyUnlinkedBullets(exp, logs)).toEqual([
+      "Legacy unlinked production migration",
+    ]);
+
+    const items = getExperienceBulletItems(exp, logs);
+    expect(items).toHaveLength(2);
+    expect(items[0].text).toBe("New edited achievement bullet in Bitacora");
+    expect(items[0].log?.id).toBe("log-1");
+    expect(items[0].isLegacyUnlinked).toBe(false);
+    expect(items[1].text).toBe("Legacy unlinked production migration");
+    expect(items[1].isLegacyUnlinked).toBe(true);
+
+    expect(deriveExperienceBulletsFromLogs(exp, logs)).toEqual([
+      "New edited achievement bullet in Bitacora",
+      "Legacy unlinked production migration",
+    ]);
   });
 });

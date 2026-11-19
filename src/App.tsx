@@ -147,6 +147,7 @@ export default function App() {
                   certifications={workspace.certifications}
                   careerGoals={workspace.careerGoals}
                   onTogglePublic={workspace.handleTogglePublic}
+                  onToggleIncludeInCv={workspace.handleToggleIncludeInCv}
                   onEditLog={modals.openEditLog}
                   onDeleteLog={workspace.handleDeleteLog}
                   onDuplicateLog={workspace.handleDuplicateLog}
@@ -417,8 +418,8 @@ export default function App() {
         isExperienceModalOpen={modals.isExperienceModalOpen}
         editingExperience={modals.editingExperience}
         onCloseExperienceModal={modals.closeExperienceModal}
-        onSaveExperience={(expData, newLogBulletsToCreate) =>
-          workspace.handleSaveExperience(expData, newLogBulletsToCreate)
+        onSaveExperience={(expData, newLogBulletsToCreate, editedLogs) =>
+          workspace.handleSaveExperience(expData, newLogBulletsToCreate, editedLogs)
         }
         isCvUploadOpen={modals.isCvUploadOpen}
         onCloseCvUpload={() => modals.setIsCvUploadOpen(false)}

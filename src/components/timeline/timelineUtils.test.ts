@@ -54,6 +54,32 @@ describe("timelineUtils", () => {
     expect(computeTotalBulletsCount([exp], logs)).toBe(2);
   });
 
+  test("cleanExperienceBullets projects live edited log.title and excludes includeInCv=false without resurfacing stale strings", () => {
+    const exp = makeExp({
+      id: "exp-1",
+      bullets: ["Initial stale bullet from CV", "Archived achievement hidden from CV"],
+    });
+    const logs = [
+      makeLog({
+        id: "log-1",
+        experienceId: "exp-1",
+        originalBullet: "Initial stale bullet from CV",
+        title: "Updated concise executive bullet title",
+        includeInCv: true,
+      }),
+      makeLog({
+        id: "log-2",
+        experienceId: "exp-1",
+        originalBullet: "Archived achievement hidden from CV",
+        title: "Archived achievement hidden from CV",
+        includeInCv: false,
+      }),
+    ];
+
+    expect(cleanExperienceBullets(exp, logs)).toEqual(["Updated concise executive bullet title"]);
+    expect(computeTotalBulletsCount([exp], logs)).toBe(1);
+  });
+
   test("filterTimelineLogs applies visibility, tag, search and date range filters", () => {
     const nowMs = new Date("2026-11-16T12:00:00Z").getTime();
     const logs = [

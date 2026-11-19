@@ -52,9 +52,10 @@ export interface LogEntry {
   client: string; // e.g. "Acme Corp", "ClientX"
   project: string; // e.g. "Digital Submissions", "Checkout Revamp"
   category: LogCategory;
-  // 1. Logro (multilínea): campo resumen, es la viñeta que aparecerá en el CV o que fue cargada desde el CV
+  // 1. Logro (multilínea): campo resumen; cuando includeInCv !== false actúa como viñeta directa de su Experiencia y CV
   title: string;
   logro?: string; // Alias opcional para title
+  includeInCv?: boolean; // Si es !== false, su title se proyecta como viñeta en la Experiencia padre y CV; si es false, queda solo en Bitácora
   
   // Acordeones estructurados independientes con signo +:
   whatWasSought?: string; // 2. ¿Qué se buscaba lograr?

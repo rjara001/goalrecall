@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { AlertCircle, X, Sparkles, Eye, Lock, Zap, Loader2 } from "lucide-react";
+import { AlertCircle, X, Sparkles, Eye, Lock, Zap, Loader2, FileText } from "lucide-react";
 import { InboxAchievementDraft, LogEntry, WorkExperience } from "../types";
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
@@ -124,48 +124,86 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
           </button>
         </div>
 
-        <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className={`p-1 rounded-md shrink-0 ${
-                form.isPublic
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                  : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
-              }`}
-            >
-              {form.isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-            </div>
-            <div className="flex items-center gap-1.5 truncate">
-              <span
-                className={`text-xs font-semibold ${
-                  form.isPublic ? "text-emerald-300" : "text-slate-200"
+        <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className={`p-1 rounded-md shrink-0 ${
+                  form.includeInCv
+                    ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
+                    : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
                 }`}
               >
-                {form.isPublic ? "Visible en Vitrina Pública" : "Bóveda Privada (Confidencial)"}
-              </span>
-              <span className="text-[11px] text-slate-400 hidden sm:inline truncate">
-                —{" "}
-                {form.isPublic
-                  ? "Visible para reclutadores y exportaciones públicas"
-                  : "Solo tú puedes verlo; ideal para métricas internas y notas de trabajo"}
-              </span>
+                <FileText className="w-3.5 h-3.5" />
+              </div>
+              <div className="truncate">
+                <span
+                  className={`text-xs font-semibold ${
+                    form.includeInCv ? "text-cyan-300" : "text-slate-300"
+                  }`}
+                >
+                  {form.includeInCv ? "Viñeta activa en Experiencia / CV" : "Solo en Bitácora"}
+                </span>
+              </div>
             </div>
+
+            <label
+              className="relative inline-flex items-center cursor-pointer shrink-0"
+              title={
+                form.includeInCv
+                  ? "Ocultar de viñetas de Experiencia y CV"
+                  : "Mostrar como viñeta en Experiencia y CV"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={form.includeInCv}
+                onChange={(e) => form.setIncludeInCv(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-cyan-500" />
+            </label>
           </div>
 
-          <label
-            className="relative inline-flex items-center cursor-pointer shrink-0"
-            title={
-              form.isPublic ? "Cambiar a Bóveda Privada" : "Hacer Visible en Vitrina Pública"
-            }
-          >
-            <input
-              type="checkbox"
-              checked={form.isPublic}
-              onChange={(e) => form.setIsPublic(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500" />
-          </label>
+          <span className="hidden sm:inline text-slate-700">·</span>
+
+          <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className={`p-1 rounded-md shrink-0 ${
+                  form.isPublic
+                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                    : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
+                }`}
+              >
+                {form.isPublic ? <Eye className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+              </div>
+              <div className="truncate">
+                <span
+                  className={`text-xs font-semibold ${
+                    form.isPublic ? "text-emerald-300" : "text-slate-300"
+                  }`}
+                >
+                  {form.isPublic ? "Visible en Vitrina Pública" : "Bóveda Privada"}
+                </span>
+              </div>
+            </div>
+
+            <label
+              className="relative inline-flex items-center cursor-pointer shrink-0"
+              title={
+                form.isPublic ? "Cambiar a Bóveda Privada" : "Hacer Visible en Vitrina Pública"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={form.isPublic}
+                onChange={(e) => form.setIsPublic(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500" />
+            </label>
+          </div>
         </div>
 
         <form onSubmit={form.handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">

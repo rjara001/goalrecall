@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { LogEntry } from "../../types";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
+import { isLogIncludedInCv } from "../../utils/bulletToLogMapper";
 
 interface TimelineAchievementCardProps {
   log: LogEntry;
@@ -24,6 +25,7 @@ interface TimelineAchievementCardProps {
   onToggleField: (key: string) => void;
   onSelectTag: (tag: string) => void;
   onTogglePublic: (id: string) => void;
+  onToggleIncludeInCv?: (id: string) => void;
   onDuplicateLog: (entry: LogEntry) => void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
@@ -36,10 +38,13 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
   onToggleField,
   onSelectTag,
   onTogglePublic,
+  onToggleIncludeInCv,
   onDuplicateLog,
   onEditLog,
   onDeleteLog,
 }) => {
+  const includedInCv = isLogIncludedInCv(log);
+
   return (
     <div className="p-4 bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-slate-700/80 rounded-xl transition-all group">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs">
@@ -51,9 +56,19 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
           <span className="font-mono text-slate-400">{log.date}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700/60">
             {log.category}
+          </span>
+
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border ${
+              includedInCv
+                ? "text-cyan-300 bg-cyan-950/60 border-cyan-800/50"
+                : "text-slate-400 bg-slate-800/70 border-slate-700/60"
+            }`}
+          >
+            {includedInCv ? "En CV" : "Solo Bitácora"}
           </span>
 
           {log.isPublic ? (
@@ -217,26 +232,49 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
       )}
 
       <div className="pt-2.5 border-t border-slate-800/70 flex flex-wrap items-center justify-between gap-2">
-        <button
-          onClick={() => onTogglePublic(log.id)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
-            log.isPublic
-              ? "bg-emerald-950/60 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/60"
-              : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white"
-          }`}
-        >
-          {log.isPublic ? (
-            <>
-              <EyeOff className="w-3 h-3 text-emerald-400" />
-              <span>{tl.unpublishBtn}</span>
-            </>
-          ) : (
-            <>
-              <Globe className="w-3 h-3 text-cyan-400" />
-              <span>Publicar en Public Deck</span>
-            </>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onTogglePublic(log.id)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
+              log.isPublic
+                ? "bg-emerald-950/60 border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/60"
+                : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white"
+            }`}
+          >
+            {log.isPublic ? (
+              <>
+                <EyeOff className="w-3 h-3 text-emerald-400" />
+                <span>{tl.unpublishBtn}</span>
+              </>
+            ) : (
+              <>
+                <Globe className="w-3 h-3 text-cyan-400" />
+                <span>Publicar en Public Deck</span>
+              </>
+            )}
+          </button>
+
+          {onToggleIncludeInCv && (
+            <button
+              type="button"
+              onClick={() => onToggleIncludeInCv(log.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                includedInCv
+                  ? "bg-cyan-950/60 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/50"
+                  : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white"
+              }`}
+              title={
+                includedInCv
+                  ? "Aparece como viñeta en su Experiencia y CV (clic para mover a Solo Bitácora)"
+                  : "Oculto del CV (clic para incluirlo como viñeta en su Experiencia)"
+              }
+            >
+              <FileText className="w-3 h-3" />
+              <span>{includedInCv ? "En CV" : "Solo Bitácora"}</span>
+            </button>
           )}
-        </button>
+        </div>
 
         <div className="flex items-center gap-1 text-slate-400">
           <button

@@ -5,6 +5,116 @@ export interface ExperienceHealingResult {
   changed: boolean;
 }
 
+export interface ExperienceBulletItem {
+  key: string;
+  text: string;
+  log: LogEntry | null;
+  isLegacyUnlinked: boolean;
+}
+
+export const normalizeBulletText = (text: string): string =>
+  text
+    .replace(/^[•●○▪■◆\-*–—›\d\.\)\>]+\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+export const cleanLegacyBulletText = (raw: string): string =>
+  raw.replace(/^[•●○▪■◆\-*–—›\d\.\)\>]+\s*/, "").trim();
+
+export const isJunkBulletString = (raw: string): boolean => {
+  const clean = cleanLegacyBulletText(raw);
+  return clean.length <= 10 || /^\d+\s*(?:of|\/)\s*\d+/i.test(clean);
+};
+
+export const isLogIncludedInCv = (log: LogEntry): boolean => log.includeInCv !== false;
+
+export const doesLogBelongToExperience = (
+  log: LogEntry,
+  exp: WorkExperience
+): boolean => {
+  if (log.experienceId) {
+    return log.experienceId === exp.id;
+  }
+  return log.client.trim().toLowerCase() === exp.company.trim().toLowerCase();
+};
+
+export const getExperienceChildLogs = (
+  exp: WorkExperience,
+  logs: LogEntry[]
+): LogEntry[] => logs.filter((l) => doesLogBelongToExperience(l, exp));
+
+export const findLegacyUnlinkedBullets = (
+  exp: WorkExperience,
+  expLogs: LogEntry[]
+): string[] => {
+  const matchedKeys = new Set<string>();
+  expLogs.forEach((l) => {
+    [l.title, l.logro, l.originalBullet, l.impact].forEach((val) => {
+      if (val && val.trim()) {
+        matchedKeys.add(normalizeBulletText(val));
+      }
+    });
+  });
+
+  const seenLegacy = new Set<string>();
+  const legacy: string[] = [];
+
+  (exp.bullets || []).forEach((raw) => {
+    if (isJunkBulletString(raw)) return;
+    const clean = cleanLegacyBulletText(raw);
+    const norm = normalizeBulletText(clean);
+    if (!norm || matchedKeys.has(norm) || seenLegacy.has(norm)) return;
+    seenLegacy.add(norm);
+    legacy.push(clean);
+  });
+
+  return legacy;
+};
+
+export const getExperienceBulletItems = (
+  exp: WorkExperience,
+  logs: LogEntry[]
+): ExperienceBulletItem[] => {
+  const expLogs = getExperienceChildLogs(exp, logs);
+  const items: ExperienceBulletItem[] = [];
+  const seenKeys = new Set<string>();
+
+  expLogs.filter(isLogIncludedInCv).forEach((log) => {
+    const text = (log.title || log.logro || log.impact || "").trim();
+    if (!text) return;
+    seenKeys.add(normalizeBulletText(text));
+    items.push({
+      key: `log-${log.id}`,
+      text,
+      log,
+      isLegacyUnlinked: false,
+    });
+  });
+
+  const legacyUnlinked = findLegacyUnlinkedBullets(exp, expLogs);
+  legacyUnlinked.forEach((text, idx) => {
+    const norm = normalizeBulletText(text);
+    if (!norm || seenKeys.has(norm)) return;
+    seenKeys.add(norm);
+    items.push({
+      key: `legacy-${exp.id}-${idx}`,
+      text,
+      log: null,
+      isLegacyUnlinked: true,
+    });
+  });
+
+  return items;
+};
+
+export const deriveExperienceBulletsFromLogs = (
+  exp: WorkExperience,
+  logs: LogEntry[]
+): string[] => {
+  return getExperienceBulletItems(exp, logs).map((item) => item.text);
+};
+
 /**
  * Auto-heals experiences that have zero bullets by re-hydrating bullets
  * from matching Bitácora logs belonging to that company/experience.
@@ -19,7 +129,9 @@ export const healExperiencesFromLogs = (
     if (!exp.bullets || exp.bullets.length === 0) {
       const companyKey = exp.company.trim().toLowerCase();
       const matched = storedLogs.filter(
-        (l) => l.experienceId === exp.id || l.client.trim().toLowerCase() === companyKey
+        (l) =>
+          (l.experienceId === exp.id || l.client.trim().toLowerCase() === companyKey) &&
+          isLogIncludedInCv(l)
       );
       if (matched.length > 0) {
         changed = true;
@@ -218,6 +330,7 @@ export const buildLogFromSavedExperienceBullet = (
     impact: "",
     tags: expData.technologies && expData.technologies.length > 0 ? expData.technologies : [],
     isPublic: false,
+    includeInCv: true,
   };
 };
 
@@ -266,5 +379,6 @@ export const buildLogFromExtractedBullet = ({
     impact: cleanBullet,
     tags,
     isPublic: false,
+    includeInCv: true,
   };
 };

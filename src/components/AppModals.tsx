@@ -53,7 +53,8 @@ export interface AppModalsProps {
   onCloseExperienceModal: () => void;
   onSaveExperience: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
-    newLogBulletsToCreate?: string[]
+    newLogBulletsToCreate?: string[],
+    editedLogs?: LogEntry[]
   ) => Promise<void>;
   isCvUploadOpen: boolean;
   onCloseCvUpload: () => void;
@@ -192,6 +193,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
         onClose={onClosePasteBullets}
         onImportLogs={onImportBatchLogs}
         onOpenCvModal={onOpenCvModal}
+        experiences={experiences}
       />
 
       <AuthModal

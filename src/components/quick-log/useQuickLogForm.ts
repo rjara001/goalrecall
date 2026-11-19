@@ -74,6 +74,7 @@ export function useQuickLogForm({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
+  const [includeInCv, setIncludeInCv] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -132,6 +133,7 @@ export function useQuickLogForm({
       setCategory(initialData.category);
       setTags(initialData.tags || []);
       setIsPublic(initialData.isPublic);
+      setIncludeInCv(initialData.includeInCv !== false);
     } else {
       const targetExp = initialExperienceId
         ? exps.find((e) => e.id === initialExperienceId)
@@ -184,6 +186,7 @@ export function useQuickLogForm({
         setTags(["#FullStack", "#TypeScript"]);
       }
       setIsPublic(false);
+      setIncludeInCv(true);
     }
 
     setTimeout(() => titleInputRef.current?.focus(), 100);
@@ -271,6 +274,7 @@ export function useQuickLogForm({
         project: project.trim() || "General",
         category,
         title: title.trim(),
+        logro: title.trim(),
         whatWasSought: whatWasSought.trim() || undefined,
         whyImportant: whyImportant.trim() || undefined,
         howApplied: howApplied.trim() || undefined,
@@ -278,6 +282,7 @@ export function useQuickLogForm({
         impact: finalImpact,
         tags,
         isPublic,
+        includeInCv,
       });
 
       onClose();
@@ -350,6 +355,8 @@ export function useQuickLogForm({
     tags,
     isPublic,
     setIsPublic,
+    includeInCv,
+    setIncludeInCv,
     experiencesList: experiences || [],
     existingProjects,
     companyLabel,

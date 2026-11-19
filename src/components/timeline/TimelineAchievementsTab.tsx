@@ -34,6 +34,7 @@ interface TimelineAchievementsTabProps {
   onOpenQuickLog: () => void;
   onAddLogToExperience: (experienceId: string) => void;
   onTogglePublic: (id: string) => void;
+  onToggleIncludeInCv?: (id: string) => void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
   onDuplicateLog: (entry: LogEntry) => void;
@@ -66,6 +67,7 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
   onOpenQuickLog,
   onAddLogToExperience,
   onTogglePublic,
+  onToggleIncludeInCv,
   onEditLog,
   onDeleteLog,
   onDuplicateLog,
@@ -290,6 +292,7 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                         onToggleField={onToggleField}
                         onSelectTag={setSelectedTag}
                         onTogglePublic={onTogglePublic}
+                        onToggleIncludeInCv={onToggleIncludeInCv}
                         onDuplicateLog={onDuplicateLog}
                         onEditLog={onEditLog}
                         onDeleteLog={onDeleteLog}

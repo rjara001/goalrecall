@@ -33,6 +33,7 @@ interface TimelineViewProps {
   certifications?: TechnicalCertification[];
   careerGoals?: CareerGoal[];
   onTogglePublic: (id: string) => Promise<void> | void;
+  onToggleIncludeInCv?: (id: string) => Promise<void> | void;
   onEditLog: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => Promise<void> | void;
   onDuplicateLog: (entry: LogEntry) => Promise<void> | void;
@@ -76,6 +77,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   logs,
   experiences,
   onTogglePublic,
+  onToggleIncludeInCv,
   onEditLog,
   onDeleteLog,
   onDuplicateLog,
@@ -234,6 +236,16 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             void runMutation(() => onDeleteExperience(id), "No se pudo eliminar la experiencia.")
           }
           onAddLogToExperience={onAddLogToExperience}
+          onEditLog={onEditLog}
+          onToggleIncludeInCv={
+            onToggleIncludeInCv
+              ? (id) =>
+                  void runMutation(
+                    () => onToggleIncludeInCv(id),
+                    "No se pudo actualizar la inclusión en CV."
+                  )
+              : undefined
+          }
           onExtractBulletToLog={
             onExtractBulletToLog
               ? (expId, company, role, bullet, technologies) =>
@@ -291,6 +303,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               () => onTogglePublic(id),
               "No se pudo actualizar la visibilidad del logro."
             )
+          }
+          onToggleIncludeInCv={
+            onToggleIncludeInCv
+              ? (id) =>
+                  void runMutation(
+                    () => onToggleIncludeInCv(id),
+                    "No se pudo actualizar la inclusión en CV."
+                  )
+              : undefined
           }
           onEditLog={onEditLog}
           onDeleteLog={(id) =>

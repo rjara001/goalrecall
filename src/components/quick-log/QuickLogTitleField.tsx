@@ -47,7 +47,7 @@ export const QuickLogTitleField: React.FC<QuickLogTitleFieldProps> = ({
       <div className="flex items-center justify-between">
         <label className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-cyan-400" />
-          Logro (Multilínea — Viñeta para CV) *
+          Logro / Viñeta de Experiencia (CV) *
         </label>
 
         <div className="flex items-center gap-2">
@@ -111,14 +111,14 @@ export const QuickLogTitleField: React.FC<QuickLogTitleFieldProps> = ({
         rows={3}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Escribe la viñeta de logro completa tal como aparecerá en el CV o fue extraída..."
+        placeholder="Escribe el resumen ejecutivo del logro tal como aparecerá como viñeta en la experiencia y CV..."
         required
         className="w-full bg-slate-900/90 border border-slate-700/90 hover:border-slate-600 rounded-xl px-4 py-3 text-sm font-medium text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/40 transition-all shadow-inner resize-y leading-relaxed"
       />
       <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
         <span>
-          💡 Campo resumen: es la viñeta principal de tu CV. Desglosa los detalles abajo con los
-          acordeones (+).
+          Este texto es la viñeta viva en su Experiencia y CV. Si lo modificas aquí, se sincroniza
+          automáticamente en ambos lados; desglosa el detalle técnico abajo (+).
         </span>
       </p>
     </div>

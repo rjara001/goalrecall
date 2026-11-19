@@ -464,6 +464,9 @@ function buildLogFields(entry: Partial<LogEntry>) {
     isPublic: Boolean(entry.isPublic),
   };
 
+  if (typeof entry.includeInCv === "boolean") {
+    out.includeInCv = entry.includeInCv;
+  }
   if (typeof entry.experienceId === "string") {
     out.experienceId = clampString(entry.experienceId, 128);
   }
@@ -522,6 +525,7 @@ export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntr
     category: nonEmptyString(raw.category, 120, "Feature ✨"),
     title: nonEmptyString(raw.title, 2000, "Logro"),
     logro: typeof raw.logro === "string" ? raw.logro : undefined,
+    includeInCv: typeof raw.includeInCv === "boolean" ? raw.includeInCv : undefined,
     whatWasSought: typeof raw.whatWasSought === "string" ? raw.whatWasSought : undefined,
     whyImportant: typeof raw.whyImportant === "string" ? raw.whyImportant : undefined,
     howApplied: typeof raw.howApplied === "string" ? raw.howApplied : undefined,

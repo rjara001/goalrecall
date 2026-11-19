@@ -8,11 +8,13 @@ import {
   buildInboxMessageCreatePayload,
   buildJobOfferCreatePayload,
   buildLogEntryCreatePayload,
+  buildLogEntryUpdatePayload,
   buildProductCreatePayload,
   buildProductUpdatePayload,
   buildPublicShowcaseCreatePayload,
   buildPublicUserProfile,
   buildStoredCvCreatePayload,
+  docToLogEntry,
   buildUserProfileCreatePayload,
   buildWorkExperienceCreatePayload,
   isValidUsernameHandle,
@@ -125,12 +127,30 @@ describe("Firestore sanitizer payloads", () => {
         whatWasSought: undefined,
         tags: ["#Auth", ""],
         isPublic: true,
+        includeInCv: false,
       },
       "uid-1",
       "log-1"
     ) as Record<string, unknown>;
     assertNoUndefinedDeep(logPayload);
     expect(logPayload.impact).toBe("Launched auth");
+    expect(logPayload.includeInCv).toBe(false);
+
+    const logUpdatePayload = buildLogEntryUpdatePayload({
+      title: "Updated CV bullet",
+      includeInCv: true,
+    }) as Record<string, unknown>;
+    assertNoUndefinedDeep(logUpdatePayload);
+    expect(logUpdatePayload.includeInCv).toBe(true);
+
+    const parsedWithFalse = docToLogEntry(
+      { title: "Hidden from CV", impact: "x", includeInCv: false },
+      "log-1"
+    );
+    expect(parsedWithFalse.includeInCv).toBe(false);
+
+    const parsedWithoutFlag = docToLogEntry({ title: "Legacy log", impact: "x" }, "log-2");
+    expect(parsedWithoutFlag.includeInCv).toBeUndefined();
 
     const expPayload = buildWorkExperienceCreatePayload(
       {

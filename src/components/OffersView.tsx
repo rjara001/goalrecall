@@ -31,6 +31,7 @@ import { JobOffer, JobOfferStatus, LogEntry, WorkExperience, UserProfile } from 
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
+import { doesLogBelongToExperience, isLogIncludedInCv } from "../utils/bulletToLogMapper";
 
 interface OffersViewProps {
   offers: JobOffer[];
@@ -145,7 +146,12 @@ export const OffersView: React.FC<OffersViewProps> = ({
       tailoredCv: {
         headline: `${formRole} | Infraestructura & Software`,
         targetSummary: `Profesional con experiencia comprobada postulando al rol de ${formRole} en ${formCompany}. Enfoque en escalabilidad, mejores prácticas y entrega de impacto de negocio medible.`,
-        selectedLogIds: logs.slice(0, 5).map(l => l.id),
+        selectedLogIds: (logs.filter(isLogIncludedInCv).length > 0
+          ? logs.filter(isLogIncludedInCv)
+          : logs
+        )
+          .slice(0, 5)
+          .map((l) => l.id),
         selectedExperienceIds: experiences.map(e => e.id),
         highlightedSkills: matchedKeywords.slice(0, 6)
       },
@@ -245,22 +251,49 @@ export const OffersView: React.FC<OffersViewProps> = ({
     }
   };
 
+  const groupSelectedLogsByExperience = (selectedLogs: LogEntry[]) => {
+    const usedIds = new Set<string>();
+    const sections = experiences
+      .map((exp) => {
+        const matched = selectedLogs.filter((l) => doesLogBelongToExperience(l, exp));
+        matched.forEach((m) => usedIds.add(m.id));
+        return { exp, logs: matched };
+      })
+      .filter((section) => section.logs.length > 0);
+    const unmatched = selectedLogs.filter((l) => !usedIds.has(l.id));
+    return { sections, unmatched };
+  };
+
   const copyCvMarkdown = () => {
     if (!currentOffer) return;
     const headline = currentOffer.tailoredCv?.headline || `${user?.name || "Candidato"} - ${currentOffer.role}`;
     const summary = currentOffer.tailoredCv?.targetSummary || user?.bio || "";
     const selectedLogs = logs.filter(l => (currentOffer.tailoredCv?.selectedLogIds || []).includes(l.id));
+    const { sections, unmatched } = groupSelectedLogsByExperience(selectedLogs);
 
     let output = `# ${user?.name || "Candidato"} | ${headline}\n`;
     output += `Email: ${user?.email || ""} | Ubicación: ${user?.location || "Remoto"}\n`;
     if (user?.linkedin) output += `LinkedIn: ${user.linkedin} | `;
     if (user?.github) output += `GitHub: ${user.github}\n\n`;
     output += `## PERFIL PROFESIONAL\n${summary}\n\n`;
-    output += `## LOGROS DESTACADOS ADAPTADOS A ${currentOffer.company.toUpperCase()}\n`;
-    
-    selectedLogs.forEach(l => {
-      output += `- [${l.client}] ${l.title}: ${l.impact}\n`;
+    output += `## EXPERIENCIA Y LOGROS ADAPTADOS A ${currentOffer.company.toUpperCase()}\n\n`;
+
+    sections.forEach(({ exp, logs: expLogs }) => {
+      output += `### ${exp.role} @ ${exp.company} (${exp.startDate || "Inicio"} — ${exp.isCurrent ? "Present" : exp.endDate || "Present"})\n`;
+      expLogs.forEach((l) => {
+        const hasDistinctImpact = l.impact && l.impact.trim() && l.impact.trim() !== l.title.trim();
+        output += hasDistinctImpact ? `- ${l.title} (${l.impact})\n` : `- ${l.title}\n`;
+      });
+      output += "\n";
     });
+
+    if (unmatched.length > 0) {
+      output += `### Otros Logros Destacados\n`;
+      unmatched.forEach((l) => {
+        const hasDistinctImpact = l.impact && l.impact.trim() && l.impact.trim() !== l.title.trim();
+        output += hasDistinctImpact ? `- [${l.client}] ${l.title} (${l.impact})\n` : `- [${l.client}] ${l.title}\n`;
+      });
+    }
 
     navigator.clipboard.writeText(output);
     setCopiedCvText(true);
@@ -699,6 +732,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                         {logs.map((log) => {
                           const isIncluded = (currentOffer.tailoredCv?.selectedLogIds || []).includes(log.id);
+                          const inBaseCv = isLogIncludedInCv(log);
                           return (
                             <div
                               key={log.id}
@@ -716,11 +750,22 @@ export const OffersView: React.FC<OffersViewProps> = ({
                                 className="mt-1 rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-purple-500"
                               />
                               <div className="text-xs space-y-0.5 flex-1">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="font-bold text-slate-200">[{log.client}] {log.title}</span>
-                                  <span className="text-[10px] font-mono text-purple-400 bg-purple-950 px-1.5 py-0.5 rounded">
-                                    {log.category}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                                        inBaseCv
+                                          ? "text-cyan-300 bg-cyan-950/70 border-cyan-800/60"
+                                          : "text-slate-400 bg-slate-900 border-slate-800"
+                                      }`}
+                                    >
+                                      {inBaseCv ? "En CV" : "Solo Bitácora"}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-purple-400 bg-purple-950 px-1.5 py-0.5 rounded">
+                                      {log.category}
+                                    </span>
+                                  </div>
                                 </div>
                                 <p className="text-slate-300 line-clamp-1">{log.impact}</p>
                               </div>
@@ -759,31 +804,82 @@ export const OffersView: React.FC<OffersViewProps> = ({
                       </p>
                     </div>
 
-                    {/* Tailored Achievements Section */}
-                    <div className="space-y-3">
+                    {/* Tailored Experience & Achievements Section */}
+                    <div className="space-y-4">
                       <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider border-b border-slate-200 pb-1">
-                        Logros Destacados para {currentOffer.company.toUpperCase()}
+                        Experiencia & Logros Adaptados para {currentOffer.company.toUpperCase()}
                       </h3>
                       
-                      {logs.filter(l => (currentOffer.tailoredCv?.selectedLogIds || []).includes(l.id)).length === 0 ? (
-                        <p className="text-xs text-slate-400 italic">
-                          No has marcado logros arriba para incluir en este CV. Selecciona tus viñetas en la lista superior.
-                        </p>
-                      ) : (
-                        <ul className="space-y-2 text-xs text-slate-800">
-                          {logs
-                            .filter(l => (currentOffer.tailoredCv?.selectedLogIds || []).includes(l.id))
-                            .map((log) => (
-                              <li key={log.id} className="flex items-start gap-2">
-                                <span className="text-indigo-600 font-bold">•</span>
-                                <div>
-                                  <span className="font-semibold text-slate-950">[{log.client}] {log.title}: </span>
-                                  <span>{log.impact}</span>
+                      {(() => {
+                        const selectedLogs = logs.filter((l) =>
+                          (currentOffer.tailoredCv?.selectedLogIds || []).includes(l.id)
+                        );
+                        if (selectedLogs.length === 0) {
+                          return (
+                            <p className="text-xs text-slate-400 italic">
+                              No has marcado logros arriba para incluir en este CV. Selecciona tus viñetas en la lista superior.
+                            </p>
+                          );
+                        }
+                        const { sections, unmatched } = groupSelectedLogsByExperience(selectedLogs);
+                        return (
+                          <div className="space-y-4">
+                            {sections.map(({ exp, logs: expLogs }) => (
+                              <div key={exp.id} className="space-y-1.5">
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                  <p className="text-xs font-bold text-slate-950">
+                                    {exp.role} <span className="text-indigo-700">· {exp.company}</span>
+                                  </p>
+                                  <span className="text-[11px] font-mono text-slate-500">
+                                    {exp.startDate || "Inicio"} — {exp.isCurrent ? "Present" : exp.endDate || "Present"}
+                                  </span>
                                 </div>
-                              </li>
+                                <ul className="space-y-1.5 text-xs text-slate-800 pl-1">
+                                  {expLogs.map((log) => {
+                                    const hasDistinctImpact =
+                                      log.impact && log.impact.trim() && log.impact.trim() !== log.title.trim();
+                                    return (
+                                      <li key={log.id} className="flex items-start gap-2">
+                                        <span className="text-indigo-600 font-bold">•</span>
+                                        <div>
+                                          <span className="font-medium text-slate-900">{log.title}</span>
+                                          {hasDistinctImpact && (
+                                            <span className="text-slate-600"> ({log.impact})</span>
+                                          )}
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
                             ))}
-                        </ul>
-                      )}
+
+                            {unmatched.length > 0 && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-bold text-slate-950">Otros Logros Destacados</p>
+                                <ul className="space-y-1.5 text-xs text-slate-800 pl-1">
+                                  {unmatched.map((log) => {
+                                    const hasDistinctImpact =
+                                      log.impact && log.impact.trim() && log.impact.trim() !== log.title.trim();
+                                    return (
+                                      <li key={log.id} className="flex items-start gap-2">
+                                        <span className="text-indigo-600 font-bold">•</span>
+                                        <div>
+                                          <span className="font-semibold text-slate-950">[{log.client}] </span>
+                                          <span className="font-medium text-slate-900">{log.title}</span>
+                                          {hasDistinctImpact && (
+                                            <span className="text-slate-600"> ({log.impact})</span>
+                                          )}
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
 

@@ -1,11 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowRight,
   Briefcase,
   Building,
   Calendar,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Edit3,
+  Eye,
+  EyeOff,
   FileUp,
   MapPin,
   Plus,
@@ -15,7 +19,11 @@ import {
 } from "lucide-react";
 import { LogEntry, WorkExperience } from "../../types";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
-import { cleanExperienceBullets } from "./timelineUtils";
+import {
+  getExperienceBulletItems,
+  getExperienceChildLogs,
+  isLogIncludedInCv,
+} from "../../utils/bulletToLogMapper";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -29,6 +37,8 @@ interface TimelineExperiencesTabProps {
   onEditExperience: (exp: WorkExperience) => void;
   onDeleteExperience: (id: string) => void;
   onAddLogToExperience: (experienceId: string) => void;
+  onEditLog?: (entry: LogEntry) => void;
+  onToggleIncludeInCv?: (id: string) => void;
   onExtractBulletToLog?: (
     experienceId: string,
     company: string,
@@ -44,7 +54,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   experiences,
   logs,
   totalBulletsCount,
-  extractedBulletSet,
   tl,
   onOpenPasteBullets,
   onOpenCvUpload,
@@ -52,10 +61,17 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onEditExperience,
   onDeleteExperience,
   onAddLogToExperience,
+  onEditLog,
+  onToggleIncludeInCv,
   onExtractBulletToLog,
   onExtractAllBulletsForExperience,
   onJumpToCompanyLogs,
 }) => {
+  const [expandedHiddenDrawer, setExpandedHiddenDrawer] = useState<Record<string, boolean>>({});
+
+  const toggleHiddenDrawer = (expId: string) => {
+    setExpandedHiddenDrawer((prev) => ({ ...prev, [expId]: !prev[expId] }));
+  };
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
@@ -137,16 +153,11 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
       ) : (
         <div className="space-y-6">
           {experiences.map((exp) => {
-            const expLogs = logs.filter(
-              (l) =>
-                l.experienceId === exp.id ||
-                (!l.experienceId &&
-                  l.client.trim().toLowerCase() === exp.company.trim().toLowerCase())
-            );
-            const bullets = cleanExperienceBullets(exp, expLogs);
-            const unextractedBullets = bullets.filter(
-              (b) => !extractedBulletSet.has(b.trim().toLowerCase())
-            );
+            const expLogs = getExperienceChildLogs(exp, logs);
+            const bulletItems = getExperienceBulletItems(exp, logs);
+            const unextractedLegacyItems = bulletItems.filter((item) => item.isLegacyUnlinked);
+            const hiddenFromCvLogs = expLogs.filter((l) => !isLogIncludedInCv(l));
+            const isHiddenDrawerOpen = Boolean(expandedHiddenDrawer[exp.id]);
 
             return (
               <div
@@ -192,15 +203,15 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pt-1 sm:pt-0">
-                    {unextractedBullets.length > 0 && onExtractAllBulletsForExperience && (
+                    {unextractedLegacyItems.length > 0 && onExtractAllBulletsForExperience && (
                       <button
                         type="button"
                         onClick={() => onExtractAllBulletsForExperience(exp.id)}
                         className="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 border border-cyan-500/50 text-cyan-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
-                        title={tl.extractAllBulletsBtn(unextractedBullets.length)}
+                        title={tl.extractAllBulletsBtn(unextractedLegacyItems.length)}
                       >
                         <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>{tl.extractAllBulletsBtn(unextractedBullets.length)}</span>
+                        <span>{tl.extractAllBulletsBtn(unextractedLegacyItems.length)}</span>
                       </button>
                     )}
 
@@ -240,35 +251,63 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                   </div>
                 </div>
 
-                {exp.summary && !exp.summary.includes("extraída de CV") && bullets.length === 0 && (
+                {exp.summary && !exp.summary.includes("extraída de CV") && bulletItems.length === 0 && (
                   <p className="text-xs text-slate-400 leading-relaxed max-w-3xl border-l-2 border-slate-800 pl-3 italic">
                     {exp.summary}
                   </p>
                 )}
 
                 <div className="space-y-3 pt-1">
-                  {bullets.length > 0 ? (
+                  {bulletItems.length > 0 ? (
                     <div className="space-y-2">
-                      {bullets.map((bullet, bIdx) => {
-                        const isExtracted = extractedBulletSet.has(bullet.trim().toLowerCase());
+                      {bulletItems.map((item) => {
+                        const childLog = item.log;
                         return (
                           <div
-                            key={bIdx}
+                            key={item.key}
                             className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl bg-slate-950/40 border border-slate-800/60 hover:border-slate-700/80 transition-colors"
                           >
-                            <div className="flex items-start gap-2.5 flex-1">
+                            <div className="flex items-start gap-2.5 flex-1 min-w-0">
                               <span className="text-cyan-400 font-bold text-base leading-none select-none mt-0.5">
                                 •
                               </span>
-                              <p className="text-slate-200/95 leading-relaxed">{bullet}</p>
+                              <p className="text-slate-200/95 leading-relaxed break-words">
+                                {item.text}
+                              </p>
                             </div>
 
-                            <div className="shrink-0 sm:self-center pl-4 sm:pl-0">
-                              {isExtracted ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-1 rounded-md">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                  Logro en Bitácora
-                                </span>
+                            <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center pl-4 sm:pl-0">
+                              {childLog ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400/90 px-2 py-1">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    Logro vinculado
+                                  </span>
+
+                                  {onEditLog && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onEditLog(childLog)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-200 hover:text-cyan-200 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
+                                      title="Editar título, impacto y detalles STAR del logro"
+                                    >
+                                      <Edit3 className="w-3 h-3 text-cyan-400" />
+                                      <span>Editar</span>
+                                    </button>
+                                  )}
+
+                                  {onToggleIncludeInCv && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onToggleIncludeInCv(childLog.id)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-amber-300 bg-slate-900 hover:bg-amber-950/30 border border-slate-800 hover:border-amber-800/60 px-2 py-1 rounded-md transition-colors"
+                                      title="Ocultar del resumen de esta experiencia (se mantiene completo en Bitácora)"
+                                    >
+                                      <EyeOff className="w-3 h-3" />
+                                      <span>Quitar del CV</span>
+                                    </button>
+                                  )}
+                                </>
                               ) : (
                                 <button
                                   type="button"
@@ -278,7 +317,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                         exp.id,
                                         exp.company,
                                         exp.role,
-                                        bullet,
+                                        item.text,
                                         exp.technologies
                                       );
                                     }
@@ -287,7 +326,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                   title={tl.extractToLogBtn}
                                 >
                                   <Zap className="w-3 h-3 text-cyan-400" />
-                                  <span>{tl.extractToLogBtn}</span>
+                                  <span>Vincular logro</span>
                                 </button>
                               )}
                             </div>
@@ -306,6 +345,65 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                         <Plus className="w-3.5 h-3.5" />
                         {tl.addBulletsAction}
                       </button>
+                    </div>
+                  )}
+
+                  {hiddenFromCvLogs.length > 0 && (
+                    <div className="border border-slate-800/70 rounded-xl bg-slate-950/30 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleHiddenDrawer(exp.id)}
+                        className="w-full px-3 py-2 flex items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/50 transition-colors"
+                      >
+                        <span className="flex items-center gap-2">
+                          <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+                          <span>
+                            Logros solo en Bitácora ({hiddenFromCvLogs.length})
+                          </span>
+                        </span>
+                        {isHiddenDrawerOpen ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                        )}
+                      </button>
+
+                      {isHiddenDrawerOpen && (
+                        <div className="p-2.5 pt-1 border-t border-slate-800/70 space-y-1.5">
+                          {hiddenFromCvLogs.map((hiddenLog) => (
+                            <div
+                              key={hiddenLog.id}
+                              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/60 text-xs"
+                            >
+                              <span className="text-slate-400 line-clamp-2 flex-1">
+                                {hiddenLog.title}
+                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {onEditLog && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onEditLog(hiddenLog)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                    <span>Editar</span>
+                                  </button>
+                                )}
+                                {onToggleIncludeInCv && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleIncludeInCv(hiddenLog.id)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/70 px-2 py-1 rounded-md transition-colors"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>Incluir en CV</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

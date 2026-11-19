@@ -23,6 +23,7 @@ import {
 } from "../utils/synthesis";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
+import { isLogIncludedInCv } from "../utils/bulletToLogMapper";
 
 interface SynthesisHubProps {
   logs: LogEntry[];
@@ -34,15 +35,19 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
   const sl = MODALS_LOCALES[language]?.synthesisHub || MODALS_LOCALES.en.synthesisHub;
   const [activeMode, setActiveMode] = useState<"xyz" | "star" | "casestudy">("xyz");
   const [selectedClient, setSelectedClient] = useState<string>("all");
+  const [cvOnlyFilter, setCvOnlyFilter] = useState<boolean>(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const clients = useMemo(() => Array.from(new Set(logs.map((l) => l.client))).filter(Boolean), [logs]);
+  const cvIncludedCount = useMemo(() => logs.filter(isLogIncludedInCv).length, [logs]);
 
   // Filter logs for synthesis
   const targetLogs = useMemo(() => {
-    if (selectedClient === "all") return logs;
-    return logs.filter((l) => l.client === selectedClient);
-  }, [logs, selectedClient]);
+    const scope =
+      cvOnlyFilter && cvIncludedCount > 0 ? logs.filter(isLogIncludedInCv) : logs;
+    if (selectedClient === "all") return scope;
+    return scope.filter((l) => l.client === selectedClient);
+  }, [logs, selectedClient, cvOnlyFilter, cvIncludedCount]);
 
   // Generated Items
   const xyzBullets: XYZBullet[] = useMemo(() => generateXYZBullets(targetLogs), [targetLogs]);
@@ -91,14 +96,37 @@ export const SynthesisHub: React.FC<SynthesisHubProps> = ({ logs, userName }) =>
           </p>
         </div>
 
-        {/* Client Selector & Print Action */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* CV Scope, Client Selector & Print Action */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {cvIncludedCount > 0 && cvIncludedCount < logs.length && (
+            <div className="inline-flex items-center p-0.5 rounded-lg bg-[#080C14] border border-slate-700 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setCvOnlyFilter(true)}
+                className={`px-2.5 py-1.5 rounded-md transition-colors ${
+                  cvOnlyFilter ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Solo en CV ({cvIncludedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCvOnlyFilter(false)}
+                className={`px-2.5 py-1.5 rounded-md transition-colors ${
+                  !cvOnlyFilter ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Todos ({logs.length})
+              </button>
+            </div>
+          )}
+
           <select
             value={selectedClient}
             onChange={(e) => setSelectedClient(e.target.value)}
             className="bg-[#080C14] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-medium"
           >
-            <option value="all">{t.common.all} ({logs.length})</option>
+            <option value="all">{t.common.all} ({targetLogs.length})</option>
             {clients.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}

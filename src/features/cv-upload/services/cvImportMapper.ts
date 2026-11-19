@@ -258,6 +258,7 @@ export function buildWorkspaceImportFromCv({
         impact: b.impact.trim(),
         tags: b.tags.length > 0 ? b.tags : ["#CVVerídico", "#Producción"],
         isPublic: false,
+        includeInCv: true,
       };
     }
   );

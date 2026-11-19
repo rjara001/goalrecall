@@ -67,6 +67,12 @@ import {
   sanitizeDocId,
   sanitizeUsernameHandle,
 } from "./sanitizer";
+import { inferCategoryForSavedExperienceBullet } from "../bulletToLogMapper";
+
+export interface ExperienceProjectionSync {
+  experience: WorkExperience;
+  bullets: string[];
+}
 
 export interface FirestoreWorkspaceData {
   user: UserProfile;
@@ -409,10 +415,35 @@ export async function saveCvAndApplyBatchFirestore(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Logs CRUD
+// Logs CRUD (atomic bidirectional parent WorkExperience projection sync)
 // ---------------------------------------------------------------------------
+function appendParentSyncsToBatch(
+  batch: WriteBatch,
+  firestore: ReturnType<typeof getDbOrThrow>,
+  uid: string,
+  parentExpsToSync: ExperienceProjectionSync[] | undefined,
+  now: number
+) {
+  if (!parentExpsToSync || parentExpsToSync.length === 0) return;
+  for (const sync of parentExpsToSync) {
+    const expId = sanitizeDocId(sync.experience.id, "exp");
+    const nextExp: WorkExperience = {
+      ...sync.experience,
+      id: expId,
+      userId: uid,
+      bullets: sync.bullets,
+      updatedAt: now,
+    };
+    batch.update(
+      doc(firestore, "users", uid, "experiences", expId),
+      buildWorkExperienceUpdatePayload(nextExp)
+    );
+  }
+}
+
 export async function createLogFirestore(
-  entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">
+  entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
+  parentExpsToSync?: ExperienceProjectionSync[]
 ): Promise<LogEntry> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
@@ -424,52 +455,95 @@ export async function createLogFirestore(
     id: logId,
     userId: uid,
     isPublic: Boolean(entry.isPublic),
+    includeInCv: entry.includeInCv !== false,
     createdAt: now,
     updatedAt: now,
   };
 
   try {
-    await setDoc(
-      doc(firestore, "users", uid, "logs", logId),
-      buildLogEntryCreatePayload(fullEntry, uid, logId)
-    );
+    if (parentExpsToSync && parentExpsToSync.length > 0) {
+      const batch = writeBatch(firestore);
+      batch.set(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryCreatePayload(fullEntry, uid, logId)
+      );
+      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+      await batch.commit();
+    } else {
+      await setDoc(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryCreatePayload(fullEntry, uid, logId)
+      );
+    }
     return fullEntry;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
 
-export async function updateLogFirestore(entry: LogEntry): Promise<LogEntry> {
+export async function updateLogFirestore(
+  entry: LogEntry,
+  parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<LogEntry> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
+  const now = Date.now();
   const logId = sanitizeDocId(entry.id, "log");
   const path = `users/${uid}/logs/${logId}`;
-  const updated: LogEntry = { ...entry, id: logId, userId: uid, updatedAt: Date.now() };
+  const updated: LogEntry = {
+    ...entry,
+    id: logId,
+    userId: uid,
+    includeInCv: entry.includeInCv !== false,
+    updatedAt: now,
+  };
   try {
-    await updateDoc(
-      doc(firestore, "users", uid, "logs", logId),
-      buildLogEntryUpdatePayload(updated)
-    );
+    if (parentExpsToSync && parentExpsToSync.length > 0) {
+      const batch = writeBatch(firestore);
+      batch.update(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryUpdatePayload(updated)
+      );
+      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+      await batch.commit();
+    } else {
+      await updateDoc(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryUpdatePayload(updated)
+      );
+    }
     return updated;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
-export async function deleteLogFirestore(logId: string): Promise<void> {
+export async function deleteLogFirestore(
+  logId: string,
+  parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<void> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
+  const now = Date.now();
   const safeId = sanitizeDocId(logId, "log");
   const path = `users/${uid}/logs/${safeId}`;
   try {
-    await deleteDoc(doc(firestore, "users", uid, "logs", safeId));
+    if (parentExpsToSync && parentExpsToSync.length > 0) {
+      const batch = writeBatch(firestore);
+      batch.delete(doc(firestore, "users", uid, "logs", safeId));
+      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+      await batch.commit();
+    } else {
+      await deleteDoc(doc(firestore, "users", uid, "logs", safeId));
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
 export async function createLogsBatchFirestore(
-  entries: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]
+  entries: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[],
+  parentExpsToSync?: ExperienceProjectionSync[]
 ): Promise<LogEntry[]> {
   if (entries.length === 0) return [];
   const firestore = getDbOrThrow();
@@ -485,6 +559,7 @@ export async function createLogsBatchFirestore(
       id: logId,
       userId: uid,
       isPublic: Boolean(entry.isPublic),
+      includeInCv: entry.includeInCv !== false,
       createdAt: now,
       updatedAt: now,
     };
@@ -495,6 +570,8 @@ export async function createLogsBatchFirestore(
     created.push(fullEntry);
   });
 
+  appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+
   try {
     await batch.commit();
     return created;
@@ -504,7 +581,7 @@ export async function createLogsBatchFirestore(
 }
 
 // ---------------------------------------------------------------------------
-// Work Experiences CRUD (plus linked logs cascading update)
+// Work Experiences CRUD (plus linked logs bidirectional update)
 // ---------------------------------------------------------------------------
 export async function createExperienceFirestore(
   exp: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">,
@@ -541,15 +618,17 @@ export async function createExperienceFirestore(
         userId: uid,
         experienceId: expId,
         originalBullet: clean,
+        logro: clean,
         date: new Date().toISOString().substring(0, 10),
         client: createdExp.company,
         project: createdExp.role,
-        category: "Feature ✨",
+        category: inferCategoryForSavedExperienceBullet(clean),
         title: clean,
         impact: clean,
         description: `Registrado desde trayectoria en ${createdExp.company} (${createdExp.role}).`,
         tags: (createdExp.technologies || []).slice(0, 4).map((t) => `#${t.replace(/\s+/g, "")}`),
         isPublic: false,
+        includeInCv: true,
         createdAt: now,
         updatedAt: now,
       };
@@ -571,7 +650,7 @@ export async function createExperienceFirestore(
 
 export async function updateExperienceFirestore(
   updatedExp: WorkExperience,
-  linkedLogsToRenameClient: LogEntry[],
+  logsToUpdate: LogEntry[],
   newLogBulletsToCreate?: string[]
 ): Promise<{
   experience: WorkExperience;
@@ -598,8 +677,13 @@ export async function updateExperienceFirestore(
   );
 
   const updatedLogs: LogEntry[] = [];
-  for (const log of linkedLogsToRenameClient) {
-    const nextLog: LogEntry = { ...log, client: savedExp.company, updatedAt: now };
+  for (const log of logsToUpdate) {
+    const nextLog: LogEntry = {
+      ...log,
+      experienceId: log.experienceId || expId,
+      client: savedExp.company,
+      updatedAt: now,
+    };
     batch.update(
       doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
       buildLogEntryUpdatePayload(nextLog)
@@ -618,15 +702,17 @@ export async function updateExperienceFirestore(
         userId: uid,
         experienceId: expId,
         originalBullet: clean,
+        logro: clean,
         date: new Date().toISOString().substring(0, 10),
         client: savedExp.company,
         project: savedExp.role,
-        category: "Feature ✨",
+        category: inferCategoryForSavedExperienceBullet(clean),
         title: clean,
         impact: clean,
         description: `Registrado desde trayectoria en ${savedExp.company} (${savedExp.role}).`,
         tags: (savedExp.technologies || []).slice(0, 4).map((t) => `#${t.replace(/\s+/g, "")}`),
         isPublic: false,
+        includeInCv: true,
         createdAt: now,
         updatedAt: now,
       };

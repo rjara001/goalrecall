@@ -68,6 +68,7 @@
         "description": { "type": "string", "maxLength": 10000 },
         "tags": { "type": "array", "description": "Bounded array of tag strings (max 25)." },
         "isPublic": { "type": "boolean" },
+        "includeInCv": { "type": "boolean", "description": "Whether the achievement title projects as a CV bullet on its parent experience." },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

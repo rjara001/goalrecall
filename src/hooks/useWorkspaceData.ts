@@ -10,6 +10,10 @@ import {
 import {
   buildLogFromExtractedBullet,
   buildLogFromSavedExperienceBullet,
+  deriveExperienceBulletsFromLogs,
+  doesLogBelongToExperience,
+  findLegacyUnlinkedBullets,
+  getExperienceChildLogs,
 } from "../utils/bulletToLogMapper";
 import { ParsedBackupBundle } from "../utils/storage/backupStorage";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
@@ -30,6 +34,7 @@ import {
   deleteLogFirestore,
   deleteInboxMessageFirestore,
   deleteProductFirestore,
+  ExperienceProjectionSync,
   importBackupBundleToFirestore,
   loadWorkspaceFromFirestore,
   saveUserProfileFirestore,
@@ -341,6 +346,43 @@ export const useWorkspaceData = ({
     [syncShowcaseIfPublished]
   );
 
+  const computeAffectedExperienceSyncs = useCallback(
+    (
+      affectedLogs: Array<Pick<LogEntry, "experienceId" | "client">>,
+      nextLogs: LogEntry[],
+      currentExperiences: WorkExperience[]
+    ): {
+      syncList: ExperienceProjectionSync[];
+      nextExperiences: WorkExperience[];
+    } => {
+      if (affectedLogs.length === 0 || currentExperiences.length === 0) {
+        return { syncList: [], nextExperiences: currentExperiences };
+      }
+
+      const syncList: ExperienceProjectionSync[] = [];
+      const syncMap = new Map<string, WorkExperience>();
+
+      currentExperiences.forEach((exp) => {
+        const isAffected = affectedLogs.some((log) =>
+          doesLogBelongToExperience(log as LogEntry, exp)
+        );
+        if (!isAffected) return;
+
+        const bullets = deriveExperienceBulletsFromLogs(exp, nextLogs);
+        syncList.push({ experience: exp, bullets });
+        syncMap.set(exp.id, { ...exp, bullets, updatedAt: Date.now() });
+      });
+
+      const nextExperiences =
+        syncMap.size > 0
+          ? currentExperiences.map((exp) => syncMap.get(exp.id) || exp)
+          : currentExperiences;
+
+      return { syncList, nextExperiences };
+    },
+    []
+  );
+
   // Log Actions
   const handleSaveLog = useCallback(
     async (
@@ -350,22 +392,57 @@ export const useWorkspaceData = ({
     ): Promise<boolean> => {
       try {
         if (editingLog) {
-          const updated = await updateLogFirestore({
+          const mergedCandidate: LogEntry = {
             ...editingLog,
             ...entryData,
-          });
+            logro: entryData.title,
+          };
+          const previewLogs = stateRef.current.logs.map((l) =>
+            l.id === editingLog.id ? mergedCandidate : l
+          );
+          const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+            [editingLog, mergedCandidate],
+            previewLogs,
+            stateRef.current.experiences
+          );
+
+          const updated = await updateLogFirestore(mergedCandidate, syncList);
           const nextLogs = stateRef.current.logs.map((l) =>
             l.id === updated.id ? updated : l
           );
           setLogs(nextLogs);
+          if (syncList.length > 0) {
+            setExperiences(nextExperiences);
+          }
           await syncShowcaseIfPublished({ logs: nextLogs });
           showToastRef.current(t.toasts.logSaved, "success");
           return true;
         }
 
-        const created = await createLogFirestore(entryData);
+        const simulatedCreated: LogEntry = {
+          ...entryData,
+          id: `pending-${Date.now()}`,
+          logro: entryData.title,
+          includeInCv: entryData.includeInCv !== false,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const previewLogs = [simulatedCreated, ...stateRef.current.logs];
+        const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+          [simulatedCreated],
+          previewLogs,
+          stateRef.current.experiences
+        );
+
+        const created = await createLogFirestore(
+          { ...entryData, logro: entryData.title },
+          syncList
+        );
         const nextLogs = [created, ...stateRef.current.logs];
         setLogs(nextLogs);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
 
         if (sourceInboxMessageId) {
           await updateInboxMessageStatusFirestore(sourceInboxMessageId, {
@@ -395,7 +472,13 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [syncShowcaseIfPublished, t.toasts.logSaved, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
+    [
+      computeAffectedExperienceSyncs,
+      syncShowcaseIfPublished,
+      t.toasts.logSaved,
+      t.toasts.logToggledPrivate,
+      t.toasts.logToggledPublic,
+    ]
   );
 
   const handleTogglePublic = useCallback(
@@ -425,12 +508,66 @@ export const useWorkspaceData = ({
     [syncShowcaseIfPublished, t.toasts.logToggledPrivate, t.toasts.logToggledPublic]
   );
 
+  const handleToggleIncludeInCv = useCallback(
+    async (id: string) => {
+      const target = stateRef.current.logs.find((l) => l.id === id);
+      if (!target) return;
+      const nextIncludeInCv = !(target.includeInCv !== false);
+      const nextCandidate: LogEntry = {
+        ...target,
+        includeInCv: nextIncludeInCv,
+      };
+      const previewLogs = stateRef.current.logs.map((l) =>
+        l.id === id ? nextCandidate : l
+      );
+      const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+        [target],
+        previewLogs,
+        stateRef.current.experiences
+      );
+
+      try {
+        const updated = await updateLogFirestore(nextCandidate, syncList);
+        const nextLogs = stateRef.current.logs.map((l) =>
+          l.id === id ? updated : l
+        );
+        setLogs(nextLogs);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
+        await syncShowcaseIfPublished({ logs: nextLogs });
+        showToastRef.current(
+          nextIncludeInCv
+            ? "Logro incluido como viñeta en su Experiencia y CV ✨"
+            : "Ocultado del CV (el logro sigue intacto en tu Bitácora)",
+          "info"
+        );
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo actualizar la inclusión en CV del logro."
+        );
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    [computeAffectedExperienceSyncs, syncShowcaseIfPublished]
+  );
+
   const handleDeleteLog = useCallback(
     async (id: string) => {
+      const target = stateRef.current.logs.find((l) => l.id === id);
+      const nextLogs = stateRef.current.logs.filter((l) => l.id !== id);
+      const { syncList, nextExperiences } = target
+        ? computeAffectedExperienceSyncs([target], nextLogs, stateRef.current.experiences)
+        : { syncList: [], nextExperiences: stateRef.current.experiences };
+
       try {
-        await deleteLogFirestore(id);
-        const nextLogs = stateRef.current.logs.filter((l) => l.id !== id);
+        await deleteLogFirestore(id, syncList);
         setLogs(nextLogs);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
         await syncShowcaseIfPublished({ logs: nextLogs });
         showToastRef.current(t.toasts.logDeleted, "info");
       } catch (err) {
@@ -439,19 +576,21 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [syncShowcaseIfPublished, t.toasts.logDeleted]
+    [computeAffectedExperienceSyncs, syncShowcaseIfPublished, t.toasts.logDeleted]
   );
 
   const handleDuplicateLog = useCallback(
     async (entry: LogEntry) => {
       try {
-        const created = await createLogFirestore({
+        const duplicatedTitle = `${entry.title} (${t.common.copy})`;
+        const entryDraft: Omit<LogEntry, "id" | "createdAt" | "updatedAt"> = {
           experienceId: entry.experienceId,
           date: new Date().toISOString().substring(0, 10),
           client: entry.client,
           project: entry.project,
           category: entry.category,
-          title: `${entry.title} (${t.common.copy})`,
+          title: duplicatedTitle,
+          logro: duplicatedTitle,
           whatWasSought: entry.whatWasSought,
           whyImportant: entry.whyImportant,
           howApplied: entry.howApplied,
@@ -459,8 +598,26 @@ export const useWorkspaceData = ({
           impact: entry.impact,
           tags: entry.tags,
           isPublic: false,
-        });
+          includeInCv: entry.includeInCv !== false,
+        };
+        const simulated: LogEntry = {
+          ...entryDraft,
+          id: `pending-${Date.now()}`,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const previewLogs = [simulated, ...stateRef.current.logs];
+        const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+          [simulated],
+          previewLogs,
+          stateRef.current.experiences
+        );
+
+        const created = await createLogFirestore(entryDraft, syncList);
         setLogs((prev) => [created, ...prev]);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
         showToastRef.current(t.toasts.logDuplicated, "info");
       } catch (err) {
         const msg = formatFirestoreUiError(err, "No se pudo duplicar el logro.");
@@ -468,16 +625,34 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [t.common.copy, t.toasts.logDuplicated]
+    [computeAffectedExperienceSyncs, t.common.copy, t.toasts.logDuplicated]
   );
 
   const handleImportBatchLogs = useCallback(
     async (batch: Omit<LogEntry, "id" | "createdAt" | "updatedAt">[]) => {
       if (batch.length === 0) return;
       try {
-        const created = await createLogsBatchFirestore(batch);
+        const now = Date.now();
+        const simulatedEntries: LogEntry[] = batch.map((item, idx) => ({
+          ...item,
+          id: `pending-${now}-${idx}`,
+          includeInCv: item.includeInCv !== false,
+          createdAt: now,
+          updatedAt: now,
+        }));
+        const previewLogs = [...simulatedEntries, ...stateRef.current.logs];
+        const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+          simulatedEntries,
+          previewLogs,
+          stateRef.current.experiences
+        );
+
+        const created = await createLogsBatchFirestore(batch, syncList);
         const nextLogs = [...created, ...stateRef.current.logs];
         setLogs(nextLogs);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
         await syncShowcaseIfPublished({ logs: nextLogs });
         showToastRef.current(`${t.toasts.bulletsImported} (${created.length})`, "success");
       } catch (err) {
@@ -485,7 +660,7 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [syncShowcaseIfPublished, t.toasts.bulletsImported]
+    [computeAffectedExperienceSyncs, syncShowcaseIfPublished, t.toasts.bulletsImported]
   );
 
   // Experience Actions
@@ -506,7 +681,8 @@ export const useWorkspaceData = ({
   const handleSaveExperience = useCallback(
     async (
       expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
-      newLogBulletsToCreate?: string[]
+      newLogBulletsToCreate: string[] = [],
+      editedLogs: LogEntry[] = []
     ) => {
       try {
         if (expData.id) {
@@ -517,19 +693,36 @@ export const useWorkspaceData = ({
             id: expData.id,
             updatedAt: Date.now(),
           };
-          const linkedToRename =
-            existing && existing.company !== fullExp.company
-              ? stateRef.current.logs.filter((l) => l.experienceId === fullExp.id)
-              : [];
+
+          const editedById = new Map<string, LogEntry>();
+          editedLogs.forEach((l) => {
+            editedById.set(l.id, {
+              ...l,
+              experienceId: l.experienceId || fullExp.id,
+              client: fullExp.company,
+              logro: l.title,
+            });
+          });
+
+          const companyChanged = existing && existing.company !== fullExp.company;
+          const logsToUpdate: LogEntry[] = [];
+          stateRef.current.logs.forEach((l) => {
+            const edited = editedById.get(l.id);
+            if (edited) {
+              logsToUpdate.push(edited);
+            } else if (companyChanged && doesLogBelongToExperience(l, existing)) {
+              logsToUpdate.push({
+                ...l,
+                experienceId: l.experienceId || fullExp.id,
+                client: fullExp.company,
+              });
+            }
+          });
 
           const res = await updateExperienceFirestore(
             fullExp,
-            linkedToRename,
+            logsToUpdate,
             newLogBulletsToCreate
-          );
-
-          setExperiences((prev) =>
-            prev.map((e) => (e.id === res.experience.id ? res.experience : e))
           );
 
           const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
@@ -537,9 +730,18 @@ export const useWorkspaceData = ({
             ...res.createdLogs,
             ...stateRef.current.logs.map((l) => updatedMap.get(l.id) || l),
           ];
+          const syncedBullets = deriveExperienceBulletsFromLogs(res.experience, nextLogs);
+          const finalExp: WorkExperience = {
+            ...res.experience,
+            bullets: syncedBullets,
+          };
+
+          setExperiences((prev) =>
+            prev.map((e) => (e.id === finalExp.id ? finalExp : e))
+          );
           setLogs(nextLogs);
 
-          if (res.updatedLogs.length > 0) {
+          if (res.updatedLogs.length > 0 || res.createdLogs.length > 0) {
             await syncShowcaseIfPublished({ logs: nextLogs });
           }
 
@@ -625,8 +827,24 @@ export const useWorkspaceData = ({
       if (!newLog) return;
 
       try {
-        const created = await createLogFirestore(newLog);
+        const simulated: LogEntry = {
+          ...newLog,
+          id: `pending-${Date.now()}`,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const previewLogs = [simulated, ...stateRef.current.logs];
+        const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+          [simulated],
+          previewLogs,
+          stateRef.current.experiences
+        );
+
+        const created = await createLogFirestore(newLog, syncList);
         setLogs((prev) => [created, ...prev]);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
         showToastRef.current(`${company}: ${t.toasts.logSaved} ✨`, "success");
       } catch (err) {
         const msg = formatFirestoreUiError(err, "No se pudo guardar la viñeta en tu bitácora.");
@@ -634,7 +852,7 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [t.toasts.logSaved]
+    [computeAffectedExperienceSyncs, t.toasts.logSaved]
   );
 
   const handleExtractAllBulletsForExperience = useCallback(
@@ -642,39 +860,41 @@ export const useWorkspaceData = ({
       const exp = stateRef.current.experiences.find((e) => e.id === experienceId);
       if (!exp) return;
 
-      const bullets =
-        exp.bullets && exp.bullets.length > 0
-          ? exp.bullets
-          : exp.summary && !exp.summary.includes("extraída de CV")
-          ? [exp.summary]
-          : [];
-
-      if (bullets.length === 0) return;
-
-      const existingBullets = new Set(
-        stateRef.current.logs
-          .filter((l) => l.experienceId === experienceId)
-          .map((l) => (l.originalBullet || l.impact || "").trim())
-      );
-
-      const unextracted = bullets.filter((b) => !existingBullets.has(b.trim()));
+      const expLogs = getExperienceChildLogs(exp, stateRef.current.logs);
+      const unextracted = findLegacyUnlinkedBullets(exp, expLogs);
       if (unextracted.length === 0) {
         showToastRef.current(`${t.toasts.bulletsImported} (${exp.company})`, "info");
         return;
       }
 
       const entries = unextracted
-        .map((b) =>
-          buildLogFromSavedExperienceBullet(exp, exp.id, b)
-        )
+        .map((b) => buildLogFromSavedExperienceBullet(exp, exp.id, b))
         .map((entry) => ({
           ...entry,
           impact: entry.impact || entry.title,
+          includeInCv: true,
         }));
 
       try {
-        const created = await createLogsBatchFirestore(entries);
+        const now = Date.now();
+        const simulatedEntries: LogEntry[] = entries.map((e, idx) => ({
+          ...e,
+          id: `pending-${now}-${idx}`,
+          createdAt: now,
+          updatedAt: now,
+        }));
+        const previewLogs = [...simulatedEntries, ...stateRef.current.logs];
+        const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+          simulatedEntries,
+          previewLogs,
+          stateRef.current.experiences
+        );
+
+        const created = await createLogsBatchFirestore(entries, syncList);
         setLogs((prev) => [...created, ...prev]);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
         showToastRef.current(
           `${t.toasts.bulletsImported} (${created.length} - ${exp.company}) 🚀`,
           "success"
@@ -685,7 +905,7 @@ export const useWorkspaceData = ({
         throw new Error(msg);
       }
     },
-    [t.toasts.bulletsImported]
+    [computeAffectedExperienceSyncs, t.toasts.bulletsImported]
   );
 
   // Inbox Actions
@@ -776,25 +996,42 @@ export const useWorkspaceData = ({
         e.company.toLowerCase().includes(draft.client.toLowerCase())
       ) || stateRef.current.experiences[0];
 
+    const draftPayload: Omit<LogEntry, "id" | "createdAt" | "updatedAt"> = {
+      experienceId: matchedExp?.id,
+      date:
+        msg.date && /^\d{4}-\d{2}-\d{2}/.test(msg.date)
+          ? msg.date.substring(0, 10)
+          : new Date().toISOString().substring(0, 10),
+      client: draft.client,
+      project: draft.project,
+      category: draft.category,
+      title: draft.title,
+      logro: draft.title,
+      whatWasSought: draft.whatWasSought,
+      whyImportant: draft.whyImportant,
+      howApplied: draft.howApplied,
+      description: draft.description,
+      impact: draft.impact,
+      tags: draft.tags,
+      isPublic: false,
+      includeInCv: true,
+    };
+
     try {
-      const created = await createLogFirestore({
-        experienceId: matchedExp?.id,
-        date:
-          msg.date && /^\d{4}-\d{2}-\d{2}/.test(msg.date)
-            ? msg.date.substring(0, 10)
-            : new Date().toISOString().substring(0, 10),
-        client: draft.client,
-        project: draft.project,
-        category: draft.category,
-        title: draft.title,
-        whatWasSought: draft.whatWasSought,
-        whyImportant: draft.whyImportant,
-        howApplied: draft.howApplied,
-        description: draft.description,
-        impact: draft.impact,
-        tags: draft.tags,
-        isPublic: false,
-      });
+      const simulated: LogEntry = {
+        ...draftPayload,
+        id: `pending-${Date.now()}`,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      const previewLogs = [simulated, ...stateRef.current.logs];
+      const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+        [simulated],
+        previewLogs,
+        stateRef.current.experiences
+      );
+
+      const created = await createLogFirestore(draftPayload, syncList);
 
       await updateInboxMessageStatusFirestore(msg.id, {
         read: true,
@@ -802,6 +1039,9 @@ export const useWorkspaceData = ({
       });
 
       setLogs((prev) => [created, ...prev]);
+      if (syncList.length > 0) {
+        setExperiences(nextExperiences);
+      }
       setInbox((prev) =>
         prev.map((m) =>
           m.id === msg.id ? { ...m, read: true, convertedLogId: created.id } : m
@@ -816,7 +1056,7 @@ export const useWorkspaceData = ({
       showToastRef.current(errMsg, "error");
       throw new Error(errMsg);
     }
-  }, []);
+  }, [computeAffectedExperienceSyncs]);
 
   // User Actions
   const handleUpdateProfile = useCallback(
@@ -1241,6 +1481,7 @@ export const useWorkspaceData = ({
     handleCvAppliedState,
     handleSaveLog,
     handleTogglePublic,
+    handleToggleIncludeInCv,
     handleDeleteLog,
     handleDuplicateLog,
     handleImportBatchLogs,

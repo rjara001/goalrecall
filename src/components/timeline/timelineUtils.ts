@@ -1,4 +1,13 @@
 import { LogCategory, LogEntry, WorkExperience } from "../../types";
+import {
+  cleanLegacyBulletText,
+  doesLogBelongToExperience,
+  findLegacyUnlinkedBullets,
+  getExperienceChildLogs,
+  isJunkBulletString,
+  isLogIncludedInCv,
+  normalizeBulletText,
+} from "../../utils/bulletToLogMapper";
 
 export const DEFAULT_PRESET_CATEGORIES: LogCategory[] = [
   "Feature ✨",
@@ -29,26 +38,19 @@ export const computeTotalBulletsCount = (
   logs: LogEntry[]
 ): number => {
   return experiences.reduce((acc, exp) => {
-    if (exp.bullets && exp.bullets.length > 0) {
-      return acc + exp.bullets.length;
-    }
-    const expLogsCount = logs.filter(
-      (l) =>
-        l.experienceId === exp.id ||
-        (!l.experienceId && l.client.trim().toLowerCase() === exp.company.trim().toLowerCase())
-    ).length;
-    if (expLogsCount > 0) {
-      return acc + expLogsCount;
-    }
-    return acc + (exp.summary && !exp.summary.includes("extraída de CV") ? 1 : 0);
+    const expLogs = getExperienceChildLogs(exp, logs);
+    const derived = cleanExperienceBullets(exp, expLogs);
+    return acc + derived.length;
   }, 0);
 };
 
 export const buildExtractedBulletSet = (logs: LogEntry[]): Set<string> => {
   const set = new Set<string>();
   logs.forEach((l) => {
-    if (l.originalBullet) set.add(l.originalBullet.trim().toLowerCase());
-    if (l.impact) set.add(l.impact.trim().toLowerCase());
+    if (l.title) set.add(normalizeBulletText(l.title));
+    if (l.logro) set.add(normalizeBulletText(l.logro));
+    if (l.originalBullet) set.add(normalizeBulletText(l.originalBullet));
+    if (l.impact) set.add(normalizeBulletText(l.impact));
   });
   return set;
 };
@@ -57,21 +59,36 @@ export const cleanExperienceBullets = (
   exp: WorkExperience,
   expLogs: LogEntry[]
 ): string[] => {
-  const expLogsBullets = expLogs
-    .map((l) => l.originalBullet || l.impact || l.title)
+  const activeLogBullets = expLogs
+    .filter(isLogIncludedInCv)
+    .map((l) => (l.title || l.logro || l.impact || "").trim())
     .filter(Boolean);
-  const rawBullets =
-    exp.bullets && exp.bullets.length > 0
-      ? exp.bullets
-      : expLogsBullets.length > 0
-      ? expLogsBullets
-      : exp.summary && !exp.summary.includes("extraída de CV")
-      ? [exp.summary]
-      : [];
 
-  return rawBullets
-    .map((b) => b.replace(/^[•●○▪■◆\-*–—›\d\.\)\>]+\s*/, "").trim())
-    .filter((b) => b.length > 10 && !/^\d+\s*(?:of|\/)\s*\d+/i.test(b));
+  const legacyUnlinked = findLegacyUnlinkedBullets(exp, expLogs);
+  const seen = new Set(activeLogBullets.map((b) => normalizeBulletText(b)));
+  const combined = [...activeLogBullets];
+
+  for (const bullet of legacyUnlinked) {
+    const norm = normalizeBulletText(bullet);
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    combined.push(bullet);
+  }
+
+  if (combined.length > 0) {
+    return combined;
+  }
+
+  if (
+    expLogs.length === 0 &&
+    exp.summary &&
+    !exp.summary.includes("extraída de CV") &&
+    !isJunkBulletString(exp.summary)
+  ) {
+    return [cleanLegacyBulletText(exp.summary)];
+  }
+
+  return [];
 };
 
 export const filterTimelineLogs = (
@@ -132,11 +149,7 @@ export const groupLogsByExperience = (
   const assignedLogIds = new Set<string>();
 
   experiences.forEach((exp) => {
-    const matched = filteredLogs.filter(
-      (l) =>
-        l.experienceId === exp.id ||
-        (!l.experienceId && l.client.trim().toLowerCase() === exp.company.trim().toLowerCase())
-    );
+    const matched = filteredLogs.filter((l) => doesLogBelongToExperience(l, exp));
     matched.forEach((l) => assignedLogIds.add(l.id));
     result.push({ experience: exp, logs: matched });
   });
