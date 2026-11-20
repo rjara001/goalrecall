@@ -17,6 +17,10 @@ import {
   reorderLogsWithinGroup,
 } from "../utils/bulletToLogMapper";
 import { ParsedBackupBundle } from "../utils/storage/backupStorage";
+import {
+  ParsedExperienceJson,
+  reconcileImportedExperienceJson,
+} from "../utils/experienceJson";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
 import {
   createCareerGoalFirestore,
@@ -37,6 +41,7 @@ import {
   deleteProductFirestore,
   ExperienceProjectionSync,
   importBackupBundleToFirestore,
+  importExperienceJsonFirestore,
   loadWorkspaceFromFirestore,
   reorderLogsBatchFirestore,
   saveUserProfileFirestore,
@@ -883,6 +888,76 @@ export const useWorkspaceData = ({
     [syncShowcaseIfPublished, t.toasts.experienceDeleted]
   );
 
+  const handleImportExperienceJson = useCallback(
+    async (experienceId: string, parsed: ParsedExperienceJson) => {
+      const targetExp = stateRef.current.experiences.find((e) => e.id === experienceId);
+      if (!targetExp) {
+        throw new Error("No se encontró la experiencia seleccionada.");
+      }
+
+      const reconciled = reconcileImportedExperienceJson(
+        targetExp,
+        stateRef.current.logs,
+        parsed
+      );
+
+      try {
+        const res = await importExperienceJsonFirestore({
+          updatedExperience: reconciled.updatedExperience,
+          contentEditedLogs: reconciled.contentEditedLogs,
+          metadataOnlyLogs: reconciled.metadataOnlyLogs,
+          logsToCreate: reconciled.logsToCreate,
+        });
+
+        const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
+        const nextLogs = [
+          ...res.createdLogs,
+          ...stateRef.current.logs.map((l) => updatedMap.get(l.id) || l),
+        ];
+        const syncedBullets = deriveExperienceBulletsFromLogs(res.experience, nextLogs);
+        const finalExp: WorkExperience = {
+          ...res.experience,
+          bullets: syncedBullets.length > 0 ? syncedBullets : res.experience.bullets,
+        };
+
+        setExperiences((prev) =>
+          prev.map((e) => (e.id === finalExp.id ? finalExp : e))
+        );
+        setLogs(nextLogs);
+
+        if (
+          res.createdLogs.some((l) => l.isPublic) ||
+          res.updatedLogs.some((l) => l.isPublic)
+        ) {
+          await syncShowcaseIfPublished({ logs: nextLogs });
+        }
+
+        const editedCount = reconciled.contentEditedLogs.length;
+        const metadataCount = reconciled.metadataOnlyLogs.length;
+        const createdCount = res.createdLogs.length;
+        if (createdCount === 0 && editedCount === 0 && metadataCount === 0) {
+          showToastRef.current(
+            `JSON cargado en ${finalExp.company}: datos sincronizados sin nuevos logros`,
+            "info"
+          );
+        } else {
+          showToastRef.current(
+            `JSON cargado en ${finalExp.company}: ${createdCount} nuevo(s), ${editedCount + metadataCount} actualizado(s) ✨`,
+            "success"
+          );
+        }
+      } catch (err) {
+        const msg = formatFirestoreUiError(
+          err,
+          "No se pudo importar el JSON de la experiencia en Firestore."
+        );
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    [syncShowcaseIfPublished]
+  );
+
   const handleExtractBulletToLog = useCallback(
     async (
       experienceId: string,
@@ -1563,6 +1638,7 @@ export const useWorkspaceData = ({
     handleCreateQuickExperience,
     handleSaveExperience,
     handleDeleteExperience,
+    handleImportExperienceJson,
     handleExtractBulletToLog,
     handleExtractAllBulletsForExperience,
     handleSendVisitorMessage,

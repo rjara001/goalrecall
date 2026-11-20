@@ -12,6 +12,7 @@ import {
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
+import { ParsedExperienceJson } from "../utils/experienceJson";
 import {
   buildExtractedBulletSet,
   computeTotalBulletsCount,
@@ -52,6 +53,10 @@ interface TimelineViewProps {
   onAddExperience: () => void;
   onEditExperience: (exp: WorkExperience) => void;
   onDeleteExperience: (id: string) => Promise<void> | void;
+  onImportExperienceJson?: (
+    experienceId: string,
+    parsed: ParsedExperienceJson
+  ) => Promise<void> | void;
   onAddLogToExperience: (experienceId: string) => void;
   onExtractBulletToLog?: (
     experienceId: string,
@@ -97,6 +102,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onAddExperience,
   onEditExperience,
   onDeleteExperience,
+  onImportExperienceJson,
   onAddLogToExperience,
   onExtractBulletToLog,
   onExtractAllBulletsForExperience,
@@ -292,10 +298,6 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           totalBulletsCount={totalBulletsCount}
           extractedBulletSet={extractedBulletSet}
           nowMs={nowMs}
-          recentlyEditedLogs={recentlyEditedLogs}
-          fallbackRecentLogs={fallbackRecentLogs}
-          highlightedLogId={highlightedLogId}
-          onFocusLog={focusLogElement}
           tl={tl}
           onOpenPasteBullets={onOpenPasteBullets}
           onOpenCvUpload={onOpenCvUpload}
@@ -303,6 +305,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           onEditExperience={onEditExperience}
           onDeleteExperience={(id) =>
             void runMutation(() => onDeleteExperience(id), "No se pudo eliminar la experiencia.")
+          }
+          onImportExperienceJson={
+            onImportExperienceJson
+              ? (expId, parsed) =>
+                  runMutation(
+                    () => onImportExperienceJson(expId, parsed),
+                    "No se pudo cargar el JSON de la experiencia."
+                  )
+              : undefined
           }
           onAddLogToExperience={onAddLogToExperience}
           onEditLog={onEditLog}

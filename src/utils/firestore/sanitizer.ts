@@ -542,6 +542,7 @@ export function buildLogMetadataUpdatePayload(updates: {
   includeInCv?: boolean;
   experienceId?: string;
   client?: string;
+  sortOrder?: number;
 }) {
   const out: Record<string, unknown> = {};
   if (typeof updates.isPublic === "boolean") {
@@ -555,6 +556,9 @@ export function buildLogMetadataUpdatePayload(updates: {
   }
   if (typeof updates.client === "string") {
     out.client = nonEmptyString(updates.client, 200, "General");
+  }
+  if (typeof updates.sortOrder === "number" && Number.isFinite(updates.sortOrder)) {
+    out.sortOrder = Math.max(0, Math.min(100000, Math.trunc(updates.sortOrder)));
   }
   return out;
 }

@@ -158,6 +158,7 @@ export default function App() {
                   onAddExperience={modals.openAddExperience}
                   onEditExperience={modals.openEditExperience}
                   onDeleteExperience={workspace.handleDeleteExperience}
+                  onImportExperienceJson={workspace.handleImportExperienceJson}
                   onAddLogToExperience={(expId) => modals.openQuickLog(expId)}
                   onExtractBulletToLog={workspace.handleExtractBulletToLog}
                   onExtractAllBulletsForExperience={workspace.handleExtractAllBulletsForExperience}

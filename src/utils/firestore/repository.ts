@@ -844,6 +844,131 @@ export async function updateExperienceFirestore(
   }
 }
 
+export async function importExperienceJsonFirestore(params: {
+  updatedExperience: WorkExperience;
+  contentEditedLogs: LogEntry[];
+  metadataOnlyLogs: LogEntry[];
+  logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">>;
+}): Promise<{
+  experience: WorkExperience;
+  updatedLogs: LogEntry[];
+  createdLogs: LogEntry[];
+}> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const expId = sanitizeDocId(params.updatedExperience.id, "exp");
+  const path = `users/${uid}/experiences/${expId}`;
+  const now = Date.now();
+
+  const savedExp: WorkExperience = {
+    ...params.updatedExperience,
+    id: expId,
+    userId: uid,
+    updatedAt: now,
+  };
+
+  const ops: Array<(batch: WriteBatch) => void> = [];
+  ops.push((b) =>
+    b.update(
+      doc(firestore, "users", uid, "experiences", expId),
+      buildWorkExperienceUpdatePayload(savedExp)
+    )
+  );
+
+  const updatedLogs: LogEntry[] = [];
+  for (const log of params.contentEditedLogs) {
+    const safeId = sanitizeDocId(log.id, "log");
+    const nextLog: LogEntry = {
+      ...log,
+      id: safeId,
+      userId: uid,
+      experienceId: log.experienceId || expId,
+      client: savedExp.company,
+      updatedAt: now,
+    };
+    ops.push((b) =>
+      b.update(
+        doc(firestore, "users", uid, "logs", safeId),
+        buildLogEntryUpdatePayload(nextLog)
+      )
+    );
+    updatedLogs.push(nextLog);
+  }
+
+  for (const log of params.metadataOnlyLogs) {
+    const safeId = sanitizeDocId(log.id, "log");
+    const nextLog: LogEntry = {
+      ...log,
+      id: safeId,
+      userId: uid,
+      experienceId: log.experienceId || expId,
+      client: savedExp.company,
+    };
+    const metadataPayload = buildLogMetadataUpdatePayload({
+      experienceId: nextLog.experienceId,
+      client: nextLog.client,
+      isPublic: Boolean(nextLog.isPublic),
+      ...(typeof nextLog.includeInCv === "boolean"
+        ? { includeInCv: nextLog.includeInCv }
+        : {}),
+      ...(typeof nextLog.sortOrder === "number"
+        ? { sortOrder: nextLog.sortOrder }
+        : {}),
+    });
+    if (Object.keys(metadataPayload).length > 0) {
+      ops.push((b) =>
+        b.update(doc(firestore, "users", uid, "logs", safeId), metadataPayload)
+      );
+    }
+    updatedLogs.push(nextLog);
+  }
+
+  const createdLogs: LogEntry[] = [];
+  params.logsToCreate.forEach((draft, idx) => {
+    const cleanTitle = draft.title.trim();
+    if (!cleanTitle) return;
+    const logId = sanitizeDocId(
+      `log-${now}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+      "log"
+    );
+    const entry: LogEntry = {
+      ...draft,
+      id: logId,
+      userId: uid,
+      experienceId: expId,
+      client: savedExp.company,
+      title: cleanTitle,
+      logro: draft.logro || cleanTitle,
+      impact: draft.impact || cleanTitle,
+      isPublic: Boolean(draft.isPublic),
+      includeInCv: draft.includeInCv !== false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    ops.push((b) =>
+      b.set(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryCreatePayload(entry, uid, logId)
+      )
+    );
+    createdLogs.push(entry);
+  });
+
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = writeBatch(firestore);
+    for (const applyOp of ops.slice(i, i + 400)) {
+      applyOp(batch);
+    }
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  }
+
+  return { experience: savedExp, updatedLogs, createdLogs };
+}
+
 export async function deleteExperienceFirestore(
   expId: string,
   reassignedLogs: LogEntry[]

@@ -430,6 +430,7 @@ describe("Firestore sanitizer payloads", () => {
       includeInCv: false,
       experienceId: "exp-1",
       client: "Acme Corp",
+      sortOrder: 4.9,
     }) as Record<string, unknown>;
     assertNoUndefinedDeep(metadataPayload);
     expect(metadataPayload).toEqual({
@@ -437,6 +438,7 @@ describe("Firestore sanitizer payloads", () => {
       includeInCv: false,
       experienceId: "exp-1",
       client: "Acme Corp",
+      sortOrder: 4,
     });
     expect("updatedAt" in metadataPayload).toBe(false);
 

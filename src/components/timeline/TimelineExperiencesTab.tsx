@@ -7,22 +7,30 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   Edit3,
   Eye,
   EyeOff,
   FileUp,
   GripVertical,
+  Loader2,
   MapPin,
   Plus,
   Sparkles,
   Trash2,
+  Upload,
   Zap,
 } from "lucide-react";
 import { LogEntry, WorkExperience } from "../../types";
 import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import {
-  doesLogBelongToExperience,
+  buildExperienceExportFilename,
+  buildExperienceExportJson,
+  ParsedExperienceJson,
+  parseExperienceJson,
+} from "../../utils/experienceJson";
+import {
   getExperienceBulletItems,
   getExperienceChildLogs,
   isLogIncludedInCv,
@@ -32,7 +40,6 @@ import {
   formatRelativeUpdatedTime,
   isRecentlyUpdatedLog,
 } from "./timelineUtils";
-import { RecentEditedLogsSelector } from "./RecentEditedLogsSelector";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -45,6 +52,10 @@ interface TimelineExperiencesTabProps {
   onAddExperience: () => void;
   onEditExperience: (exp: WorkExperience) => void;
   onDeleteExperience: (id: string) => void;
+  onImportExperienceJson?: (
+    experienceId: string,
+    parsed: ParsedExperienceJson
+  ) => Promise<void> | void;
   onAddLogToExperience: (experienceId: string) => void;
   onEditLog?: (entry: LogEntry) => void;
   onToggleIncludeInCv?: (id: string) => void;
@@ -64,10 +75,6 @@ interface TimelineExperiencesTabProps {
   onExtractAllBulletsForExperience?: (experienceId: string) => void;
   onJumpToCompanyLogs: (company: string) => void;
   nowMs: number;
-  recentlyEditedLogs: LogEntry[];
-  fallbackRecentLogs: LogEntry[];
-  highlightedLogId: string | null;
-  onFocusLog: (logId: string) => void;
 }
 
 export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
@@ -80,6 +87,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onAddExperience,
   onEditExperience,
   onDeleteExperience,
+  onImportExperienceJson,
   onAddLogToExperience,
   onEditLog,
   onToggleIncludeInCv,
@@ -88,10 +96,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onExtractAllBulletsForExperience,
   onJumpToCompanyLogs,
   nowMs,
-  recentlyEditedLogs,
-  fallbackRecentLogs,
-  highlightedLogId,
-  onFocusLog,
 }) => {
   const { language } = useI18n();
   const [expandedHiddenDrawer, setExpandedHiddenDrawer] = useState<Record<string, boolean>>({});
@@ -107,17 +111,74 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
     position: "before" | "after";
   } | null>(null);
   const ignoreDragStartRef = useRef(false);
+  const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingUploadExpIdRef = useRef<string | null>(null);
+  const [importingExpId, setImportingExpId] = useState<string | null>(null);
+  const [jsonErrorByExpId, setJsonErrorByExpId] = useState<Record<string, string>>({});
 
   const toggleHiddenDrawer = (expId: string) => {
     setExpandedHiddenDrawer((prev) => ({ ...prev, [expId]: !prev[expId] }));
   };
 
-  const handleSelectRecentLog = (selectedLog: LogEntry) => {
-    const matchedExp = experiences.find((exp) => doesLogBelongToExperience(selectedLog, exp));
-    if (matchedExp && !isLogIncludedInCv(selectedLog)) {
-      setExpandedHiddenDrawer((prev) => ({ ...prev, [matchedExp.id]: true }));
+  const handleDownloadExperienceJson = (exp: WorkExperience) => {
+    const jsonContent = buildExperienceExportJson(exp, logs);
+    const blob = new Blob([jsonContent], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildExperienceExportFilename(exp);
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleTriggerJsonUpload = (expId: string) => {
+    setJsonErrorByExpId((prev) => {
+      if (!prev[expId]) return prev;
+      const next = { ...prev };
+      delete next[expId];
+      return next;
+    });
+    pendingUploadExpIdRef.current = expId;
+    if (jsonFileInputRef.current) {
+      jsonFileInputRef.current.value = "";
+      jsonFileInputRef.current.click();
     }
-    onFocusLog(selectedLog.id);
+  };
+
+  const handleJsonFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const targetExpId = pendingUploadExpIdRef.current;
+    pendingUploadExpIdRef.current = null;
+    e.target.value = "";
+
+    if (!file || !targetExpId) return;
+
+    try {
+      const content = await file.text();
+      const parsed = parseExperienceJson(content);
+      if (!parsed.success) {
+        setJsonErrorByExpId((prev) => ({
+          ...prev,
+          [targetExpId]: parsed.error,
+        }));
+        return;
+      }
+
+      if (!onImportExperienceJson) return;
+
+      setImportingExpId(targetExpId);
+      await onImportExperienceJson(targetExpId, parsed.data);
+    } catch (err) {
+      setJsonErrorByExpId((prev) => ({
+        ...prev,
+        [targetExpId]:
+          err instanceof Error
+            ? err.message
+            : "No se pudo leer o cargar el archivo JSON.",
+      }));
+    } finally {
+      setImportingExpId((current) => (current === targetExpId ? null : current));
+    }
   };
 
   const resetDragState = () => {
@@ -211,6 +272,14 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   };
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      <input
+        ref={jsonFileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={(e) => void handleJsonFileChange(e)}
+        className="hidden"
+        aria-hidden="true"
+      />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900/70 border border-slate-800 rounded-xl">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -226,22 +295,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <RecentEditedLogsSelector
-            recentLogs={recentlyEditedLogs}
-            fallbackLogs={fallbackRecentLogs}
-            experiences={experiences}
-            nowMs={nowMs}
-            language={language}
-            onSelectLog={handleSelectRecentLog}
-          />
-          <button
-            type="button"
-            onClick={onOpenPasteBullets}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{tl.pasteBulletsBtn}</span>
-          </button>
           <button
             type="button"
             onClick={onOpenCvUpload}
@@ -347,12 +400,12 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 pt-1 sm:pt-0">
+                  <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0 pt-1 sm:pt-0">
                     {unextractedLegacyItems.length > 0 && onExtractAllBulletsForExperience && (
                       <button
                         type="button"
                         onClick={() => onExtractAllBulletsForExperience(exp.id)}
-                        className="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 border border-cyan-500/50 text-cyan-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                        className="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 border border-cyan-500/50 text-cyan-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95 whitespace-nowrap shrink-0"
                         title={tl.extractAllBulletsBtn(unextractedLegacyItems.length)}
                       >
                         <Zap className="w-3.5 h-3.5 text-cyan-400" />
@@ -362,8 +415,51 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => handleDownloadExperienceJson(exp)}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                      title={
+                        language === "en"
+                          ? "Download this experience and its achievements as JSON"
+                          : "Descargar esta experiencia y sus logros en formato JSON"
+                      }
+                    >
+                      <Download className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>{language === "en" ? "Download JSON" : "Descargar JSON"}</span>
+                    </button>
+
+                    {onImportExperienceJson && (
+                      <button
+                        type="button"
+                        disabled={importingExpId === exp.id}
+                        onClick={() => handleTriggerJsonUpload(exp.id)}
+                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                        title={
+                          language === "en"
+                            ? "Upload a JSON file to update or add achievements in this experience"
+                            : "Cargar un archivo JSON para actualizar o añadir logros en esta experiencia"
+                        }
+                      >
+                        {importingExpId === exp.id ? (
+                          <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                        ) : (
+                          <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                        )}
+                        <span>
+                          {importingExpId === exp.id
+                            ? language === "en"
+                              ? "Loading..."
+                              : "Cargando..."
+                            : language === "en"
+                              ? "Upload JSON"
+                              : "Cargar JSON"}
+                        </span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
                       onClick={() => onAddLogToExperience(exp.id)}
-                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
                       title={tl.manualLogBtn}
                     >
                       <Plus className="w-3.5 h-3.5 text-cyan-400" />
@@ -373,7 +469,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     <button
                       type="button"
                       onClick={() => onEditExperience(exp)}
-                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg transition-colors"
+                      className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg transition-colors shrink-0"
                       title={tl.editCompanyTooltip}
                     >
                       <Edit3 className="w-3.5 h-3.5" />
@@ -387,7 +483,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                             onDeleteExperience(exp.id);
                           }
                         }}
-                        className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800/60 rounded-lg transition-colors"
+                        className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800/60 rounded-lg transition-colors shrink-0"
                         title={tl.deleteCompanyTooltip}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -395,6 +491,28 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     )}
                   </div>
                 </div>
+
+                {jsonErrorByExpId[exp.id] && (
+                  <div
+                    role="alert"
+                    className="px-3 py-2 rounded-lg bg-red-950/60 border border-red-800/70 text-red-200 text-xs flex items-center justify-between gap-2"
+                  >
+                    <span>{jsonErrorByExpId[exp.id]}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setJsonErrorByExpId((prev) => {
+                          const next = { ...prev };
+                          delete next[exp.id];
+                          return next;
+                        })
+                      }
+                      className="text-[11px] font-semibold text-red-300 hover:text-white whitespace-nowrap shrink-0"
+                    >
+                      {language === "en" ? "Dismiss" : "Cerrar"}
+                    </button>
+                  </div>
+                )}
 
                 {exp.summary && !exp.summary.includes("extraída de CV") && bulletItems.length === 0 && (
                   <p className="text-xs text-slate-400 leading-relaxed max-w-3xl border-l-2 border-slate-800 pl-3 italic">
@@ -438,7 +556,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                         const relativeUpdated = isRecent && childLog
                           ? formatRelativeUpdatedTime(childLog.updatedAt, nowMs, language)
                           : null;
-                        const isFocused = Boolean(childLog && highlightedLogId === childLog.id);
                         return (
                           <div key={item.key} className="space-y-1">
                             {showDropBefore && (
@@ -467,11 +584,9 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                               className={`flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl border transition-colors ${
                                 isDragging
                                   ? "opacity-50 border-cyan-500/60 bg-slate-950/40"
-                                  : isFocused
-                                    ? "border-cyan-400 bg-cyan-950/35 ring-2 ring-cyan-400/70"
-                                    : isRecent
-                                      ? "border-cyan-500/40 bg-cyan-950/15 hover:border-cyan-400/60"
-                                      : "bg-slate-950/40 border-slate-800/60 hover:border-slate-700/80"
+                                  : isRecent
+                                    ? "border-cyan-500/40 bg-cyan-950/15 hover:border-cyan-400/60"
+                                    : "bg-slate-950/40 border-slate-800/60 hover:border-slate-700/80"
                               }`}
                             >
                               <div className="flex items-start gap-2 flex-1 min-w-0">
@@ -631,7 +746,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                             const hiddenRelative = isHiddenRecent
                               ? formatRelativeUpdatedTime(hiddenLog.updatedAt, nowMs, language)
                               : null;
-                            const isHiddenFocused = highlightedLogId === hiddenLog.id;
                             return (
                               <div key={hiddenLog.id} className="space-y-1">
                                 {showHiddenBefore && (
@@ -662,11 +776,9 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg border text-xs transition-colors ${
                                     isDraggingHidden
                                       ? "opacity-50 border-cyan-500/60 bg-slate-900/60"
-                                      : isHiddenFocused
-                                        ? "border-cyan-400 bg-cyan-950/35 ring-2 ring-cyan-400/70"
-                                        : isHiddenRecent
-                                          ? "border-cyan-500/40 bg-cyan-950/15"
-                                          : "border-slate-800/60 bg-slate-900/60"
+                                      : isHiddenRecent
+                                        ? "border-cyan-500/40 bg-cyan-950/15"
+                                        : "border-slate-800/60 bg-slate-900/60"
                                   }`}
                                 >
                                   <div className="flex items-start gap-2 flex-1 min-w-0">
