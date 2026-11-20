@@ -146,6 +146,7 @@ describe("experienceJson export & import", () => {
     if (!parsed.success) return;
 
     const roundTrip = reconcileImportedExperienceJson(sampleExp, sampleLogs, parsed.data, 1800000000000);
+    expect(roundTrip.hasChanges).toBe(false);
     expect(roundTrip.contentEditedLogs.length).toBe(0);
     expect(roundTrip.metadataOnlyLogs.length).toBe(0);
     expect(roundTrip.logsToCreate.length).toBe(0);
@@ -192,6 +193,8 @@ describe("experienceJson export & import", () => {
       1800000000000
     );
 
+    expect(reconciled.hasChanges).toBe(true);
+    expect(reconciled.experienceChanged).toBe(true);
     expect(reconciled.updatedExperience.company).toBe("Acme Cloud Global");
     expect(reconciled.contentEditedLogs.map((l) => l.id)).toEqual(["log-1"]);
     expect(reconciled.contentEditedLogs[0].updatedAt).toBe(1800000000000);
@@ -207,5 +210,36 @@ describe("experienceJson export & import", () => {
       "Nuevo logro añadido desde JSON",
       "Bullet nuevo directo desde experience.bullets",
     ]);
+  });
+
+  it("does not duplicate a log when logs[].title is edited while experience.bullets retains the previous mirrored bullet", () => {
+    const exportedRaw = JSON.parse(buildExperienceExportJson(sampleExp, sampleLogs)) as {
+      experience: Record<string, unknown>;
+      logs: Array<Record<string, unknown>>;
+    };
+
+    // Simulate user editing only logs[0].title in the JSON editor without touching experience.bullets
+    exportedRaw.logs[0].title = "Reduje latencia p99 en 55% con Edge Cache";
+    exportedRaw.logs[0].date = "ab"; // invalid short date must fall back cleanly
+
+    const parsed = parseExperienceJson(JSON.stringify(exportedRaw));
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const reconciled = reconcileImportedExperienceJson(
+      sampleExp,
+      sampleLogs,
+      parsed.data,
+      1800000000000
+    );
+    expect(reconciled.logsToCreate.length).toBe(0);
+    expect(reconciled.contentEditedLogs.map((l) => l.id)).toEqual(["log-1"]);
+    expect(reconciled.contentEditedLogs[0].date).toBe("2024-06-10");
+    expect(reconciled.updatedExperience.bullets).toContain(
+      "Reduje latencia p99 en 55% con Edge Cache"
+    );
+
+    const oversized = JSON.stringify({ company: "X", summary: "a".repeat(520 * 1024) });
+    expect(parseExperienceJson(oversized).success).toBe(false);
   });
 });

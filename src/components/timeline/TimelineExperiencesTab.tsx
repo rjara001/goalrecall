@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import {
   ArrowRight,
+  Braces,
   Briefcase,
   Building,
   Calendar,
@@ -40,6 +41,7 @@ import {
   formatRelativeUpdatedTime,
   isRecentlyUpdatedLog,
 } from "./timelineUtils";
+import { ExperienceJsonEditorModal } from "./ExperienceJsonEditorModal";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -110,11 +112,15 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
     scope: "cv" | "hidden";
     position: "before" | "after";
   } | null>(null);
-  const ignoreDragStartRef = useRef(false);
   const jsonFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingUploadExpIdRef = useRef<string | null>(null);
   const [importingExpId, setImportingExpId] = useState<string | null>(null);
   const [jsonErrorByExpId, setJsonErrorByExpId] = useState<Record<string, string>>({});
+  const [editingJsonExpId, setEditingJsonExpId] = useState<string | null>(null);
+
+  const editingJsonExp = editingJsonExpId
+    ? experiences.find((exp) => exp.id === editingJsonExpId) || null
+    : null;
 
   const toggleHiddenDrawer = (expId: string) => {
     setExpandedHiddenDrawer((prev) => ({ ...prev, [expId]: !prev[expId] }));
@@ -184,25 +190,21 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   const resetDragState = () => {
     setDraggedItem(null);
     setDropTarget(null);
-    ignoreDragStartRef.current = false;
-  };
-
-  const handleRowPointerDownCapture = (e: React.PointerEvent<HTMLDivElement>) => {
-    const targetEl = e.target as HTMLElement | null;
-    ignoreDragStartRef.current = Boolean(
-      targetEl?.closest("button, a, input, select, textarea")
-    );
   };
 
   const handleRowDragStart = (
-    e: React.DragEvent<HTMLDivElement>,
+    e: React.DragEvent<HTMLElement>,
     logId: string,
     expId: string,
     scope: "cv" | "hidden"
   ) => {
-    if (!onReorderLogs || ignoreDragStartRef.current) {
+    if (!onReorderLogs) {
       e.preventDefault();
       return;
+    }
+    const rowEl = e.currentTarget.closest("[data-log-id]");
+    if (rowEl instanceof HTMLElement && typeof e.dataTransfer.setDragImage === "function") {
+      e.dataTransfer.setDragImage(rowEl, 18, 18);
     }
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", logId);
@@ -413,48 +415,85 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadExperienceJson(exp)}
-                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-                      title={
-                        language === "en"
-                          ? "Download this experience and its achievements as JSON"
-                          : "Descargar esta experiencia y sus logros en formato JSON"
-                      }
+                    <div
+                      className="inline-flex items-center rounded-lg border border-slate-700/80 bg-slate-800/80 p-0.5 shrink-0"
+                      role="group"
+                      aria-label={language === "en" ? "Experience JSON actions" : "Acciones JSON de la experiencia"}
                     >
-                      <Download className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>{language === "en" ? "Download JSON" : "Descargar JSON"}</span>
-                    </button>
+                      {onImportExperienceJson && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setJsonErrorByExpId((prev) => {
+                              if (!prev[exp.id]) return prev;
+                              const next = { ...prev };
+                              delete next[exp.id];
+                              return next;
+                            });
+                            setEditingJsonExpId(exp.id);
+                          }}
+                          className="px-2.5 py-1 text-slate-200 hover:text-white hover:bg-slate-700/80 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                          title={
+                            language === "en"
+                              ? "Open, edit and save this experience JSON inline"
+                              : "Abrir, editar y guardar el JSON de esta experiencia aquí mismo"
+                          }
+                        >
+                          <Braces className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>{language === "en" ? "Edit JSON" : "Editar JSON"}</span>
+                        </button>
+                      )}
 
-                    {onImportExperienceJson && (
+                      {onImportExperienceJson && (
+                        <span className="h-4 w-px bg-slate-700/80 mx-0.5" aria-hidden="true" />
+                      )}
+
                       <button
                         type="button"
-                        disabled={importingExpId === exp.id}
-                        onClick={() => handleTriggerJsonUpload(exp.id)}
-                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                        onClick={() => handleDownloadExperienceJson(exp)}
+                        className="px-2.5 py-1 text-slate-200 hover:text-white hover:bg-slate-700/80 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                         title={
                           language === "en"
-                            ? "Upload a JSON file to update or add achievements in this experience"
-                            : "Cargar un archivo JSON para actualizar o añadir logros en esta experiencia"
+                            ? "Download this experience and its achievements as JSON"
+                            : "Descargar esta experiencia y sus logros en formato JSON"
                         }
                       >
-                        {importingExpId === exp.id ? (
-                          <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
-                        ) : (
-                          <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                        )}
-                        <span>
-                          {importingExpId === exp.id
-                            ? language === "en"
-                              ? "Loading..."
-                              : "Cargando..."
-                            : language === "en"
-                              ? "Upload JSON"
-                              : "Cargar JSON"}
-                        </span>
+                        <Download className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{language === "en" ? "Download" : "Descargar"}</span>
                       </button>
-                    )}
+
+                      {onImportExperienceJson && (
+                        <>
+                          <span className="h-4 w-px bg-slate-700/80 mx-0.5" aria-hidden="true" />
+                          <button
+                            type="button"
+                            disabled={importingExpId === exp.id}
+                            onClick={() => handleTriggerJsonUpload(exp.id)}
+                            className="px-2.5 py-1 disabled:opacity-60 disabled:cursor-not-allowed text-slate-200 hover:text-white hover:bg-slate-700/80 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                            title={
+                              language === "en"
+                                ? "Upload a JSON file to update or add achievements in this experience"
+                                : "Cargar un archivo JSON para actualizar o añadir logros en esta experiencia"
+                            }
+                          >
+                            {importingExpId === exp.id ? (
+                              <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                            ) : (
+                              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                            )}
+                            <span>
+                              {importingExpId === exp.id
+                                ? language === "en"
+                                  ? "Loading..."
+                                  : "Cargando..."
+                                : language === "en"
+                                  ? "Upload"
+                                  : "Cargar"}
+                            </span>
+                          </button>
+                        </>
+                      )}
+                    </div>
 
                     <button
                       type="button"
@@ -526,7 +565,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                       {onReorderLogs && bulletItems.filter((item) => item.log !== null).length > 1 && (
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 pl-1">
                           <GripVertical className="w-3 h-3 text-slate-500" />
-                          <span>Arrastra los logros con el mouse para subir o bajar su orden</span>
+                          <span>Arrastra desde el ícono de puntos para reordenar; puedes seleccionar el texto libremente</span>
                         </p>
                       )}
                       {bulletItems.map((item) => {
@@ -563,13 +602,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                             )}
                             <div
                               data-log-id={childLog?.id}
-                              draggable={canDrag}
-                              onPointerDownCapture={canDrag ? handleRowPointerDownCapture : undefined}
-                              onDragStart={
-                                childLog && onReorderLogs
-                                  ? (e) => handleRowDragStart(e, childLog.id, exp.id, "cv")
-                                  : undefined
-                              }
                               onDragOver={
                                 childLog && onReorderLogs
                                   ? (e) => handleRowDragOver(e, childLog.id, exp.id, "cv")
@@ -580,7 +612,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                   ? (e) => handleRowDrop(e, childLog.id, exp.id, "cv")
                                   : undefined
                               }
-                              onDragEnd={canDrag ? resetDragState : undefined}
                               className={`flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl border transition-colors ${
                                 isDragging
                                   ? "opacity-50 border-cyan-500/60 bg-slate-950/40"
@@ -590,10 +621,15 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                               }`}
                             >
                               <div className="flex items-start gap-2 flex-1 min-w-0">
-                                {canDrag && (
+                                {canDrag && childLog && (
                                   <span
-                                    className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
-                                    title="Arrastrar con el mouse para reordenar"
+                                    draggable
+                                    data-drag-handle="true"
+                                    onDragStart={(e) => handleRowDragStart(e, childLog.id, exp.id, "cv")}
+                                    onDragEnd={resetDragState}
+                                    className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 hover:bg-slate-800/80 p-1 -m-0.5 rounded shrink-0 select-none transition-colors"
+                                    title="Arrastrar desde este ícono para reordenar"
+                                    aria-label="Arrastrar para reordenar"
                                   >
                                     <GripVertical className="w-3.5 h-3.5" />
                                   </span>
@@ -753,15 +789,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                 )}
                                 <div
                                   data-log-id={hiddenLog.id}
-                                  draggable={canDragHidden}
-                                  onPointerDownCapture={
-                                    canDragHidden ? handleRowPointerDownCapture : undefined
-                                  }
-                                  onDragStart={
-                                    canDragHidden
-                                      ? (e) => handleRowDragStart(e, hiddenLog.id, exp.id, "hidden")
-                                      : undefined
-                                  }
                                   onDragOver={
                                     canDragHidden
                                       ? (e) => handleRowDragOver(e, hiddenLog.id, exp.id, "hidden")
@@ -772,7 +799,6 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                       ? (e) => handleRowDrop(e, hiddenLog.id, exp.id, "hidden")
                                       : undefined
                                   }
-                                  onDragEnd={canDragHidden ? resetDragState : undefined}
                                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg border text-xs transition-colors ${
                                     isDraggingHidden
                                       ? "opacity-50 border-cyan-500/60 bg-slate-900/60"
@@ -784,8 +810,13 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                   <div className="flex items-start gap-2 flex-1 min-w-0">
                                     {canDragHidden && (
                                       <span
-                                        className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
-                                        title="Arrastrar con el mouse para reordenar"
+                                        draggable
+                                        data-drag-handle="true"
+                                        onDragStart={(e) => handleRowDragStart(e, hiddenLog.id, exp.id, "hidden")}
+                                        onDragEnd={resetDragState}
+                                        className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 hover:bg-slate-800/80 p-1 -m-0.5 rounded shrink-0 select-none transition-colors"
+                                        title="Arrastrar desde este ícono para reordenar"
+                                        aria-label="Arrastrar para reordenar"
                                       >
                                         <GripVertical className="w-3.5 h-3.5" />
                                       </span>
@@ -891,6 +922,19 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
           })}
         </div>
       )}
+
+      <ExperienceJsonEditorModal
+        isOpen={Boolean(editingJsonExp)}
+        experience={editingJsonExp}
+        allLogs={logs}
+        language={language}
+        onClose={() => setEditingJsonExpId(null)}
+        onSave={async (expId, parsed) => {
+          if (onImportExperienceJson) {
+            await onImportExperienceJson(expId, parsed);
+          }
+        }}
+      />
     </div>
   );
 };

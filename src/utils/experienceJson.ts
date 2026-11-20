@@ -51,8 +51,12 @@ export interface ParsedExperienceJson {
   logs: ExperienceJsonLogDraft[];
 }
 
+export const MAX_EXPERIENCE_JSON_CHARS = 512 * 1024;
+
 export interface ReconciledExperienceJsonImport {
   updatedExperience: WorkExperience;
+  experienceChanged: boolean;
+  hasChanges: boolean;
   contentEditedLogs: LogEntry[];
   metadataOnlyLogs: LogEntry[];
   logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">>;
@@ -85,7 +89,19 @@ function normalizeSortOrder(raw: unknown): number | undefined {
   return Math.max(0, Math.min(100000, Math.trunc(raw)));
 }
 
-export function buildExperienceExportFilename(experience: WorkExperience): string {
+function normalizeValidDate(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length >= 4 && trimmed.length <= 32) {
+    return trimmed;
+  }
+  return undefined;
+}
+
+export function buildExperienceExportFilename(
+  experience: WorkExperience,
+  suffix?: string
+): string {
   const rawSlug = (experience.company || "experiencia")
     .toLowerCase()
     .normalize("NFD")
@@ -95,7 +111,8 @@ export function buildExperienceExportFilename(experience: WorkExperience): strin
     .slice(0, 48);
   const slug = rawSlug || "experiencia";
   const dateStamp = new Date().toISOString().substring(0, 10);
-  return `experiencia-${slug}-${dateStamp}.json`;
+  const safeSuffix = suffix ? `-${suffix}` : "";
+  return `experiencia-${slug}${safeSuffix}-${dateStamp}.json`;
 }
 
 export function buildExperienceExportJson(
@@ -214,7 +231,7 @@ function parseRawLogDraft(raw: unknown): ExperienceJsonLogDraft | null {
   return stripUndefinedKeys({
     id: typeof obj.id === "string" && obj.id.trim() ? obj.id.trim() : undefined,
     originalBullet: normalizeOptionalString(obj.originalBullet),
-    date: typeof obj.date === "string" && obj.date.trim() ? obj.date.trim() : undefined,
+    date: normalizeValidDate(obj.date),
     client: typeof obj.client === "string" && obj.client.trim() ? obj.client.trim() : undefined,
     project: typeof obj.project === "string" && obj.project.trim() ? obj.project.trim() : undefined,
     category:
@@ -242,6 +259,13 @@ export function parseExperienceJson(
 ): { success: true; data: ParsedExperienceJson } | { success: false; error: string } {
   if (!jsonString || !jsonString.trim()) {
     return { success: false, error: "El archivo JSON está vacío." };
+  }
+
+  if (jsonString.length > MAX_EXPERIENCE_JSON_CHARS) {
+    return {
+      success: false,
+      error: "El contenido JSON excede el tamaño máximo permitido (512 KB).",
+    };
   }
 
   let parsed: unknown;
@@ -418,6 +442,7 @@ export function reconcileImportedExperienceJson(
       : [];
 
   const resultingTitleSet = new Set<string>();
+  const matchedPreviousTitleSet = new Set<string>();
 
   for (const draft of parsed.logs) {
     const cleanTitle = draft.title.trim();
@@ -431,6 +456,10 @@ export function reconcileImportedExperienceJson(
 
     if (matched) {
       matchedExistingIds.add(matched.id);
+      matchedPreviousTitleSet.add(matched.title.trim().toLowerCase());
+      if (matched.originalBullet) {
+        matchedPreviousTitleSet.add(matched.originalBullet.trim().toLowerCase());
+      }
       const nextCandidate: LogEntry = {
         ...matched,
         experienceId: targetExp.id,
@@ -512,12 +541,14 @@ export function reconcileImportedExperienceJson(
   }
 
   // Materialize any extra bullets listed in parsed.experience.bullets not yet covered
+  // Skip stale bullets that merely mirror the pre-edit title of a matched log updated above
   if (Array.isArray(incomingExp?.bullets)) {
     for (const rawBullet of incomingExp.bullets) {
       const clean = cleanLegacyBulletText(rawBullet);
       if (!clean) continue;
-      if (resultingTitleSet.has(clean.toLowerCase())) continue;
-      resultingTitleSet.add(clean.toLowerCase());
+      const lower = clean.toLowerCase();
+      if (resultingTitleSet.has(lower) || matchedPreviousTitleSet.has(lower)) continue;
+      resultingTitleSet.add(lower);
       logsToCreate.push({
         experienceId: targetExp.id,
         originalBullet: clean,
@@ -573,8 +604,27 @@ export function reconcileImportedExperienceJson(
           ),
   };
 
+  const experienceChanged =
+    targetExp.company !== updatedExperience.company ||
+    targetExp.role !== updatedExperience.role ||
+    targetExp.startDate !== updatedExperience.startDate ||
+    (targetExp.endDate || "") !== (updatedExperience.endDate || "") ||
+    Boolean(targetExp.isCurrent) !== Boolean(updatedExperience.isCurrent) ||
+    (targetExp.location || "") !== (updatedExperience.location || "") ||
+    (targetExp.summary || "") !== (updatedExperience.summary || "") ||
+    !areStringArraysEqual(targetExp.technologies, updatedExperience.technologies) ||
+    !areStringArraysEqual(targetExp.bullets, updatedExperience.bullets);
+
+  const hasChanges =
+    experienceChanged ||
+    contentEditedLogs.length > 0 ||
+    metadataOnlyLogs.length > 0 ||
+    logsToCreate.length > 0;
+
   return {
     updatedExperience,
+    experienceChanged,
+    hasChanges,
     contentEditedLogs,
     metadataOnlyLogs,
     logsToCreate,

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React from "react";
 import {
   Copy,
   Edit3,
@@ -35,7 +35,7 @@ interface TimelineAchievementCardProps {
   isDraggable?: boolean;
   isDragging?: boolean;
   dropIndicator?: "before" | "after" | null;
-  onDragStartCard?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragStartCard?: (e: React.DragEvent<HTMLElement>) => void;
   onDragOverCard?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDropCard?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragEndCard?: () => void;
@@ -70,25 +70,19 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
   const relativeUpdated = isRecent
     ? formatRelativeUpdatedTime(log.updatedAt, nowMs, language)
     : null;
-  const ignoreDragStartRef = useRef(false);
-
-  const handlePointerDownCapture = (e: React.PointerEvent<HTMLDivElement>) => {
-    const targetEl = e.target as HTMLElement | null;
-    ignoreDragStartRef.current = Boolean(
-      targetEl?.closest("button, a, input, select, textarea, [data-no-drag='true']")
-    );
-  };
-
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!isDraggable || ignoreDragStartRef.current) {
+  const handleDragStart = (e: React.DragEvent<HTMLElement>) => {
+    if (!isDraggable) {
       e.preventDefault();
       return;
+    }
+    const cardEl = e.currentTarget.closest("[data-log-id]");
+    if (cardEl instanceof HTMLElement && typeof e.dataTransfer.setDragImage === "function") {
+      e.dataTransfer.setDragImage(cardEl, 20, 20);
     }
     onDragStartCard?.(e);
   };
 
   const handleDragEnd = () => {
-    ignoreDragStartRef.current = false;
     onDragEndCard?.();
   };
 
@@ -97,12 +91,8 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
       {dropIndicator === "before" && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
       <div
         data-log-id={log.id}
-        draggable={isDraggable}
-        onPointerDownCapture={isDraggable ? handlePointerDownCapture : undefined}
-        onDragStart={isDraggable ? handleDragStart : undefined}
         onDragOver={isDraggable ? onDragOverCard : undefined}
         onDrop={isDraggable ? onDropCard : undefined}
-        onDragEnd={isDraggable ? handleDragEnd : undefined}
         className={`p-4 hover:bg-slate-900 border rounded-xl transition-all group ${
           isDragging
             ? "opacity-50 border-cyan-500/60 bg-slate-900/80"
@@ -117,8 +107,13 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
           <div className="flex flex-wrap items-center gap-2 text-slate-400 font-medium">
             {isDraggable && (
               <span
-                className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 shrink-0 select-none"
-                title="Arrastrar con el mouse para subir o bajar este logro"
+                draggable
+                data-drag-handle="true"
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 hover:bg-slate-800/80 p-1 -m-0.5 rounded shrink-0 select-none transition-colors"
+                title="Arrastrar desde este ícono para subir o bajar este logro"
+                aria-label="Arrastrar para reordenar"
               >
                 <GripVertical className="w-4 h-4" />
               </span>

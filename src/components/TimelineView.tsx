@@ -308,11 +308,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           }
           onImportExperienceJson={
             onImportExperienceJson
-              ? (expId, parsed) =>
-                  runMutation(
-                    () => onImportExperienceJson(expId, parsed),
-                    "No se pudo cargar el JSON de la experiencia."
-                  )
+              ? async (expId, parsed) => {
+                  setActionError(null);
+                  await onImportExperienceJson(expId, parsed);
+                }
               : undefined
           }
           onAddLogToExperience={onAddLogToExperience}

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { Building, FolderGit2, GripVertical, Plus, Search, Tag as TagIcon, Zap } from "lucide-react";
 import { LogCategory, LogEntry, WorkExperience } from "../../types";
 import { useI18n } from "../../i18n";
@@ -102,22 +102,23 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
     groupKey: string;
     position: "before" | "after";
   } | null>(null);
-  const ignoreUnassignedDragRef = useRef(false);
-
   const resetDragState = () => {
     setDraggedCard(null);
     setDropTarget(null);
-    ignoreUnassignedDragRef.current = false;
   };
 
   const handleCardDragStart = (
-    e: React.DragEvent<HTMLDivElement>,
+    e: React.DragEvent<HTMLElement>,
     logId: string,
     groupKey: string
   ) => {
     if (!onReorderLogs) {
       e.preventDefault();
       return;
+    }
+    const cardEl = e.currentTarget.closest("[data-log-id]");
+    if (cardEl instanceof HTMLElement && typeof e.dataTransfer.setDragImage === "function") {
+      e.dataTransfer.setDragImage(cardEl, 20, 20);
     }
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", logId);
@@ -490,28 +491,6 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                       {showBefore && <div className="h-0.5 bg-cyan-400 rounded-full mx-1" />}
                       <div
                         data-log-id={log.id}
-                        draggable={canDragUnassigned}
-                        onPointerDownCapture={
-                          canDragUnassigned
-                            ? (e) => {
-                                const targetEl = e.target as HTMLElement | null;
-                                ignoreUnassignedDragRef.current = Boolean(
-                                  targetEl?.closest("button, a, input, select, textarea")
-                                );
-                              }
-                            : undefined
-                        }
-                        onDragStart={
-                          canDragUnassigned
-                            ? (e) => {
-                                if (ignoreUnassignedDragRef.current) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                handleCardDragStart(e, log.id, "__unassigned__");
-                              }
-                            : undefined
-                        }
                         onDragOver={
                           canDragUnassigned
                             ? (e) => handleCardDragOver(e, log.id, "__unassigned__")
@@ -522,7 +501,6 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                             ? (e) => handleCardDrop(e, log.id, "__unassigned__", undefined)
                             : undefined
                         }
-                        onDragEnd={canDragUnassigned ? resetDragState : undefined}
                         className={`p-3 bg-slate-900 border rounded-xl flex items-center justify-between gap-3 text-xs transition-colors ${
                           isDraggingUnassigned
                             ? "opacity-50 border-cyan-500/60"
@@ -536,8 +514,13 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                         <div className="flex items-start gap-2.5 min-w-0 flex-1">
                           {canDragUnassigned && (
                             <span
-                              className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 mt-0.5 shrink-0 select-none"
-                              title="Arrastrar con el mouse para reordenar"
+                              draggable
+                              data-drag-handle="true"
+                              onDragStart={(e) => handleCardDragStart(e, log.id, "__unassigned__")}
+                              onDragEnd={resetDragState}
+                              className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-cyan-400 hover:bg-slate-800/80 p-1 -m-0.5 rounded shrink-0 select-none transition-colors"
+                              title="Arrastrar desde este ícono para reordenar"
+                              aria-label="Arrastrar para reordenar"
                             >
                               <GripVertical className="w-4 h-4" />
                             </span>
