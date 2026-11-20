@@ -907,17 +907,26 @@ export const useWorkspaceData = ({
           contentEditedLogs: reconciled.contentEditedLogs,
           metadataOnlyLogs: reconciled.metadataOnlyLogs,
           logsToCreate: reconciled.logsToCreate,
+          logsToDelete: reconciled.logsToDelete,
         });
 
+        const deletedIdSet = new Set(res.deletedLogIds);
         const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
         const nextLogs = [
           ...res.createdLogs,
-          ...stateRef.current.logs.map((l) => updatedMap.get(l.id) || l),
+          ...stateRef.current.logs
+            .filter((l) => !deletedIdSet.has(l.id))
+            .map((l) => updatedMap.get(l.id) || l),
         ];
         const syncedBullets = deriveExperienceBulletsFromLogs(res.experience, nextLogs);
         const finalExp: WorkExperience = {
           ...res.experience,
-          bullets: syncedBullets.length > 0 ? syncedBullets : res.experience.bullets,
+          bullets:
+            deletedIdSet.size > 0 || parsed.hasExplicitLogsField
+              ? syncedBullets
+              : syncedBullets.length > 0
+                ? syncedBullets
+                : res.experience.bullets,
         };
 
         setExperiences((prev) =>
@@ -927,7 +936,8 @@ export const useWorkspaceData = ({
 
         if (
           res.createdLogs.some((l) => l.isPublic) ||
-          res.updatedLogs.some((l) => l.isPublic)
+          res.updatedLogs.some((l) => l.isPublic) ||
+          reconciled.logsToDelete.some((l) => l.isPublic)
         ) {
           await syncShowcaseIfPublished({ logs: nextLogs });
         }
@@ -935,14 +945,26 @@ export const useWorkspaceData = ({
         const editedCount = reconciled.contentEditedLogs.length;
         const metadataCount = reconciled.metadataOnlyLogs.length;
         const createdCount = res.createdLogs.length;
-        if (createdCount === 0 && editedCount === 0 && metadataCount === 0) {
+        const deletedCount = res.deletedLogIds.length;
+        if (
+          createdCount === 0 &&
+          editedCount === 0 &&
+          metadataCount === 0 &&
+          deletedCount === 0
+        ) {
           showToastRef.current(
-            `JSON cargado en ${finalExp.company}: datos sincronizados sin nuevos logros`,
+            `JSON sincronizado en ${finalExp.company} sin cambios en logros`,
             "info"
           );
         } else {
+          const parts: string[] = [];
+          if (createdCount > 0) parts.push(`${createdCount} nuevo(s)`);
+          if (editedCount + metadataCount > 0) {
+            parts.push(`${editedCount + metadataCount} actualizado(s)`);
+          }
+          if (deletedCount > 0) parts.push(`${deletedCount} eliminado(s)`);
           showToastRef.current(
-            `JSON cargado en ${finalExp.company}: ${createdCount} nuevo(s), ${editedCount + metadataCount} actualizado(s) ✨`,
+            `JSON reemplazado en ${finalExp.company}: ${parts.join(", ")} ✨`,
             "success"
           );
         }

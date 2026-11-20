@@ -49,6 +49,7 @@ export interface ExperienceJsonLogDraft {
 export interface ParsedExperienceJson {
   experience?: ExperienceJsonPayload;
   logs: ExperienceJsonLogDraft[];
+  hasExplicitLogsField?: boolean;
 }
 
 export const MAX_EXPERIENCE_JSON_CHARS = 512 * 1024;
@@ -60,6 +61,7 @@ export interface ReconciledExperienceJsonImport {
   contentEditedLogs: LogEntry[];
   metadataOnlyLogs: LogEntry[];
   logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">>;
+  logsToDelete: LogEntry[];
   unchangedCount: number;
 }
 
@@ -154,7 +156,9 @@ export function buildExperienceExportJson(
       project: log.project,
       category: log.category,
       title: log.title,
-      logro: log.logro,
+      ...(log.logro && log.logro.trim() && log.logro.trim() !== log.title.trim()
+        ? { logro: log.logro }
+        : {}),
       includeInCv: log.includeInCv,
       whatWasSought: log.whatWasSought,
       whyImportant: log.whyImportant,
@@ -239,7 +243,7 @@ function parseRawLogDraft(raw: unknown): ExperienceJsonLogDraft | null {
         ? (obj.category.trim() as LogCategory)
         : undefined,
     title: rawTitle,
-    logro: typeof obj.logro === "string" && obj.logro.trim() ? obj.logro.trim() : rawTitle,
+    logro: typeof obj.logro === "string" && obj.logro.trim() ? obj.logro.trim() : undefined,
     includeInCv: typeof obj.includeInCv === "boolean" ? obj.includeInCv : undefined,
     whatWasSought: normalizeOptionalString(obj.whatWasSought),
     whyImportant: normalizeOptionalString(obj.whyImportant),
@@ -285,13 +289,13 @@ export function parseExperienceJson(
     const logs = parsed
       .map(parseRawLogDraft)
       .filter((item): item is ExperienceJsonLogDraft => item !== null);
-    if (logs.length === 0) {
+    if (parsed.length > 0 && logs.length === 0) {
       return {
         success: false,
         error: "La lista JSON no contiene logros válidos (cada elemento requiere un campo title o texto).",
       };
     }
-    return { success: true, data: { logs } };
+    return { success: true, data: { logs, hasExplicitLogsField: true } };
   }
 
   if (!parsed || typeof parsed !== "object") {
@@ -309,6 +313,15 @@ export function parseExperienceJson(
 
   const experience = parseRawExperienceObject(rawExpObj);
 
+  const hasExplicitLogsField =
+    Array.isArray(root.logs) ||
+    Boolean(
+      root.experience &&
+        typeof root.experience === "object" &&
+        !Array.isArray(root.experience) &&
+        Array.isArray((root.experience as Record<string, unknown>).logs)
+    );
+
   const rawLogsArray = Array.isArray(root.logs)
     ? root.logs
     : root.experience &&
@@ -322,7 +335,7 @@ export function parseExperienceJson(
     .map(parseRawLogDraft)
     .filter((item): item is ExperienceJsonLogDraft => item !== null);
 
-  if (!experience && logs.length === 0) {
+  if (!experience && !hasExplicitLogsField && logs.length === 0) {
     return {
       success: false,
       error:
@@ -335,6 +348,7 @@ export function parseExperienceJson(
     data: {
       experience,
       logs,
+      hasExplicitLogsField,
     },
   };
 }
@@ -424,6 +438,7 @@ export function reconcileImportedExperienceJson(
   const contentEditedLogs: LogEntry[] = [];
   const metadataOnlyLogs: LogEntry[] = [];
   const logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">> = [];
+  const logsToDelete: LogEntry[] = [];
   let unchangedCount = 0;
 
   const findUnmatchedByTitle = (title: string): LogEntry | undefined => {
@@ -441,25 +456,181 @@ export function reconcileImportedExperienceJson(
       ? nextTechnologies.slice(0, 4).map((t) => `#${t.replace(/\s+/g, "")}`)
       : [];
 
-  const resultingTitleSet = new Set<string>();
-  const matchedPreviousTitleSet = new Set<string>();
+  const hasExplicitLogsField =
+    parsed.hasExplicitLogsField === true || parsed.logs.length > 0;
+  const hasExplicitBulletsField = Array.isArray(incomingExp?.bullets);
 
-  for (const draft of parsed.logs) {
-    const cleanTitle = draft.title.trim();
-    if (!cleanTitle) continue;
-    resultingTitleSet.add(cleanTitle.toLowerCase());
+  const originalCvBullets = deriveExperienceBulletsFromLogs(targetExp, existingAllLogs);
+  const incomingBullets = hasExplicitBulletsField
+    ? (incomingExp?.bullets || []).map(cleanLegacyBulletText).filter((b) => b.length > 0)
+    : [];
+  const bulletsChanged =
+    hasExplicitBulletsField && !areStringArraysEqual(incomingBullets, originalCvBullets);
 
+  const resolveEffectiveDraftTitle = (
+    draft: ExperienceJsonLogDraft,
+    matched?: LogEntry
+  ): string => {
+    const t = draft.title.trim();
+    if (
+      matched &&
+      draft.logro &&
+      draft.logro.trim().length > 0 &&
+      t === matched.title.trim() &&
+      draft.logro.trim() !== (matched.logro || "").trim()
+    ) {
+      return draft.logro.trim();
+    }
+    return t;
+  };
+
+  const didParsedLogsChange = (): boolean => {
+    if (!hasExplicitLogsField) return false;
+    if (parsed.logs.length !== existingChildLogs.length) return true;
+    for (let i = 0; i < parsed.logs.length; i += 1) {
+      const draft = parsed.logs[i];
+      const existing = existingChildLogs[i];
+      if (!existing) return true;
+      if (draft.id && draft.id !== existing.id) return true;
+      const effectiveTitle = resolveEffectiveDraftTitle(draft, existing);
+      if (!draft.id && effectiveTitle.toLowerCase() !== existing.title.trim().toLowerCase()) {
+        return true;
+      }
+      const candidate: LogEntry = {
+        ...existing,
+        experienceId: targetExp.id,
+        client: nextCompany,
+        project: draft.project ?? existing.project,
+        category: draft.category ?? existing.category,
+        date: draft.date ?? existing.date,
+        title: effectiveTitle,
+        logro: effectiveTitle,
+        originalBullet:
+          draft.originalBullet !== undefined ? draft.originalBullet : existing.originalBullet,
+        whatWasSought:
+          draft.whatWasSought !== undefined ? draft.whatWasSought : existing.whatWasSought,
+        whyImportant:
+          draft.whyImportant !== undefined ? draft.whyImportant : existing.whyImportant,
+        howApplied: draft.howApplied !== undefined ? draft.howApplied : existing.howApplied,
+        impact:
+          draft.impact !== undefined
+            ? draft.impact || effectiveTitle
+            : existing.impact || effectiveTitle,
+        description:
+          draft.description !== undefined ? draft.description : existing.description,
+        tags: draft.tags !== undefined ? draft.tags : existing.tags,
+        isPublic: typeof draft.isPublic === "boolean" ? draft.isPublic : existing.isPublic,
+        includeInCv:
+          typeof draft.includeInCv === "boolean" ? draft.includeInCv : existing.includeInCv,
+        sortOrder: draft.sortOrder !== undefined ? draft.sortOrder : existing.sortOrder,
+      };
+      if (hasLogContentChanged(existing, candidate) || hasLogMetadataChanged(existing, candidate)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const logsChanged = didParsedLogsChange();
+  const isLegacyBulletsOnlySnapshot =
+    existingChildLogs.length === 0 && parsed.logs.length === 0 && hasExplicitBulletsField;
+  const shouldDriveFromBullets =
+    (!hasExplicitLogsField && hasExplicitBulletsField) ||
+    (!logsChanged && bulletsChanged) ||
+    (isLegacyBulletsOnlySnapshot && bulletsChanged);
+
+  const replaceAchievements =
+    (hasExplicitLogsField && !isLegacyBulletsOnlySnapshot) ||
+    hasExplicitBulletsField && shouldDriveFromBullets;
+
+  const buildDraftsFromEditedBullets = (): ExperienceJsonLogDraft[] => {
+    const existingCvLogs = existingChildLogs.filter(isLogIncludedInCv);
+    const existingHiddenLogs = existingChildLogs.filter((l) => !isLogIncludedInCv(l));
+
+    const usedCvIds = new Set<string>();
+    const exactMatchByBulletIdx = new Map<number, LogEntry>();
+
+    incomingBullets.forEach((bulletText, idx) => {
+      const norm = bulletText.toLowerCase();
+      const exact = existingCvLogs.find(
+        (l) => !usedCvIds.has(l.id) && l.title.trim().toLowerCase() === norm
+      );
+      if (exact) {
+        usedCvIds.add(exact.id);
+        exactMatchByBulletIdx.set(idx, exact);
+      }
+    });
+
+    const isOrderOrCountChanged =
+      incomingBullets.length !== existingCvLogs.length ||
+      incomingBullets.some((b, idx) => {
+        const m = exactMatchByBulletIdx.get(idx);
+        return !m || existingCvLogs[idx]?.id !== m.id;
+      });
+
+    const cvDrafts: ExperienceJsonLogDraft[] = incomingBullets.map((bulletText, idx) => {
+      const exact = exactMatchByBulletIdx.get(idx);
+      if (exact) {
+        return {
+          id: exact.id,
+          title: bulletText,
+          ...(isOrderOrCountChanged ? { sortOrder: idx } : {}),
+        };
+      }
+      const positional = existingCvLogs[idx];
+      if (positional && !usedCvIds.has(positional.id)) {
+        usedCvIds.add(positional.id);
+        return {
+          id: positional.id,
+          title: bulletText,
+          ...(isOrderOrCountChanged ? { sortOrder: idx } : {}),
+        };
+      }
+      return {
+        title: bulletText,
+        includeInCv: true,
+        sortOrder: idx,
+      };
+    });
+
+    const hiddenDrafts: ExperienceJsonLogDraft[] = existingHiddenLogs.map((l) => ({
+      id: l.id,
+      title: l.title,
+      includeInCv: false,
+      sortOrder: l.sortOrder,
+    }));
+
+    return [...cvDrafts, ...hiddenDrafts];
+  };
+
+  const effectiveDrafts: ExperienceJsonLogDraft[] =
+    !hasExplicitLogsField && hasExplicitBulletsField
+      ? incomingBullets.map((clean, idx) => ({
+          title: clean,
+          includeInCv: true,
+          sortOrder: idx,
+        }))
+      : shouldDriveFromBullets
+        ? buildDraftsFromEditedBullets()
+        : hasExplicitLogsField
+          ? parsed.logs
+          : [];
+
+  for (let draftIdx = 0; draftIdx < effectiveDrafts.length; draftIdx += 1) {
+    const draft = effectiveDrafts[draftIdx];
     const byId = draft.id ? existingById.get(draft.id) : undefined;
+    const tentativeTitle = resolveEffectiveDraftTitle(draft, byId);
+    if (!tentativeTitle) continue;
+
     const matched = byId && !matchedExistingIds.has(byId.id)
       ? byId
-      : findUnmatchedByTitle(cleanTitle);
+      : findUnmatchedByTitle(tentativeTitle);
+
+    const cleanTitle = resolveEffectiveDraftTitle(draft, matched);
+    if (!cleanTitle) continue;
 
     if (matched) {
       matchedExistingIds.add(matched.id);
-      matchedPreviousTitleSet.add(matched.title.trim().toLowerCase());
-      if (matched.originalBullet) {
-        matchedPreviousTitleSet.add(matched.originalBullet.trim().toLowerCase());
-      }
       const nextCandidate: LogEntry = {
         ...matched,
         experienceId: targetExp.id,
@@ -519,51 +690,26 @@ export function reconcileImportedExperienceJson(
           `Importado desde JSON para ${nextCompany} (${nextRole}).`,
         tags: draft.tags !== undefined ? draft.tags : defaultTags,
         isPublic: Boolean(draft.isPublic),
-        sortOrder: draft.sortOrder,
+        sortOrder: draft.sortOrder !== undefined ? draft.sortOrder : draftIdx,
       });
     }
   }
 
-  // Sync remaining existing child logs of targetExp if company rename or legacy linking applies
   for (const existing of existingChildLogs) {
     if (matchedExistingIds.has(existing.id)) continue;
-    resultingTitleSet.add(existing.title.trim().toLowerCase());
 
-    const needsLinkOrClientSync =
-      existing.experienceId !== targetExp.id || existing.client !== nextCompany;
-    if (needsLinkOrClientSync) {
-      metadataOnlyLogs.push({
-        ...existing,
-        experienceId: existing.experienceId || targetExp.id,
-        client: nextCompany,
-      });
-    }
-  }
-
-  // Materialize any extra bullets listed in parsed.experience.bullets not yet covered
-  // Skip stale bullets that merely mirror the pre-edit title of a matched log updated above
-  if (Array.isArray(incomingExp?.bullets)) {
-    for (const rawBullet of incomingExp.bullets) {
-      const clean = cleanLegacyBulletText(rawBullet);
-      if (!clean) continue;
-      const lower = clean.toLowerCase();
-      if (resultingTitleSet.has(lower) || matchedPreviousTitleSet.has(lower)) continue;
-      resultingTitleSet.add(lower);
-      logsToCreate.push({
-        experienceId: targetExp.id,
-        originalBullet: clean,
-        date: defaultDate,
-        client: nextCompany,
-        project: nextRole || nextCompany,
-        category: inferCategoryForSavedExperienceBullet(clean),
-        title: clean,
-        logro: clean,
-        includeInCv: true,
-        impact: clean,
-        description: `Importado desde JSON para ${nextCompany} (${nextRole}).`,
-        tags: defaultTags,
-        isPublic: false,
-      });
+    if (replaceAchievements) {
+      logsToDelete.push(existing);
+    } else {
+      const needsLinkOrClientSync =
+        existing.experienceId !== targetExp.id || existing.client !== nextCompany;
+      if (needsLinkOrClientSync) {
+        metadataOnlyLogs.push({
+          ...existing,
+          experienceId: existing.experienceId || targetExp.id,
+          client: nextCompany,
+        });
+      }
     }
   }
 
@@ -571,6 +717,7 @@ export function reconcileImportedExperienceJson(
   const mutatedMap = new Map<string, LogEntry>();
   for (const l of contentEditedLogs) mutatedMap.set(l.id, l);
   for (const l of metadataOnlyLogs) mutatedMap.set(l.id, l);
+  const deletedIdSet = new Set(logsToDelete.map((l) => l.id));
 
   const syntheticCreated: LogEntry[] = logsToCreate.map((item, idx) => ({
     ...item,
@@ -580,24 +727,30 @@ export function reconcileImportedExperienceJson(
   }));
 
   const previewAllLogs = [
-    ...existingAllLogs.map((l) => {
-      const updated = mutatedMap.get(l.id);
-      if (updated) return updated;
-      if (doesLogBelongToExperience(l, targetExp)) {
-        return { ...l, experienceId: l.experienceId || targetExp.id, client: nextCompany };
-      }
-      return l;
-    }),
+    ...existingAllLogs
+      .filter((l) => !deletedIdSet.has(l.id))
+      .map((l) => {
+        const updated = mutatedMap.get(l.id);
+        if (updated) return updated;
+        if (doesLogBelongToExperience(l, targetExp)) {
+          return { ...l, experienceId: l.experienceId || targetExp.id, client: nextCompany };
+        }
+        return l;
+      }),
     ...syntheticCreated,
   ];
 
-  const projectedBullets = deriveExperienceBulletsFromLogs(nextExpBase, previewAllLogs);
+  const expForProjection: WorkExperience = replaceAchievements
+    ? { ...nextExpBase, bullets: [] }
+    : nextExpBase;
+  const projectedBullets = deriveExperienceBulletsFromLogs(expForProjection, previewAllLogs);
+  const previewRemainingChildLogs = getExperienceChildLogs(expForProjection, previewAllLogs);
   const updatedExperience: WorkExperience = {
     ...nextExpBase,
     bullets:
-      projectedBullets.length > 0
+      previewRemainingChildLogs.length > 0 || replaceAchievements
         ? projectedBullets
-        : (incomingExp?.bullets || targetExp.bullets || []).filter((b) =>
+        : (targetExp.bullets || []).filter((b) =>
             existingChildLogs.every(
               (l) => isLogIncludedInCv(l) || l.title.trim() !== b.trim()
             )
@@ -619,7 +772,8 @@ export function reconcileImportedExperienceJson(
     experienceChanged ||
     contentEditedLogs.length > 0 ||
     metadataOnlyLogs.length > 0 ||
-    logsToCreate.length > 0;
+    logsToCreate.length > 0 ||
+    logsToDelete.length > 0;
 
   return {
     updatedExperience,
@@ -628,6 +782,7 @@ export function reconcileImportedExperienceJson(
     contentEditedLogs,
     metadataOnlyLogs,
     logsToCreate,
+    logsToDelete,
     unchangedCount,
   };
 }

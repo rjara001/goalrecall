@@ -207,6 +207,7 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
       logsToCreate,
       contentEditedLogs,
       metadataOnlyLogs,
+      logsToDelete,
       unchangedCount,
     } = validation.reconciled;
     if (experienceChanged) {
@@ -231,6 +232,13 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
         isEn
           ? `${metadataOnlyLogs.length} order/visibility change(s) (keeps timestamp)`
           : `${metadataOnlyLogs.length} orden/visibilidad (mantiene fecha)`
+      );
+    }
+    if (logsToDelete.length > 0) {
+      diffSummaryParts.push(
+        isEn
+          ? `${logsToDelete.length} achievement(s) removed`
+          : `${logsToDelete.length} logro(s) a eliminar`
       );
     }
     if (diffSummaryParts.length === 0 && unchangedCount >= 0) {
@@ -264,8 +272,8 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
               {isEn
-                ? "Edit experience metadata or achievements directly. IDs, userId and audit timestamps are protected; omitted achievements are preserved."
-                : "Edita datos o logros directamente. Los IDs, usuario y fechas de auditoría están protegidos; los logros omitidos no se eliminan."}
+                ? "Replaces this experience's achievement set with the JSON below (IDs, userId and audit timestamps are protected; omitted achievements will be removed)."
+                : "Reemplaza el conjunto de logros de esta experiencia con este JSON (IDs, usuario y fechas de auditoría están protegidos; los logros omitidos se eliminarán)."}
             </p>
           </div>
           <button

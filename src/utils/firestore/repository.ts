@@ -849,10 +849,12 @@ export async function importExperienceJsonFirestore(params: {
   contentEditedLogs: LogEntry[];
   metadataOnlyLogs: LogEntry[];
   logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">>;
+  logsToDelete: LogEntry[];
 }): Promise<{
   experience: WorkExperience;
   updatedLogs: LogEntry[];
   createdLogs: LogEntry[];
+  deletedLogIds: string[];
 }> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
@@ -923,6 +925,13 @@ export async function importExperienceJsonFirestore(params: {
     updatedLogs.push(nextLog);
   }
 
+  const deletedLogIds: string[] = [];
+  for (const log of params.logsToDelete) {
+    const safeId = sanitizeDocId(log.id, "log");
+    ops.push((b) => b.delete(doc(firestore, "users", uid, "logs", safeId)));
+    deletedLogIds.push(safeId);
+  }
+
   const createdLogs: LogEntry[] = [];
   params.logsToCreate.forEach((draft, idx) => {
     const cleanTitle = draft.title.trim();
@@ -966,7 +975,7 @@ export async function importExperienceJsonFirestore(params: {
     }
   }
 
-  return { experience: savedExp, updatedLogs, createdLogs };
+  return { experience: savedExp, updatedLogs, createdLogs, deletedLogIds };
 }
 
 export async function deleteExperienceFirestore(

@@ -150,16 +150,17 @@ describe("experienceJson export & import", () => {
     expect(roundTrip.contentEditedLogs.length).toBe(0);
     expect(roundTrip.metadataOnlyLogs.length).toBe(0);
     expect(roundTrip.logsToCreate.length).toBe(0);
+    expect(roundTrip.logsToDelete.length).toBe(0);
     expect(roundTrip.unchangedCount).toBe(2);
 
-    // Edit content of log-1, metadata-only of log-2, add new log-3 + unlinked bullet
+    // Edit content of log-1, metadata-only of log-2, add new log-3
     const editedParsed = parseExperienceJson(
       JSON.stringify({
         experience: {
           ...sampleExp,
           company: "Acme Cloud Global",
           technologies: ["TypeScript", "React", "Firestore", "Go"],
-          bullets: ["Bullet nuevo directo desde experience.bullets"],
+          bullets: ["Stale mirrored bullet should not auto-create extra log"],
         },
         logs: [
           {
@@ -208,38 +209,182 @@ describe("experienceJson export & import", () => {
 
     expect(reconciled.logsToCreate.map((l) => l.title)).toEqual([
       "Nuevo logro añadido desde JSON",
-      "Bullet nuevo directo desde experience.bullets",
     ]);
+    expect(reconciled.logsToDelete.length).toBe(0);
   });
 
-  it("does not duplicate a log when logs[].title is edited while experience.bullets retains the previous mirrored bullet", () => {
-    const exportedRaw = JSON.parse(buildExperienceExportJson(sampleExp, sampleLogs)) as {
-      experience: Record<string, unknown>;
-      logs: Array<Record<string, unknown>>;
-    };
+  it("replaces the entire achievement set when logs are removed, swapped without IDs, or emptied", () => {
+    // 1. Remove log-2 from canonical JSON -> log-2 must be scheduled for deletion even if experience.bullets still contains it
+    const partialReplace = parseExperienceJson(
+      JSON.stringify({
+        experience: {
+          ...sampleExp,
+          bullets: ["Reduje latencia p99 en 42%", "Migración OAuth sin downtime"],
+        },
+        logs: [
+          {
+            id: "log-1",
+            title: "Reduje latencia p99 en 55% con Edge Cache",
+            date: "ab", // invalid short date must fall back cleanly
+          },
+        ],
+      })
+    );
+    expect(partialReplace.success).toBe(true);
+    if (!partialReplace.success) return;
 
-    // Simulate user editing only logs[0].title in the JSON editor without touching experience.bullets
-    exportedRaw.logs[0].title = "Reduje latencia p99 en 55% con Edge Cache";
-    exportedRaw.logs[0].date = "ab"; // invalid short date must fall back cleanly
-
-    const parsed = parseExperienceJson(JSON.stringify(exportedRaw));
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
-
-    const reconciled = reconcileImportedExperienceJson(
+    const reconciledPartial = reconcileImportedExperienceJson(
       sampleExp,
       sampleLogs,
-      parsed.data,
+      partialReplace.data,
       1800000000000
     );
-    expect(reconciled.logsToCreate.length).toBe(0);
-    expect(reconciled.contentEditedLogs.map((l) => l.id)).toEqual(["log-1"]);
-    expect(reconciled.contentEditedLogs[0].date).toBe("2024-06-10");
-    expect(reconciled.updatedExperience.bullets).toContain(
-      "Reduje latencia p99 en 55% con Edge Cache"
+    expect(reconciledPartial.logsToCreate.length).toBe(0);
+    expect(reconciledPartial.contentEditedLogs.map((l) => l.id)).toEqual(["log-1"]);
+    expect(reconciledPartial.contentEditedLogs[0].date).toBe("2024-06-10");
+    expect(reconciledPartial.logsToDelete.map((l) => l.id)).toEqual(["log-2"]);
+    expect(reconciledPartial.updatedExperience.bullets).toEqual([
+      "Reduje latencia p99 en 55% con Edge Cache",
+    ]);
+
+    // 2. Replace with brand-new logs (no IDs) -> creates new ones and deletes both log-1 and log-2
+    const fullSwap = parseExperienceJson(
+      JSON.stringify({
+        experience: { ...sampleExp },
+        logs: [{ title: "Logro completamente nuevo A" }, { title: "Logro completamente nuevo B" }],
+      })
     );
+    expect(fullSwap.success).toBe(true);
+    if (!fullSwap.success) return;
+
+    const reconciledSwap = reconcileImportedExperienceJson(
+      sampleExp,
+      sampleLogs,
+      fullSwap.data,
+      1800000000000
+    );
+    expect(reconciledSwap.logsToCreate.map((l) => l.title)).toEqual([
+      "Logro completamente nuevo A",
+      "Logro completamente nuevo B",
+    ]);
+    expect(reconciledSwap.logsToDelete.map((l) => l.id)).toEqual(["log-1", "log-2"]);
+    expect(reconciledSwap.updatedExperience.bullets).toEqual([
+      "Logro completamente nuevo A",
+      "Logro completamente nuevo B",
+    ]);
+
+    // 3. Explicit empty logs: [] wipes experience achievements cleanly to []
+    const emptyLogs = parseExperienceJson(
+      JSON.stringify({
+        experience: { ...sampleExp },
+        logs: [],
+      })
+    );
+    expect(emptyLogs.success).toBe(true);
+    if (!emptyLogs.success) return;
+
+    const reconciledEmpty = reconcileImportedExperienceJson(
+      sampleExp,
+      sampleLogs,
+      emptyLogs.data,
+      1800000000000
+    );
+    expect(reconciledEmpty.logsToCreate.length).toBe(0);
+    expect(reconciledEmpty.logsToDelete.map((l) => l.id)).toEqual(["log-1", "log-2"]);
+    expect(reconciledEmpty.updatedExperience.bullets).toEqual([]);
+
+    // 4. Flat experience payload with bullets (no logs field) replaces prior logs cleanly
+    const flatReplace = parseExperienceJson(
+      JSON.stringify({
+        company: "Acme Cloud Labs",
+        role: "Principal Engineer",
+        bullets: ["Único logro reemplazante desde bullets"],
+      })
+    );
+    expect(flatReplace.success).toBe(true);
+    if (!flatReplace.success) return;
+
+    const reconciledFlat = reconcileImportedExperienceJson(
+      sampleExp,
+      sampleLogs,
+      flatReplace.data,
+      1800000000000
+    );
+    expect(reconciledFlat.logsToCreate.map((l) => l.title)).toEqual([
+      "Único logro reemplazante desde bullets",
+    ]);
+    expect(reconciledFlat.logsToDelete.map((l) => l.id)).toEqual(["log-1", "log-2"]);
+    expect(reconciledFlat.updatedExperience.bullets).toEqual([
+      "Único logro reemplazante desde bullets",
+    ]);
 
     const oversized = JSON.stringify({ company: "X", summary: "a".repeat(520 * 1024) });
     expect(parseExperienceJson(oversized).success).toBe(false);
+  });
+
+  it("activates hasChanges when editing experience.bullets directly without touching logs[], and preserves legacy unlinked snapshots", () => {
+    // 1. Canonical export where user edits experience.bullets[0] directly at the top of the JSON
+    const exportedRaw = JSON.parse(buildExperienceExportJson(sampleExp, sampleLogs)) as {
+      experience: { bullets: string[] };
+      logs: Array<Record<string, unknown>>;
+    };
+    expect("logro" in exportedRaw.logs[0]).toBe(false); // redundant logro omitted when identical to title
+
+    exportedRaw.experience.bullets = ["Reduje latencia p99 en 60% directo en bullets"];
+    const parsedBulletEdit = parseExperienceJson(JSON.stringify(exportedRaw));
+    expect(parsedBulletEdit.success).toBe(true);
+    if (!parsedBulletEdit.success) return;
+
+    const reconciledBulletEdit = reconcileImportedExperienceJson(
+      sampleExp,
+      sampleLogs,
+      parsedBulletEdit.data,
+      1800000000000
+    );
+    expect(reconciledBulletEdit.hasChanges).toBe(true);
+    expect(reconciledBulletEdit.contentEditedLogs.map((l) => l.id)).toEqual(["log-1"]);
+    expect(reconciledBulletEdit.contentEditedLogs[0].title).toBe(
+      "Reduje latencia p99 en 60% directo en bullets"
+    );
+    // Hidden Bitácora log (log-2, includeInCv: false) is not wiped just for editing bullets[]
+    expect(reconciledBulletEdit.logsToDelete.length).toBe(0);
+
+    // 2. Legacy experience with 0 logs and unlinked bullets must report hasChanges=false on open,
+    // and hasChanges=true when a bullet is edited
+    const legacyExp: WorkExperience = {
+      ...sampleExp,
+      id: "exp-legacy",
+      bullets: ["Legacy bullet A", "Legacy bullet B"],
+    };
+    const legacyExport = buildExperienceExportJson(legacyExp, []);
+    const parsedLegacyUnchanged = parseExperienceJson(legacyExport);
+    expect(parsedLegacyUnchanged.success).toBe(true);
+    if (!parsedLegacyUnchanged.success) return;
+
+    const roundTripLegacy = reconcileImportedExperienceJson(
+      legacyExp,
+      [],
+      parsedLegacyUnchanged.data,
+      1800000000000
+    );
+    expect(roundTripLegacy.hasChanges).toBe(false);
+
+    const legacyObj = JSON.parse(legacyExport) as { experience: { bullets: string[] }; logs: unknown[] };
+    legacyObj.experience.bullets[0] = "Legacy bullet A editado";
+    const parsedLegacyEdited = parseExperienceJson(JSON.stringify(legacyObj));
+    expect(parsedLegacyEdited.success).toBe(true);
+    if (!parsedLegacyEdited.success) return;
+
+    const reconciledLegacyEdited = reconcileImportedExperienceJson(
+      legacyExp,
+      [],
+      parsedLegacyEdited.data,
+      1800000000000
+    );
+    expect(reconciledLegacyEdited.hasChanges).toBe(true);
+    expect(reconciledLegacyEdited.logsToCreate.map((l) => l.title)).toEqual([
+      "Legacy bullet A editado",
+      "Legacy bullet B",
+    ]);
   });
 });

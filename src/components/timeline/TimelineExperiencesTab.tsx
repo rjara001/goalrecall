@@ -472,8 +472,8 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                             className="px-2.5 py-1 disabled:opacity-60 disabled:cursor-not-allowed text-slate-200 hover:text-white hover:bg-slate-700/80 text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                             title={
                               language === "en"
-                                ? "Upload a JSON file to update or add achievements in this experience"
-                                : "Cargar un archivo JSON para actualizar o añadir logros en esta experiencia"
+                                ? "Upload a JSON file to replace this experience's data and achievements"
+                                : "Cargar un archivo JSON para reemplazar los datos y logros de esta experiencia"
                             }
                           >
                             {importingExpId === exp.id ? (
