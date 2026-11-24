@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { extractCvWithAi } from "./cvAiExtractor";
+import { CvAiExtractionError, extractCvWithAi } from "./cvAiExtractor";
 import { CvExtractionPayload } from "../../../types";
 
 const samplePayload: CvExtractionPayload = {
@@ -48,7 +48,7 @@ describe("cvAiExtractor", () => {
             achievements: [],
             pendingFields: [],
             completenessScore: 90,
-            engine: "gemini-2.5-flash",
+            engine: "gemini-4-hydrogen",
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
@@ -58,10 +58,32 @@ describe("cvAiExtractor", () => {
     expect(authHeader).toBe("Bearer token-123");
     expect(result.usedAi).toBe(true);
     expect(result.fallbackReason).toBeUndefined();
-    expect(result.response.engine).toBe("gemini-2.5-flash");
+    expect(result.response.engine).toBe("gemini-4-hydrogen");
   });
 
-  it("falls back locally with fallbackReason='unauthenticated' on 401", async () => {
+  it("throws CvAiExtractionError instead of silently masking GEMINI_* server errors", async () => {
+    let caught: unknown = null;
+    try {
+      await extractCvWithAi(samplePayload, {
+        fetcher: (async () =>
+          new Response(
+            JSON.stringify({
+              code: "GEMINI_API_KEY_INVALID",
+              error: "La clave de Gemini API no es válida.",
+            }),
+            { status: 401, headers: { "Content-Type": "application/json" } }
+          )) as unknown as typeof fetch,
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(CvAiExtractionError);
+    expect((caught as CvAiExtractionError).code).toBe("GEMINI_API_KEY_INVALID");
+    expect((caught as CvAiExtractionError).status).toBe(401);
+  });
+
+  it("falls back locally with fallbackReason='unauthenticated' on plain 401", async () => {
     const result = await extractCvWithAi(samplePayload, {
       fetcher: (async () => new Response("Unauthorized", { status: 401 })) as unknown as typeof fetch,
     });

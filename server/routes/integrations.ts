@@ -186,7 +186,7 @@ export function createIntegrationsRouter(): Router {
         res.status(400).json({
           success: false,
           error:
-            "Jira Cloud requiere dominio (https://tu-org.atlassian.net), email y token de sesión (o variables JIRA_* en servidor).",
+            "Jira Cloud requiere dominio (https://tu-org.atlassian.net), email y token de sesión.",
         });
         return;
       }

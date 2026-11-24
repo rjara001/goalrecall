@@ -2,12 +2,43 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { ExtractedCvData } from "../../src/types";
 import { calculateCvAudit, cvToAchievements } from "../../src/utils/localCvExtractor";
 
+export const GEMINI_CV_MODEL = "gemini-4-hydrogen";
+
+const PLACEHOLDER_KEYS = new Set([
+  "MY_GEMINI_API_KEY",
+  "YOUR_GEMINI_API_KEY",
+  "YOUR_API_KEY",
+  "GEMINI_API_KEY",
+  "UNDEFINED",
+  "NULL",
+]);
+
 let cachedClient: GoogleGenAI | null = null;
+let cachedApiKey: string | null = null;
+
+export function resolveConfiguredGeminiApiKey(): string | null {
+  const raw = process.env.GEMINI_API_KEY;
+  if (typeof raw !== "string") return null;
+  let cleaned = raw.trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  if (!cleaned) return null;
+  if (PLACEHOLDER_KEYS.has(cleaned.toUpperCase())) return null;
+  return cleaned;
+}
+
+export function isGeminiApiKeyConfigured(): boolean {
+  return resolveConfiguredGeminiApiKey() !== null;
+}
 
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = resolveConfiguredGeminiApiKey();
   if (!apiKey) return null;
-  if (!cachedClient) {
+  if (!cachedClient || cachedApiKey !== apiKey) {
     cachedClient = new GoogleGenAI({
       apiKey,
       httpOptions: {
@@ -16,8 +47,133 @@ function getGeminiClient(): GoogleGenAI | null {
         },
       },
     });
+    cachedApiKey = apiKey;
   }
   return cachedClient;
+}
+
+export type GeminiErrorCode =
+  | "GEMINI_API_KEY_MISSING"
+  | "GEMINI_API_KEY_INVALID"
+  | "GEMINI_PERMISSION_DENIED"
+  | "GEMINI_QUOTA_EXCEEDED"
+  | "GEMINI_MODEL_NOT_FOUND"
+  | "GEMINI_UPSTREAM_ERROR";
+
+export interface ClassifiedGeminiError {
+  httpStatus: number;
+  code: GeminiErrorCode;
+  userMessage: string;
+  logDetail: string;
+}
+
+export function classifyGeminiError(err: unknown): ClassifiedGeminiError {
+  const rawMsg = err instanceof Error ? err.message : String(err || "Unknown Gemini error");
+  const statusProp =
+    err && typeof err === "object" && "status" in err
+      ? Number((err as { status?: unknown }).status)
+      : NaN;
+  const upper = rawMsg.toUpperCase();
+
+  if (
+    rawMsg.includes("GEMINI_API_KEY is not configured") ||
+    upper.includes("API_KEY_MISSING")
+  ) {
+    return {
+      httpStatus: 503,
+      code: "GEMINI_API_KEY_MISSING",
+      userMessage:
+        "El análisis inteligente no tiene una clave válida configurada. Revisa Settings > Secrets o usa el lector local.",
+      logDetail: "GEMINI_API_KEY missing or placeholder",
+    };
+  }
+
+  if (
+    statusProp === 401 ||
+    upper.includes("UNAUTHENTICATED") ||
+    upper.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED") ||
+    upper.includes("API_KEY_INVALID") ||
+    upper.includes("API KEY NOT VALID")
+  ) {
+    return {
+      httpStatus: 401,
+      code: "GEMINI_API_KEY_INVALID",
+      userMessage:
+        "La clave configurada para el análisis inteligente no es válida. Verifícala en Settings > Secrets o usa el lector local.",
+      logDetail: rawMsg.slice(0, 240),
+    };
+  }
+
+  if (statusProp === 403 || upper.includes("PERMISSION_DENIED")) {
+    return {
+      httpStatus: 403,
+      code: "GEMINI_PERMISSION_DENIED",
+      userMessage:
+        "La clave configurada en Settings > Secrets no tiene permisos para ejecutar el análisis inteligente.",
+      logDetail: rawMsg.slice(0, 240),
+    };
+  }
+
+  if (statusProp === 429 || upper.includes("RESOURCE_EXHAUSTED")) {
+    return {
+      httpStatus: 429,
+      code: "GEMINI_QUOTA_EXCEEDED",
+      userMessage:
+        "Se alcanzó el límite temporal del análisis inteligente. Intenta más tarde, revisa Settings > Secrets o usa el lector local.",
+      logDetail: rawMsg.slice(0, 240),
+    };
+  }
+
+  if (statusProp === 404 || upper.includes("NOT_FOUND")) {
+    return {
+      httpStatus: 404,
+      code: "GEMINI_MODEL_NOT_FOUND",
+      userMessage:
+        "El servicio de análisis inteligente no está disponible en este momento. Puedes usar el lector local.",
+      logDetail: rawMsg.slice(0, 240),
+    };
+  }
+
+  return {
+    httpStatus: 502,
+    code: "GEMINI_UPSTREAM_ERROR",
+    userMessage:
+      "Error temporal en el servicio de análisis inteligente. Puedes reintentar o usar el lector local.",
+    logDetail: rawMsg.slice(0, 240),
+  };
+}
+
+function isRetryableGeminiError(err: unknown): boolean {
+  const rawMsg = err instanceof Error ? err.message : String(err || "");
+  const statusProp =
+    err && typeof err === "object" && "status" in err
+      ? Number((err as { status?: unknown }).status)
+      : NaN;
+
+  if ([400, 401, 403, 404].includes(statusProp)) return false;
+  const upper = rawMsg.toUpperCase();
+  if (
+    upper.includes("UNAUTHENTICATED") ||
+    upper.includes("API_KEY_INVALID") ||
+    upper.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED") ||
+    upper.includes("API KEY NOT VALID") ||
+    upper.includes("PERMISSION_DENIED") ||
+    upper.includes("NOT_FOUND")
+  ) {
+    return false;
+  }
+
+  return (
+    statusProp === 429 ||
+    statusProp === 500 ||
+    statusProp === 502 ||
+    statusProp === 503 ||
+    statusProp === 504 ||
+    upper.includes("UNAVAILABLE") ||
+    upper.includes("INTERNAL") ||
+    upper.includes("ECONNRESET") ||
+    upper.includes("ETIMEDOUT")
+  );
 }
 
 const PROMPT_INSTRUCTIONS = `Eres un **Auditor y Extractor Profesional y Técnico de CVs de Máxima Fidelidad (Strict Truthfulness Engine)** capacitado para perfiles multidisciplinarios (Ingeniería de Software, Product Management, Growth & Marketing, Diseño UX/UI, Ventas B2B, Operaciones y Liderazgo).
@@ -234,25 +390,38 @@ export async function extractFullCvWithGemini(params: {
       : params.fileBase64;
     parts.push({ inlineData: { mimeType: params.mimeType, data: cleanBase64 } });
     parts.push({
-      text: `${PROMPT_INSTRUCTIONS}\n\nDocumento adjunto: "${params.fileName || "CV"}". Extrae la estructura fidedigna sin inventar ningún dato.`,
+      text: `Documento adjunto: "${params.fileName || "CV"}". Extrae la estructura JSON fidedigna y concisa sin inventar ningún dato.`,
     });
   } else {
     parts.push({
-      text: `${PROMPT_INSTRUCTIONS}\n\n--- CONTENIDO DEL CV ORIGINAL ---\n${params.textContent}\n--- FIN DEL CV ---`,
+      text: `--- CONTENIDO DEL CV ORIGINAL ---\n${params.textContent}\n--- FIN DEL CV ---`,
     });
   }
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: { parts },
-    config: {
-      maxOutputTokens: 2048,
-      responseMimeType: "application/json",
-      responseSchema: CV_RESPONSE_SCHEMA,
-    },
-  });
+  let response;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      response = await ai.models.generateContent({
+        model: GEMINI_CV_MODEL,
+        contents: { parts },
+        config: {
+          systemInstruction: PROMPT_INSTRUCTIONS,
+          responseMimeType: "application/json",
+          responseSchema: CV_RESPONSE_SCHEMA,
+        },
+      });
+      break;
+    } catch (err) {
+      if (attempt < maxAttempts && isRetryableGeminiError(err)) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * Math.pow(2, attempt - 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
 
-  const parsedData = JSON.parse(response.text?.trim() || "{}") as Partial<ExtractedCvData>;
+  const parsedData = JSON.parse(response?.text?.trim() || "{}") as Partial<ExtractedCvData>;
   const cleanCvData = sanitizeGeminiCv(parsedData, params.textContent, params.fileName);
   const audit = calculateCvAudit(cleanCvData);
   const achievements = cvToAchievements(cleanCvData, params.fileName);

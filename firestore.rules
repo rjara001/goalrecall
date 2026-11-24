@@ -62,6 +62,22 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(userId)) || existsAfter(/databases/$(database)/documents/users/$(userId));
     }
 
+    function hasParentLog(userId, logId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/logs/$(logId));
+    }
+
+    function hasParentLogOrBatch(userId, logId) {
+      return hasParentLog(userId, logId) || existsAfter(/databases/$(database)/documents/users/$(userId)/logs/$(logId));
+    }
+
+    function hasParentExperience(userId, experienceId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/experiences/$(experienceId));
+    }
+
+    function hasParentExperienceOrBatch(userId, experienceId) {
+      return hasParentExperience(userId, experienceId) || existsAfter(/databases/$(database)/documents/users/$(userId)/experiences/$(experienceId));
+    }
+
     // -------------------------------------------------------------------------
     // Entity Validation Blueprints (Anti-Update-Gap & Shadow-Field Guards)
     // -------------------------------------------------------------------------
@@ -137,7 +153,7 @@ service cloud.firestore {
       && data.keys().hasOnly([
         'id', 'userId', 'experienceId', 'originalBullet', 'date', 'client',
         'project', 'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
-        'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'createdAt', 'updatedAt'
+        'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'updatesCount', 'deletedAt', 'createdAt', 'updatedAt'
       ])
       && data.id == logId
       && isValidId(data.id)
@@ -152,6 +168,8 @@ service cloud.firestore {
       && data.isPublic is bool
       && (!('includeInCv' in data) || data.includeInCv is bool)
       && (!('sortOrder' in data) || (data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 100000))
+      && (!('updatesCount' in data) || (data.updatesCount is int && data.updatesCount >= 0 && data.updatesCount <= 1000000))
+      && (!('deletedAt' in data) || (data.deletedAt is int && data.deletedAt > 0 && data.deletedAt <= 4102444800000))
       && (!('experienceId' in data) || isValidString(data.experienceId, 0, 128))
       && (!('originalBullet' in data) || isValidString(data.originalBullet, 0, 2000))
       && (!('logro' in data) || isValidString(data.logro, 0, 2000))
@@ -169,7 +187,7 @@ service cloud.firestore {
       ])
       && data.keys().hasOnly([
         'id', 'userId', 'company', 'role', 'startDate', 'endDate', 'isCurrent',
-        'location', 'summary', 'bullets', 'technologies', 'isPersonalProjects',
+        'location', 'summary', 'bullets', 'technologies', 'isPersonalProjects', 'updatesCount', 'deletedAt',
         'createdAt', 'updatedAt'
       ])
       && data.id == experienceId
@@ -185,8 +203,112 @@ service cloud.firestore {
       && (!('bullets' in data) || (data.bullets is list && data.bullets.size() <= 60 && (data.bullets.size() == 0 || (data.bullets[0] is string && data.bullets[0].size() <= 2000))))
       && (!('technologies' in data) || isBoundedStringList(data.technologies, 50))
       && (!('isPersonalProjects' in data) || data.isPersonalProjects is bool)
+      && (!('updatesCount' in data) || (data.updatesCount is int && data.updatesCount >= 0 && data.updatesCount <= 1000000))
+      && (!('deletedAt' in data) || (data.deletedAt is int && data.deletedAt > 0 && data.deletedAt <= 4102444800000))
       && data.createdAt is timestamp
       && data.updatedAt is timestamp;
+    }
+
+    function isValidRevisionSource(source) {
+      return source in ['initial', 'manual_form', 'json_editor', 'json_import', 'restore'];
+    }
+
+    function isValidLogRevisionSnapshot(snap) {
+      return snap is map
+        && snap.keys().hasAll([
+          'date', 'client', 'project', 'category', 'title',
+          'whatWasSought', 'whyImportant', 'howApplied', 'impact',
+          'description', 'tags', 'experienceId'
+        ])
+        && snap.keys().hasOnly([
+          'date', 'client', 'project', 'category', 'title',
+          'whatWasSought', 'whyImportant', 'howApplied', 'impact',
+          'description', 'tags', 'experienceId'
+        ])
+        && isValidString(snap.date, 4, 32)
+        && isValidString(snap.client, 1, 200)
+        && isValidString(snap.project, 1, 200)
+        && isValidString(snap.category, 1, 120)
+        && isValidString(snap.title, 1, 2000)
+        && isValidString(snap.whatWasSought, 0, 4000)
+        && isValidString(snap.whyImportant, 0, 4000)
+        && isValidString(snap.howApplied, 0, 4000)
+        && isValidString(snap.impact, 1, 3000)
+        && isValidString(snap.description, 0, 10000)
+        && isBoundedStringList(snap.tags, 25)
+        && isValidString(snap.experienceId, 0, 128);
+    }
+
+    function isValidLogRevision(data, userId, logId, revisionId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'parentId', 'entityType', 'versionNumber',
+        'source', 'changedFields', 'snapshot', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'parentId', 'entityType', 'versionNumber',
+        'source', 'changedFields', 'snapshot', 'createdAt'
+      ])
+      && data.id == revisionId
+      && isValidId(data.id)
+      && data.userId == userId
+      && data.parentId == logId
+      && isValidId(data.parentId)
+      && data.entityType == 'log'
+      && data.versionNumber is int
+      && data.versionNumber >= 1
+      && data.versionNumber <= 1000000
+      && isValidRevisionSource(data.source)
+      && isBoundedStringList(data.changedFields, 20)
+      && isValidLogRevisionSnapshot(data.snapshot)
+      && data.createdAt is timestamp;
+    }
+
+    function isValidExperienceRevisionSnapshot(snap) {
+      return snap is map
+        && snap.keys().hasAll([
+          'company', 'role', 'startDate', 'endDate', 'isCurrent',
+          'location', 'summary', 'bullets', 'technologies', 'isPersonalProjects'
+        ])
+        && snap.keys().hasOnly([
+          'company', 'role', 'startDate', 'endDate', 'isCurrent',
+          'location', 'summary', 'bullets', 'technologies', 'isPersonalProjects'
+        ])
+        && isValidString(snap.company, 1, 200)
+        && isValidString(snap.role, 1, 200)
+        && isValidString(snap.startDate, 0, 40)
+        && isValidString(snap.endDate, 0, 40)
+        && snap.isCurrent is bool
+        && isValidString(snap.location, 0, 200)
+        && isValidString(snap.summary, 0, 5000)
+        && snap.bullets is list
+        && snap.bullets.size() <= 60
+        && (snap.bullets.size() == 0 || (snap.bullets[0] is string && snap.bullets[0].size() <= 2000))
+        && isBoundedStringList(snap.technologies, 50)
+        && snap.isPersonalProjects is bool;
+    }
+
+    function isValidExperienceRevision(data, userId, experienceId, revisionId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'parentId', 'entityType', 'versionNumber',
+        'source', 'changedFields', 'snapshot', 'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'id', 'userId', 'parentId', 'entityType', 'versionNumber',
+        'source', 'changedFields', 'snapshot', 'createdAt'
+      ])
+      && data.id == revisionId
+      && isValidId(data.id)
+      && data.userId == userId
+      && data.parentId == experienceId
+      && isValidId(data.parentId)
+      && data.entityType == 'experience'
+      && data.versionNumber is int
+      && data.versionNumber >= 1
+      && data.versionNumber <= 1000000
+      && isValidRevisionSource(data.source)
+      && isBoundedStringList(data.changedFields, 20)
+      && isValidExperienceRevisionSnapshot(data.snapshot)
+      && data.createdAt is timestamp;
     }
 
     function isValidProduct(data, userId, productId) {
@@ -488,17 +610,34 @@ service cloud.firestore {
             || (
               incoming().updatedAt == existing().updatedAt
               && incoming().diff(existing()).affectedKeys().hasOnly([
-                'sortOrder', 'isPublic', 'includeInCv', 'experienceId', 'client'
+                'sortOrder', 'isPublic', 'includeInCv', 'experienceId', 'client', 'updatesCount', 'deletedAt'
               ])
             )
           )
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'experienceId', 'originalBullet', 'date', 'client', 'project',
             'category', 'title', 'logro', 'whatWasSought', 'whyImportant',
-            'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'updatedAt'
+            'howApplied', 'impact', 'description', 'tags', 'isPublic', 'includeInCv', 'sortOrder', 'updatesCount', 'deletedAt', 'updatedAt'
           ]);
 
         allow delete: if isSelf(userId) && isValidId(logId) && hasParentUser(userId);
+
+        // Subcollection: Immutable Log Revisions (/users/{userId}/logs/{logId}/revisions/{revisionId})
+        match /revisions/{revisionId} {
+          allow get: if isOwner(userId) && isValidId(logId) && isValidId(revisionId) && hasParentLog(userId, logId);
+          allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+          allow create: if isOwner(userId)
+            && isValidId(logId)
+            && isValidId(revisionId)
+            && isValidLogRevision(incoming(), userId, logId, revisionId)
+            && incoming().createdAt == request.time
+            && hasParentLogOrBatch(userId, logId);
+
+          allow update: if false;
+
+          allow delete: if isOwner(userId) && isValidId(logId) && isValidId(revisionId) && hasParentUser(userId);
+        }
       }
 
       // Subcollection: Work Experiences (/users/{userId}/experiences/{experienceId})
@@ -519,13 +658,36 @@ service cloud.firestore {
           && incoming().id == existing().id
           && incoming().userId == existing().userId
           && incoming().createdAt == existing().createdAt
-          && incoming().updatedAt == request.time
+          && (
+            incoming().updatedAt == request.time
+            || (
+              incoming().updatedAt == existing().updatedAt
+              && incoming().diff(existing()).affectedKeys().hasOnly(['updatesCount', 'deletedAt'])
+            )
+          )
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'company', 'role', 'startDate', 'endDate', 'isCurrent', 'location',
-            'summary', 'bullets', 'technologies', 'isPersonalProjects', 'updatedAt'
+            'summary', 'bullets', 'technologies', 'isPersonalProjects', 'updatesCount', 'deletedAt', 'updatedAt'
           ]);
 
         allow delete: if isSelf(userId) && isValidId(experienceId) && hasParentUser(userId);
+
+        // Subcollection: Immutable Experience Revisions (/users/{userId}/experiences/{experienceId}/revisions/{revisionId})
+        match /revisions/{revisionId} {
+          allow get: if isOwner(userId) && isValidId(experienceId) && isValidId(revisionId) && hasParentExperience(userId, experienceId);
+          allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+
+          allow create: if isOwner(userId)
+            && isValidId(experienceId)
+            && isValidId(revisionId)
+            && isValidExperienceRevision(incoming(), userId, experienceId, revisionId)
+            && incoming().createdAt == request.time
+            && hasParentExperienceOrBatch(userId, experienceId);
+
+          allow update: if false;
+
+          allow delete: if isOwner(userId) && isValidId(experienceId) && isValidId(revisionId) && hasParentUser(userId);
+        }
       }
 
       // Subcollection: Portfolio Products (/users/{userId}/products/{productId})

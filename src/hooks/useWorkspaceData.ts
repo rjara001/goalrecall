@@ -10,6 +10,7 @@ import {
 import {
   buildLogFromExtractedBullet,
   buildLogFromSavedExperienceBullet,
+  compareLogEntriesByOrder,
   deriveExperienceBulletsFromLogs,
   doesLogBelongToExperience,
   findLegacyUnlinkedBullets,
@@ -43,8 +44,13 @@ import {
   importBackupBundleToFirestore,
   importExperienceJsonFirestore,
   loadWorkspaceFromFirestore,
+  permanentlyDeleteExperienceFirestore,
+  permanentlyDeleteLogFirestore,
   reorderLogsBatchFirestore,
+  restoreExperienceFirestore,
+  restoreLogFirestore,
   saveUserProfileFirestore,
+  syncEntityUpdatesCountFirestore,
   syncPublicShowcaseFirestore,
   updateCareerGoalFirestore,
   updateCertificationFirestore,
@@ -63,6 +69,8 @@ import {
   JobOffer,
   LogEntry,
   Product,
+  RevisionEntityType,
+  RevisionSource,
   TechnicalCertification,
   UserProfile,
   VisitorMessage,
@@ -98,7 +106,9 @@ export const useWorkspaceData = ({
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isHydrating, setIsHydrating] = useState(true);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [deletedLogs, setDeletedLogs] = useState<LogEntry[]>([]);
   const [experiences, setExperiences] = useState<WorkExperience[]>([]);
+  const [deletedExperiences, setDeletedExperiences] = useState<WorkExperience[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [storedCv, setStoredCv] = useState<ExtractedCvData | null>(null);
   const [aiQuota, setAiQuota] = useState<AiUsageRecord | null>(null);
@@ -114,7 +124,9 @@ export const useWorkspaceData = ({
   const stateRef = useRef({
     user,
     logs,
+    deletedLogs,
     experiences,
+    deletedExperiences,
     inbox,
     jobOffers,
     products,
@@ -124,7 +136,9 @@ export const useWorkspaceData = ({
   stateRef.current = {
     user,
     logs,
+    deletedLogs,
     experiences,
+    deletedExperiences,
     inbox,
     jobOffers,
     products,
@@ -138,7 +152,9 @@ export const useWorkspaceData = ({
     setStoredCv(null);
     setAiQuota(null);
     setLogs([]);
+    setDeletedLogs([]);
     setExperiences([]);
+    setDeletedExperiences([]);
     setInbox([]);
     setJobOffers([]);
     setProducts([]);
@@ -203,7 +219,9 @@ export const useWorkspaceData = ({
           setStoredCv(workspace.cv);
           setAiQuota(workspace.aiQuota);
           setExperiences(workspace.experiences);
+          setDeletedExperiences(workspace.deletedExperiences);
           setLogs(workspace.logs);
+          setDeletedLogs(workspace.deletedLogs);
           setInbox(workspace.inbox);
           setJobOffers(workspace.jobOffers);
           setProducts(workspace.products);
@@ -219,7 +237,7 @@ export const useWorkspaceData = ({
         } catch (err) {
           console.error("[Firestore] Error hydrating workspace:", err);
           showToastRef.current(
-            formatFirestoreUiError(err, "No se pudo cargar tu espacio de trabajo desde Firestore."),
+            formatFirestoreUiError(err, "No se pudo cargar tu espacio de trabajo."),
             "error"
           );
           throw err;
@@ -346,8 +364,8 @@ export const useWorkspaceData = ({
       const appliedCount = result.savedLogs.length;
       showToastRef.current(
         appliedCount > 0
-          ? `CV guardado en Firestore y ${appliedCount} logro(s) añadidos a tu Bóveda Privada ✨`
-          : "CV y perfil profesional guardados en Firestore ✨",
+          ? `CV guardado y ${appliedCount} logro(s) añadidos a tu Bóveda Privada ✨`
+          : "CV y perfil profesional guardados ✨",
         "success"
       );
     },
@@ -396,7 +414,8 @@ export const useWorkspaceData = ({
     async (
       entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
       editingLog: LogEntry | null,
-      sourceInboxMessageId?: string
+      sourceInboxMessageId?: string,
+      revisionSource: RevisionSource = "manual_form"
     ): Promise<boolean> => {
       try {
         if (editingLog) {
@@ -414,7 +433,10 @@ export const useWorkspaceData = ({
             stateRef.current.experiences
           );
 
-          const updated = await updateLogFirestore(mergedCandidate, syncList);
+          const updated = await updateLogFirestore(mergedCandidate, syncList, {
+            previousEntry: editingLog,
+            source: revisionSource,
+          });
           const nextLogs = stateRef.current.logs.map((l) =>
             l.id === updated.id ? updated : l
           );
@@ -476,7 +498,7 @@ export const useWorkspaceData = ({
         );
         return false;
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudo guardar el logro en Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudo guardar el logro.");
         throw new Error(msg);
       }
     },
@@ -619,7 +641,7 @@ export const useWorkspaceData = ({
         setExperiences(prevExperiences);
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo guardar el nuevo orden de los logros en Firestore."
+          "No se pudo guardar el nuevo orden de los logros."
         );
         showToastRef.current(msg, "error");
         throw new Error(msg);
@@ -637,21 +659,102 @@ export const useWorkspaceData = ({
         : { syncList: [], nextExperiences: stateRef.current.experiences };
 
       try {
-        await deleteLogFirestore(id, syncList);
+        const deletedAt = await deleteLogFirestore(id, syncList);
         setLogs(nextLogs);
+        if (target) {
+          setDeletedLogs((prev) => [
+            { ...target, deletedAt, isPublic: false },
+            ...prev.filter((l) => l.id !== id),
+          ]);
+        }
         if (syncList.length > 0) {
           setExperiences(nextExperiences);
         }
         await syncShowcaseIfPublished({ logs: nextLogs });
-        showToastRef.current(t.toasts.logDeleted, "info");
+        showToastRef.current(
+          "Logro movido al historial. Puedes recuperarlo cuando quieras.",
+          "info"
+        );
       } catch (err) {
         const msg = formatFirestoreUiError(err, "No se pudo eliminar el logro.");
         showToastRef.current(msg, "error");
         throw new Error(msg);
       }
     },
-    [computeAffectedExperienceSyncs, syncShowcaseIfPublished, t.toasts.logDeleted]
+    [computeAffectedExperienceSyncs, syncShowcaseIfPublished]
   );
+
+  const handleRestoreDeletedLog = useCallback(
+    async (id: string): Promise<LogEntry | null> => {
+      const target = stateRef.current.deletedLogs.find((l) => l.id === id);
+      if (!target) return null;
+
+      const activeExps = stateRef.current.experiences;
+      const hasMatchingExp =
+        Boolean(target.experienceId) &&
+        activeExps.some((exp) => exp.id === target.experienceId);
+      const fallbackExp =
+        activeExps.find((e) => e.isPersonalProjects) || activeExps[0];
+
+      const { deletedAt: _ignoredDeletedAt, ...baseTarget } = target;
+      void _ignoredDeletedAt;
+      const candidateRestored: LogEntry = hasMatchingExp
+        ? baseTarget
+        : fallbackExp
+          ? {
+              ...baseTarget,
+              experienceId: fallbackExp.id,
+              client: fallbackExp.company,
+            }
+          : {
+              ...baseTarget,
+              experienceId: undefined,
+            };
+
+      const previewLogs = [candidateRestored, ...stateRef.current.logs].sort(
+        compareLogEntriesByOrder
+      );
+      const { syncList, nextExperiences } = computeAffectedExperienceSyncs(
+        [candidateRestored],
+        previewLogs,
+        activeExps
+      );
+
+      try {
+        const restored = await restoreLogFirestore(candidateRestored, syncList);
+        setDeletedLogs((prev) => prev.filter((l) => l.id !== id));
+        const nextLogs = [restored, ...stateRef.current.logs.filter((l) => l.id !== id)].sort(
+          compareLogEntriesByOrder
+        );
+        setLogs(nextLogs);
+        if (syncList.length > 0) {
+          setExperiences(nextExperiences);
+        }
+        showToastRef.current("Logro recuperado en tu bitácora ✨", "success");
+        return restored;
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo recuperar el logro.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    [computeAffectedExperienceSyncs]
+  );
+
+  const handlePermanentDeleteLog = useCallback(async (id: string) => {
+    try {
+      await permanentlyDeleteLogFirestore(id);
+      setDeletedLogs((prev) => prev.filter((l) => l.id !== id));
+      showToastRef.current("Logro eliminado definitivamente del historial.", "info");
+    } catch (err) {
+      const msg = formatFirestoreUiError(
+        err,
+        "No se pudo eliminar definitivamente el logro."
+      );
+      showToastRef.current(msg, "error");
+      throw new Error(msg);
+    }
+  }, []);
 
   const handleDuplicateLog = useCallback(
     async (entry: LogEntry) => {
@@ -730,7 +833,7 @@ export const useWorkspaceData = ({
         await syncShowcaseIfPublished({ logs: nextLogs });
         showToastRef.current(`${t.toasts.bulletsImported} (${created.length})`, "success");
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudieron importar las viñetas a Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudieron importar las viñetas.");
         throw new Error(msg);
       }
     },
@@ -745,7 +848,7 @@ export const useWorkspaceData = ({
         setExperiences((prev) => [res.experience, ...prev]);
         return res.experience;
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudo crear la nueva empresa en Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudo crear la nueva empresa.");
         throw new Error(msg);
       }
     },
@@ -756,7 +859,8 @@ export const useWorkspaceData = ({
     async (
       expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
       newLogBulletsToCreate: string[] = [],
-      editedLogs: LogEntry[] = []
+      editedLogs: LogEntry[] = [],
+      revisionSource: RevisionSource = "manual_form"
     ) => {
       try {
         if (expData.id) {
@@ -798,11 +902,57 @@ export const useWorkspaceData = ({
             }
           });
 
+          const previousLogsById = new Map(stateRef.current.logs.map((l) => [l.id, l]));
+          const previousBullets = existing
+            ? deriveExperienceBulletsFromLogs(existing, stateRef.current.logs)
+            : [];
+
+          const nowPreview = Date.now();
+          const mutatedPreviewMap = new Map<string, LogEntry>();
+          contentEditedLogs.forEach((l) => mutatedPreviewMap.set(l.id, l));
+          metadataOnlyLogs.forEach((l) => mutatedPreviewMap.set(l.id, l));
+          const syntheticCreated: LogEntry[] = (newLogBulletsToCreate || [])
+            .map((b) => b.trim())
+            .filter(Boolean)
+            .map((clean, idx) => ({
+              id: `preview-${nowPreview}-${idx}`,
+              userId: fullExp.userId,
+              experienceId: fullExp.id,
+              date: new Date().toISOString().substring(0, 10),
+              client: fullExp.company,
+              project: fullExp.role,
+              category: "Feature ✨",
+              title: clean,
+              logro: clean,
+              impact: clean,
+              tags: [],
+              isPublic: false,
+              includeInCv: true,
+              createdAt: nowPreview,
+              updatedAt: nowPreview,
+            }));
+          const previewLogs = [
+            ...syntheticCreated,
+            ...stateRef.current.logs.map((l) => mutatedPreviewMap.get(l.id) || l),
+          ];
+          const nextBullets = deriveExperienceBulletsFromLogs(fullExp, previewLogs);
+          const expWithSyncedBullets: WorkExperience = {
+            ...fullExp,
+            bullets: nextBullets,
+          };
+
           const res = await updateExperienceFirestore(
-            fullExp,
+            expWithSyncedBullets,
             contentEditedLogs,
             newLogBulletsToCreate,
-            metadataOnlyLogs
+            metadataOnlyLogs,
+            {
+              previousExperience: existing,
+              previousBullets,
+              nextBullets,
+              previousLogsById,
+              source: revisionSource,
+            }
           );
 
           const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
@@ -848,7 +998,7 @@ export const useWorkspaceData = ({
           }
         }
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudo guardar la experiencia en Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudo guardar la experiencia.");
         throw new Error(msg);
       }
     },
@@ -857,11 +1007,14 @@ export const useWorkspaceData = ({
 
   const handleDeleteExperience = useCallback(
     async (id: string) => {
+      const targetExp = stateRef.current.experiences.find((e) => e.id === id);
       const remaining = stateRef.current.experiences.filter((e) => e.id !== id);
       const fallback = remaining.find((e) => e.isPersonalProjects) || remaining[0];
       const reassignedLogs = fallback
         ? stateRef.current.logs
-            .filter((l) => l.experienceId === id)
+            .filter((l) =>
+              targetExp ? doesLogBelongToExperience(l, targetExp) : l.experienceId === id
+            )
             .map((l) => ({
               ...l,
               experienceId: fallback.id,
@@ -870,31 +1023,93 @@ export const useWorkspaceData = ({
         : [];
 
       try {
-        await deleteExperienceFirestore(id, reassignedLogs);
+        const deletedAt = await deleteExperienceFirestore(id, reassignedLogs);
         setExperiences(remaining);
+        if (targetExp) {
+          setDeletedExperiences((prev) => [
+            { ...targetExp, deletedAt },
+            ...prev.filter((e) => e.id !== id),
+          ]);
+        }
         if (reassignedLogs.length > 0) {
           const map = new Map(reassignedLogs.map((l) => [l.id, l]));
           const nextLogs = stateRef.current.logs.map((l) => map.get(l.id) || l);
           setLogs(nextLogs);
           await syncShowcaseIfPublished({ logs: nextLogs });
         }
-        showToastRef.current(t.toasts.experienceDeleted, "info");
+        showToastRef.current(
+          "Experiencia movida al historial. Puedes recuperarla cuando quieras.",
+          "info"
+        );
       } catch (err) {
         const msg = formatFirestoreUiError(err, "No se pudo eliminar la experiencia.");
         showToastRef.current(msg, "error");
         throw new Error(msg);
       }
     },
-    [syncShowcaseIfPublished, t.toasts.experienceDeleted]
+    [syncShowcaseIfPublished]
   );
 
+  const handleRestoreDeletedExperience = useCallback(
+    async (id: string): Promise<WorkExperience | null> => {
+      const target = stateRef.current.deletedExperiences.find((e) => e.id === id);
+      if (!target) return null;
+      try {
+        const restored = await restoreExperienceFirestore(target);
+        setDeletedExperiences((prev) => prev.filter((e) => e.id !== id));
+        setExperiences((prev) =>
+          [restored, ...prev.filter((e) => e.id !== id)].sort(
+            (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+          )
+        );
+        showToastRef.current(
+          `Experiencia "${restored.company}" recuperada ✨`,
+          "success"
+        );
+        return restored;
+      } catch (err) {
+        const msg = formatFirestoreUiError(err, "No se pudo recuperar la experiencia.");
+        showToastRef.current(msg, "error");
+        throw new Error(msg);
+      }
+    },
+    []
+  );
+
+  const handlePermanentDeleteExperience = useCallback(async (id: string) => {
+    try {
+      await permanentlyDeleteExperienceFirestore(id);
+      setDeletedExperiences((prev) => prev.filter((e) => e.id !== id));
+      showToastRef.current(
+        "Experiencia eliminada definitivamente del historial.",
+        "info"
+      );
+    } catch (err) {
+      const msg = formatFirestoreUiError(
+        err,
+        "No se pudo eliminar definitivamente la experiencia."
+      );
+      showToastRef.current(msg, "error");
+      throw new Error(msg);
+    }
+  }, []);
+
   const handleImportExperienceJson = useCallback(
-    async (experienceId: string, parsed: ParsedExperienceJson) => {
+    async (
+      experienceId: string,
+      parsed: ParsedExperienceJson,
+      source: "json_editor" | "json_import" = "json_import"
+    ) => {
       const targetExp = stateRef.current.experiences.find((e) => e.id === experienceId);
       if (!targetExp) {
         throw new Error("No se encontró la experiencia seleccionada.");
       }
 
+      const previousLogsById = new Map(stateRef.current.logs.map((l) => [l.id, l]));
+      const previousBullets = deriveExperienceBulletsFromLogs(
+        targetExp,
+        stateRef.current.logs
+      );
       const reconciled = reconcileImportedExperienceJson(
         targetExp,
         stateRef.current.logs,
@@ -908,9 +1123,17 @@ export const useWorkspaceData = ({
           metadataOnlyLogs: reconciled.metadataOnlyLogs,
           logsToCreate: reconciled.logsToCreate,
           logsToDelete: reconciled.logsToDelete,
+          previousExperience: targetExp,
+          previousBullets,
+          nextBullets: reconciled.updatedExperience.bullets || [],
+          previousLogsById,
+          source,
         });
 
         const deletedIdSet = new Set(res.deletedLogIds);
+        const softDeletedLogs = stateRef.current.logs
+          .filter((l) => deletedIdSet.has(l.id))
+          .map((l) => ({ ...l, deletedAt: res.deletedAt, isPublic: false }));
         const updatedMap = new Map(res.updatedLogs.map((l) => [l.id, l]));
         const nextLogs = [
           ...res.createdLogs,
@@ -933,6 +1156,12 @@ export const useWorkspaceData = ({
           prev.map((e) => (e.id === finalExp.id ? finalExp : e))
         );
         setLogs(nextLogs);
+        if (softDeletedLogs.length > 0) {
+          setDeletedLogs((prev) => [
+            ...softDeletedLogs,
+            ...prev.filter((l) => !deletedIdSet.has(l.id)),
+          ]);
+        }
 
         if (
           res.createdLogs.some((l) => l.isPublic) ||
@@ -971,7 +1200,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo importar el JSON de la experiencia en Firestore."
+          "No se pudo importar la experiencia."
         );
         showToastRef.current(msg, "error");
         throw new Error(msg);
@@ -1071,7 +1300,7 @@ export const useWorkspaceData = ({
           "success"
         );
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudieron extraer las viñetas a Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudieron extraer las viñetas.");
         showToastRef.current(msg, "error");
         throw new Error(msg);
       }
@@ -1089,7 +1318,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const errMsg = formatFirestoreUiError(
           err,
-          "No se pudo enviar el mensaje a la base de datos. Inicia sesión con Google para pruebas de dueño o verifica permisos."
+          "No se pudo enviar el mensaje. Inicia sesión con Google o verifica tus permisos."
         );
         throw new Error(errMsg);
       }
@@ -1143,14 +1372,14 @@ export const useWorkspaceData = ({
         const saved = await createInboxBatchFirestore(newOnes);
         setInbox((prev) => [...saved, ...prev]);
         showToastRef.current(
-          `${saved.length} sugerencia(s) guardadas en tu Inbox de Firestore ✨`,
+          `${saved.length} sugerencia(s) guardadas en tu Inbox ✨`,
           "success"
         );
         return { addedCount: saved.length, skippedCount };
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudieron guardar las sugerencias en Firestore."
+          "No se pudieron guardar las sugerencias."
         );
         showToastRef.current(msg, "error");
         throw new Error(msg);
@@ -1240,7 +1469,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo guardar el perfil en Firestore."
+          "No se pudo guardar el perfil."
         );
         throw new Error(msg);
       }
@@ -1265,7 +1494,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo guardar tu nuevo avatar en Firestore."
+          "No se pudo guardar tu nuevo avatar."
         );
         throw new Error(msg);
       }
@@ -1328,7 +1557,7 @@ export const useWorkspaceData = ({
           );
           setProducts(nextProducts);
           await syncShowcaseIfPublished({ products: nextProducts });
-          showToastRef.current("Producto actualizado en Firestore.", "success");
+          showToastRef.current("Producto actualizado.", "success");
         } else {
           const created = await createProductFirestore(
             productData as Omit<Product, "id" | "createdAt">
@@ -1341,7 +1570,7 @@ export const useWorkspaceData = ({
           showToastRef.current("Producto guardado en tu showcase.", "success");
         }
       } catch (err) {
-        const msg = formatFirestoreUiError(err, "No se pudo guardar el producto en Firestore.");
+        const msg = formatFirestoreUiError(err, "No se pudo guardar el producto.");
         throw new Error(msg);
       }
     },
@@ -1411,7 +1640,7 @@ export const useWorkspaceData = ({
           );
           setCertifications(nextCerts);
           await syncShowcaseIfPublished({ certifications: nextCerts });
-          showToastRef.current("Certificación actualizada en Firestore.", "success");
+          showToastRef.current("Certificación actualizada.", "success");
           return saved;
         }
 
@@ -1449,7 +1678,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo guardar la certificación en Firestore."
+          "No se pudo guardar la certificación."
         );
         throw new Error(msg);
       }
@@ -1527,7 +1756,7 @@ export const useWorkspaceData = ({
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo guardar el objetivo profesional en Firestore."
+          "No se pudo guardar el objetivo profesional."
         );
         throw new Error(msg);
       }
@@ -1612,19 +1841,64 @@ export const useWorkspaceData = ({
           });
         }
         showToastRef.current(
-          `Respaldo importado en Firestore (${writtenCount} registros sincronizados) ✨`,
+          `Respaldo importado (${writtenCount} registros sincronizados) ✨`,
           "success"
         );
         return writtenCount;
       } catch (err) {
         const msg = formatFirestoreUiError(
           err,
-          "No se pudo importar el respaldo JSON en Firestore."
+          "No se pudo importar el respaldo."
         );
         throw new Error(msg);
       }
     },
     [hydrateFromFirebaseUser]
+  );
+
+  const handleSyncRevisionUpdatesCount = useCallback(
+    (entityType: RevisionEntityType, entityId: string, updatesCount: number) => {
+      const clamped = Math.max(0, Math.min(1000000, Math.trunc(updatesCount)));
+      if (entityType === "log") {
+        const currentActive = stateRef.current.logs.find((l) => l.id === entityId);
+        const currentDeleted = stateRef.current.deletedLogs.find((l) => l.id === entityId);
+        const current = currentActive || currentDeleted;
+        if (!current || current.updatesCount === clamped) return;
+        if (currentActive) {
+          setLogs((prev) =>
+            prev.map((l) => (l.id === entityId ? { ...l, updatesCount: clamped } : l))
+          );
+        }
+        if (currentDeleted) {
+          setDeletedLogs((prev) =>
+            prev.map((l) => (l.id === entityId ? { ...l, updatesCount: clamped } : l))
+          );
+        }
+        void syncEntityUpdatesCountFirestore("log", entityId, clamped).catch(
+          () => undefined
+        );
+        return;
+      }
+
+      const currentActive = stateRef.current.experiences.find((e) => e.id === entityId);
+      const currentDeleted = stateRef.current.deletedExperiences.find((e) => e.id === entityId);
+      const current = currentActive || currentDeleted;
+      if (!current || current.updatesCount === clamped) return;
+      if (currentActive) {
+        setExperiences((prev) =>
+          prev.map((e) => (e.id === entityId ? { ...e, updatesCount: clamped } : e))
+        );
+      }
+      if (currentDeleted) {
+        setDeletedExperiences((prev) =>
+          prev.map((e) => (e.id === entityId ? { ...e, updatesCount: clamped } : e))
+        );
+      }
+      void syncEntityUpdatesCountFirestore("experience", entityId, clamped).catch(
+        () => undefined
+      );
+    },
+    []
   );
 
   const unreadInboxCount = inbox.filter((m) => !m.read).length;
@@ -1634,7 +1908,9 @@ export const useWorkspaceData = ({
     isAuthReady,
     isHydrating,
     logs,
+    deletedLogs,
     experiences,
+    deletedExperiences,
     setExperiences,
     user,
     setUser,
@@ -1655,12 +1931,17 @@ export const useWorkspaceData = ({
     handleToggleIncludeInCv,
     handleReorderLogs,
     handleDeleteLog,
+    handleRestoreDeletedLog,
+    handlePermanentDeleteLog,
     handleDuplicateLog,
     handleImportBatchLogs,
     handleCreateQuickExperience,
     handleSaveExperience,
     handleDeleteExperience,
+    handleRestoreDeletedExperience,
+    handlePermanentDeleteExperience,
     handleImportExperienceJson,
+    handleSyncRevisionUpdatesCount,
     handleExtractBulletToLog,
     handleExtractAllBulletsForExperience,
     handleSendVisitorMessage,

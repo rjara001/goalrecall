@@ -11,16 +11,27 @@ import { ProductModal } from "./ProductModal";
 import { ShareDeckModal } from "./ShareDeckModal";
 import { CertificationModal } from "./CertificationModal";
 import { CareerGoalModal } from "./CareerGoalModal";
-import { CertificationPrefillDraft } from "../hooks/useAppModals";
+import { RevisionHistoryFlyout } from "./revisions/RevisionHistoryFlyout";
+import { RevisionDiffModal } from "./revisions/RevisionDiffModal";
+import {
+  CertificationPrefillDraft,
+  DiffModalState,
+  HistoryTarget,
+  RestoredExperienceDraft,
+  RestoredLogDraft,
+} from "../hooks/useAppModals";
 import { CvSavedResult } from "../features/cv-upload/hooks/useCvUpload";
 import { ParsedBackupBundle } from "../utils/storage/backupStorage";
 import {
   AiUsageRecord,
   CareerGoal,
+  EntityRevision,
   InboxAchievementDraft,
   JobOffer,
   LogEntry,
   Product,
+  RevisionEntityType,
+  RevisionSource,
   TechnicalCertification,
   UserProfile,
   VisitorMessage,
@@ -30,7 +41,9 @@ import {
 export interface AppModalsProps {
   user: UserProfile | null;
   logs: LogEntry[];
+  deletedLogs?: LogEntry[];
   experiences: WorkExperience[];
+  deletedExperiences?: WorkExperience[];
   inbox: VisitorMessage[];
   jobOffers: JobOffer[];
   products: Product[];
@@ -40,22 +53,43 @@ export interface AppModalsProps {
   onAiQuotaUpdated: (quota: AiUsageRecord) => void;
   isQuickLogOpen: boolean;
   editingLog: LogEntry | null;
+  restoredLogDraft?: RestoredLogDraft | null;
+  onOpenLogHistory?: (log: LogEntry) => void;
   initialExperienceIdForLog?: string;
   initialBulletTextForLog?: string;
   initialDraftForLog?: InboxAchievementDraft | null;
   onCloseQuickLog: () => void;
-  onSaveLog: (entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onSaveLog: (
+    entryData: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
+    source?: RevisionSource
+  ) => Promise<void>;
+  onDeleteLog?: (id: string) => Promise<void>;
   onCreateQuickExperience: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
   ) => Promise<WorkExperience>;
   isExperienceModalOpen: boolean;
   editingExperience: WorkExperience | null;
+  restoredExperienceDraft?: RestoredExperienceDraft | null;
+  onOpenExperienceHistory?: (exp: WorkExperience) => void;
   onCloseExperienceModal: () => void;
   onSaveExperience: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
     newLogBulletsToCreate?: string[],
-    editedLogs?: LogEntry[]
+    editedLogs?: LogEntry[],
+    source?: RevisionSource
   ) => Promise<void>;
+  historyTarget: HistoryTarget | null;
+  onCloseHistory: () => void;
+  onRecoverDeletedHistoryTarget?: (target: HistoryTarget) => Promise<void> | void;
+  diffModalState: DiffModalState | null;
+  onOpenDiffModal: (params: DiffModalState) => void;
+  onCloseDiffModal: () => void;
+  onRestoreRevision: (revision: EntityRevision) => void;
+  onSyncRevisionUpdatesCount?: (
+    entityType: RevisionEntityType,
+    entityId: string,
+    updatesCount: number
+  ) => void;
   isCvUploadOpen: boolean;
   onCloseCvUpload: () => void;
   onCvSaved: (result: CvSavedResult) => Promise<void>;
@@ -100,7 +134,9 @@ export interface AppModalsProps {
 export const AppModals: React.FC<AppModalsProps> = ({
   user,
   logs,
+  deletedLogs = [],
   experiences,
+  deletedExperiences = [],
   inbox,
   jobOffers,
   products,
@@ -110,16 +146,29 @@ export const AppModals: React.FC<AppModalsProps> = ({
   onAiQuotaUpdated,
   isQuickLogOpen,
   editingLog,
+  restoredLogDraft,
+  onOpenLogHistory,
   initialExperienceIdForLog,
   initialBulletTextForLog,
   initialDraftForLog,
   onCloseQuickLog,
   onSaveLog,
+  onDeleteLog,
   onCreateQuickExperience,
   isExperienceModalOpen,
   editingExperience,
+  restoredExperienceDraft,
+  onOpenExperienceHistory,
   onCloseExperienceModal,
   onSaveExperience,
+  historyTarget,
+  onCloseHistory,
+  onRecoverDeletedHistoryTarget,
+  diffModalState,
+  onOpenDiffModal,
+  onCloseDiffModal,
+  onRestoreRevision,
+  onSyncRevisionUpdatesCount,
   isCvUploadOpen,
   onCloseCvUpload,
   onCvSaved,
@@ -155,16 +204,30 @@ export const AppModals: React.FC<AppModalsProps> = ({
   onCloseCareerGoalModal,
   onSaveCareerGoal,
 }) => {
+  const liveEditingLog = editingLog
+    ? logs.find((l) => l.id === editingLog.id) ||
+      deletedLogs.find((l) => l.id === editingLog.id) ||
+      editingLog
+    : null;
+  const liveEditingExperience = editingExperience
+    ? experiences.find((e) => e.id === editingExperience.id) ||
+      deletedExperiences.find((e) => e.id === editingExperience.id) ||
+      editingExperience
+    : null;
+
   return (
     <>
       <QuickLogModal
         isOpen={isQuickLogOpen}
         onClose={onCloseQuickLog}
         onSave={onSaveLog}
+        onDelete={onDeleteLog}
         onCreateExperience={onCreateQuickExperience}
         existingLogs={logs}
         experiences={experiences}
-        initialData={editingLog}
+        initialData={liveEditingLog}
+        restoredDraft={restoredLogDraft}
+        onOpenHistory={liveEditingLog ? () => onOpenLogHistory?.(liveEditingLog) : undefined}
         initialExperienceId={initialExperienceIdForLog}
         initialBulletText={initialBulletTextForLog}
         initialDraft={initialDraftForLog}
@@ -174,7 +237,13 @@ export const AppModals: React.FC<AppModalsProps> = ({
         isOpen={isExperienceModalOpen}
         onClose={onCloseExperienceModal}
         onSave={onSaveExperience}
-        initialData={editingExperience}
+        initialData={liveEditingExperience}
+        restoredDraft={restoredExperienceDraft}
+        onOpenHistory={
+          liveEditingExperience
+            ? () => onOpenExperienceHistory?.(liveEditingExperience)
+            : undefined
+        }
         existingLogs={logs}
       />
 
@@ -269,6 +338,30 @@ export const AppModals: React.FC<AppModalsProps> = ({
         onClose={onCloseCareerGoalModal}
         onSave={onSaveCareerGoal}
         goal={editingCareerGoal}
+      />
+
+      <RevisionHistoryFlyout
+        target={historyTarget}
+        onClose={onCloseHistory}
+        onCompare={({ base, target, revisions }) => {
+          if (!historyTarget) return;
+          onOpenDiffModal({
+            entityType: historyTarget.entityType,
+            entityTitle: historyTarget.title,
+            revisions,
+            initialBaseId: base.id,
+            initialTargetId: target.id,
+          });
+        }}
+        onRestore={onRestoreRevision}
+        onRecoverDeleted={onRecoverDeletedHistoryTarget}
+        onSyncUpdatesCount={onSyncRevisionUpdatesCount}
+      />
+
+      <RevisionDiffModal
+        state={diffModalState}
+        onClose={onCloseDiffModal}
+        onRestoreRevision={onRestoreRevision}
       />
     </>
   );

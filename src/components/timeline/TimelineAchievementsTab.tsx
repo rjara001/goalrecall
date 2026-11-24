@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Building, FolderGit2, GripVertical, Plus, Search, Tag as TagIcon, Zap } from "lucide-react";
+import { Building, FolderGit2, GripVertical, History, Plus, Search, Tag as TagIcon, Zap } from "lucide-react";
 import { LogCategory, LogEntry, WorkExperience } from "../../types";
 import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
@@ -45,6 +45,7 @@ interface TimelineAchievementsTabProps {
     experienceId?: string
   ) => void;
   onEditLog: (entry: LogEntry) => void;
+  onOpenLogHistory?: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
   onDuplicateLog: (entry: LogEntry) => void;
   nowMs: number;
@@ -84,6 +85,7 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
   onToggleIncludeInCv,
   onReorderLogs,
   onEditLog,
+  onOpenLogHistory,
   onDeleteLog,
   onDuplicateLog,
   nowMs,
@@ -437,6 +439,7 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                           onToggleIncludeInCv={onToggleIncludeInCv}
                           onDuplicateLog={onDuplicateLog}
                           onEditLog={onEditLog}
+                          onOpenLogHistory={onOpenLogHistory}
                           onDeleteLog={onDeleteLog}
                           isDraggable={canDrag}
                           isDragging={isDragging}
@@ -542,6 +545,16 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
+                          {onOpenLogHistory && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenLogHistory(log)}
+                              title="Ver historial de cambios"
+                              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 rounded-md transition-colors"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => onEditLog(log)}
                             className="px-2.5 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800 rounded-md hover:bg-cyan-900/50"

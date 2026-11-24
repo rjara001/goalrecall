@@ -236,7 +236,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
       setNoteError(
         formatFirestoreUiError(
           err,
-          "No se pudo enviar el recado a Firestore. Requiere sesión autenticada de dueño."
+          "No se pudo enviar el recado. Requiere sesión autenticada."
         )
       );
     } finally {
@@ -890,7 +890,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                               ? (id) =>
                                   void runOwnerAction(
                                     () => onDeleteProduct(id),
-                                    "No se pudo eliminar el producto de Firestore."
+                                    "No se pudo eliminar el producto."
                                   )
                               : undefined
                           }
@@ -1026,7 +1026,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                                 onClick={() =>
                                   void runOwnerAction(
                                     () => onDeleteCertification(cert.id),
-                                    "No se pudo eliminar la certificación de Firestore."
+                                    "No se pudo eliminar la certificación."
                                   )
                                 }
                                 title="Eliminar"
@@ -1183,7 +1183,7 @@ export const PublicDeck: React.FC<PublicDeckProps> = ({
                   className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-xl transition-all shadow-sm shadow-emerald-500/20 inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {isSendingNote && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{isSendingNote ? "Enviando a Firestore..." : t.publicDeck.sendRecruiterNote}</span>
+                  <span>{isSendingNote ? "Enviando..." : t.publicDeck.sendRecruiterNote}</span>
                 </button>
               </form>
             )}

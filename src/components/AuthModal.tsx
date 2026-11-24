@@ -163,7 +163,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setIsEditingProfile(false);
     } catch (err) {
       setProfileSaveError(
-        formatFirestoreUiError(err, "No se pudo actualizar tu perfil en Firestore.")
+        formatFirestoreUiError(err, "No se pudo actualizar tu perfil.")
       );
     } finally {
       setIsSavingProfile(false);
@@ -188,7 +188,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-[11px] text-slate-400">
                 {currentUser
                   ? `${at.connectedAs} ${currentUser.name}`
-                  : "Autenticación verificada con Google y Cloud Firestore"}
+                  : "Acceso privado y sincronización automática con tu cuenta de Google"}
               </p>
             </div>
           </div>

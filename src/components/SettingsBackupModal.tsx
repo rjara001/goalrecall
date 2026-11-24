@@ -192,7 +192,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
       if (!onImportBackupData) {
         setImportStatus({
           success: false,
-          msg: "Debes iniciar sesión con Google para importar respaldos en Firestore.",
+          msg: "Debes iniciar sesión con Google para importar respaldos.",
         });
         return;
       }
@@ -203,12 +203,12 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
         const writtenCount = await onImportBackupData(parsed.data);
         setImportStatus({
           success: true,
-          msg: `${parsed.count} logs analizados y ${writtenCount} registros guardados en Firestore.`,
+          msg: `${parsed.count} logros analizados y ${writtenCount} registros guardados.`,
         });
       } catch (err) {
         setImportStatus({
           success: false,
-          msg: formatFirestoreUiError(err, "No se pudo importar el respaldo en Firestore."),
+          msg: formatFirestoreUiError(err, "No se pudo importar el respaldo."),
         });
       } finally {
         setIsImporting(false);
@@ -265,7 +265,7 @@ export const SettingsBackupModal: React.FC<SettingsBackupModalProps> = ({
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err) {
       setSocialSaveError(
-        formatFirestoreUiError(err, "No se pudieron guardar los ajustes en Firestore.")
+        formatFirestoreUiError(err, "No se pudieron guardar los ajustes.")
       );
     } finally {
       setIsSavingSocial(false);

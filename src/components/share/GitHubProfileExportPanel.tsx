@@ -249,7 +249,7 @@ export const GitHubProfileExportPanel: React.FC<
         </div>
         {options.badgeStyle === "live_svg" && (
           <p className="text-[10px] font-mono text-slate-400 break-all">
-            Vista SVG URL: {liveSvgUrl} (usa Shields.io Estático para compatibilidad directa sin servidor proxy)
+            Vista SVG URL: {liveSvgUrl} (usa Shields.io Estático para compatibilidad directa)
           </p>
         )}
       </div>

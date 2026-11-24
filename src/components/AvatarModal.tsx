@@ -274,7 +274,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
       onClose();
     } catch (err) {
       setErrorMsg(
-        formatFirestoreUiError(err, "No se pudo guardar el avatar en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar el avatar.")
       );
     } finally {
       setIsSaving(false);

@@ -21,11 +21,15 @@ import {
   AlertCircle,
   Loader2,
   Link2,
+  History,
+  RotateCcw,
 } from "lucide-react";
-import { WorkExperience, LogEntry } from "../types";
+import { WorkExperience, LogEntry, RevisionSource } from "../types";
+import type { RestoredExperienceDraft } from "../hooks/useAppModals";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
+import { formatHistoryButtonLabel } from "../utils/revisions/snapshot";
 import {
   cleanLegacyBulletText,
   findLegacyUnlinkedBullets,
@@ -39,9 +43,12 @@ interface ExperienceModalProps {
   onSave: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt"> & { id?: string },
     bulletsToCreate?: string[],
-    editedLogs?: LogEntry[]
+    editedLogs?: LogEntry[],
+    source?: RevisionSource
   ) => Promise<void> | void;
   initialData?: WorkExperience | null;
+  restoredDraft?: RestoredExperienceDraft | null;
+  onOpenHistory?: () => void;
   existingLogs?: LogEntry[];
 }
 
@@ -58,6 +65,8 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   onClose,
   onSave,
   initialData,
+  restoredDraft,
+  onOpenHistory,
   existingLogs = [],
 }) => {
   const { t, language } = useI18n();
@@ -94,7 +103,58 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    if (initialData) {
+    if (restoredDraft) {
+      const snap = restoredDraft.snapshot;
+      setCompany(snap.company || "");
+      setRole(snap.role || "");
+      setStartDate(snap.startDate || "");
+      setEndDate(snap.endDate || "");
+      setIsCurrent(Boolean(snap.isCurrent));
+      setLocation(snap.location || "");
+      setSummary(snap.summary || "");
+      setTechnologies(snap.technologies || []);
+      setIsPersonalProjects(Boolean(snap.isPersonalProjects));
+
+      const childLogs = initialData
+        ? getExperienceChildLogs(initialData, existingLogs)
+        : [];
+      const pairedRows: ExperienceBulletDraftRow[] = [];
+      const maxLen = Math.max(snap.bullets.length, childLogs.length);
+      for (let i = 0; i < maxLen; i++) {
+        const log = childLogs[i];
+        const restoredText = snap.bullets[i];
+        if (log && restoredText !== undefined) {
+          pairedRows.push({
+            key: `log-${log.id}`,
+            log,
+            text: restoredText,
+            includeInCv: true,
+          });
+        } else if (log) {
+          pairedRows.push({
+            key: `log-${log.id}`,
+            log,
+            text: (log.title || log.logro || log.impact || "").trim(),
+            includeInCv: false,
+          });
+        } else if (restoredText !== undefined) {
+          pairedRows.push({
+            key: `restore-${Date.now()}-${i}`,
+            text: restoredText,
+            includeInCv: true,
+          });
+        }
+      }
+
+      setBulletRows(
+        pairedRows.length > 0
+          ? pairedRows
+          : [{ key: `new-${Date.now()}`, text: "", includeInCv: true }]
+      );
+      setIsCompanyRoleOpen(true);
+      setIsDatesOpen(Boolean(snap.startDate || snap.endDate || snap.isCurrent));
+      setIsLocationTechOpen(Boolean(snap.location || snap.technologies.length > 0));
+    } else if (initialData) {
       setCompany(initialData.company || "");
       setRole(initialData.role || "");
       setStartDate(initialData.startDate || "");
@@ -128,6 +188,9 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
           ? initialRows
           : [{ key: `new-${Date.now()}`, text: "", includeInCv: true }]
       );
+      setIsCompanyRoleOpen(false);
+      setIsDatesOpen(false);
+      setIsLocationTechOpen(false);
     } else {
       setCompany("");
       setRole("");
@@ -139,17 +202,17 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setBulletRows([{ key: `new-${Date.now()}`, text: "", includeInCv: true }]);
       setTechnologies(["TypeScript", "React", "Node.js"]);
       setIsPersonalProjects(false);
+      setIsCompanyRoleOpen(false);
+      setIsDatesOpen(false);
+      setIsLocationTechOpen(false);
     }
 
     setShowHiddenDrawer(false);
     setIsPasteHelperOpen(false);
     setPasteBuffer("");
-    setIsCompanyRoleOpen(false);
-    setIsDatesOpen(false);
-    setIsLocationTechOpen(false);
     setIsSaving(false);
     setSaveError(null);
-  }, [initialData, isOpen, existingLogs]);
+  }, [initialData, restoredDraft, isOpen, existingLogs]);
 
   if (!isOpen) return null;
 
@@ -277,11 +340,16 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
     };
 
     try {
-      await onSave(expData, bulletsToCreate, editedLogs);
+      await onSave(
+        expData,
+        bulletsToCreate,
+        editedLogs,
+        restoredDraft ? "restore" : "manual_form"
+      );
       onClose();
     } catch (err) {
       setSaveError(
-        formatFirestoreUiError(err, "No se pudo guardar la experiencia en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar la experiencia.")
       );
     } finally {
       setIsSaving(false);
@@ -312,19 +380,47 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               </h2>
             </div>
           </div>
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={onClose}
-            aria-label={t.common.close}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {initialData?.id && onOpenHistory && (
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={onOpenHistory}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium tabular-nums inline-flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                title="Ver historial de cambios de esta experiencia"
+              >
+                <History className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{formatHistoryButtonLabel(initialData.updatesCount, "es")}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={onClose}
+              aria-label={t.common.close}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Main Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+          {restoredDraft && (
+            <div
+              role="status"
+              className="p-3 rounded-xl bg-cyan-950/45 border border-cyan-700/60 text-cyan-100 text-xs flex items-start gap-2.5"
+            >
+              <RotateCcw className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <span>
+                Borrador restaurado desde{" "}
+                <strong className="font-mono">v{restoredDraft.versionNumber}</strong>.
+                No se aplicará hasta que pulses Guardar Experiencia y Sincronizar.
+              </span>
+            </div>
+          )}
+
           {saveError && (
             <div
               role="alert"
@@ -867,7 +963,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
               )}
               <span>
                 {isSaving
-                  ? "Sincronizando Firestore..."
+                  ? "Guardando cambios..."
                   : "Guardar Experiencia y Sincronizar"}
               </span>
             </button>

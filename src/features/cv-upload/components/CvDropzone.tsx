@@ -19,6 +19,7 @@ interface CvDropzoneProps {
   quotaExhausted: boolean;
   aiUsageCount: number;
   errorMessage: string | null;
+  canFallbackLocally?: boolean;
   onRunLocalExtractor: () => void;
   onShowProModal: () => void;
 }
@@ -26,7 +27,7 @@ interface CvDropzoneProps {
 export const CvDropzone: React.FC<CvDropzoneProps> = ({
   activeTab, onTabChange, isDragging, onDraggingChange, pastedCvText, onPastedTextChange,
   onFileSelect, onPasteText, onLoadSamplePdf, onLoadSampleText, isLoadingSamplePdf,
-  quotaExhausted, aiUsageCount, errorMessage, onRunLocalExtractor, onShowProModal,
+  quotaExhausted, aiUsageCount, errorMessage, canFallbackLocally = false, onRunLocalExtractor, onShowProModal,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,9 +133,20 @@ export const CvDropzone: React.FC<CvDropzoneProps> = ({
 
       {quotaExhausted && <CvQuotaBanner aiUsageCount={aiUsageCount} onRunLocalExtractor={onRunLocalExtractor} onShowProModal={onShowProModal} />}
       {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 flex items-center gap-2.5 text-xs text-red-300">
-          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-          <span>{errorMessage}</span>
+        <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-red-200">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+          {canFallbackLocally && (
+            <button
+              type="button"
+              onClick={onRunLocalExtractor}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-semibold shrink-0 transition-colors"
+            >
+              Usar extractor local (sin IA)
+            </button>
+          )}
         </div>
       )}
     </div>

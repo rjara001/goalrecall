@@ -188,7 +188,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
       setFormUrl("");
     } catch (err) {
       setModalOfferError(
-        formatFirestoreUiError(err, "No se pudo guardar la oferta laboral en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar la oferta laboral.")
       );
     } finally {
       setIsSavingOffer(false);
@@ -208,7 +208,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
       });
     } catch (err) {
       setWorkspaceOfferError(
-        formatFirestoreUiError(err, "No se pudo actualizar el estado en Firestore.")
+        formatFirestoreUiError(err, "No se pudo actualizar el estado.")
       );
     }
   };
@@ -235,7 +235,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
       });
     } catch (err) {
       setWorkspaceOfferError(
-        formatFirestoreUiError(err, "No se pudo guardar la selección de logros en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar la selección de logros.")
       );
     }
   };
@@ -246,7 +246,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
       await onDeleteOffer(offerId);
     } catch (err) {
       setWorkspaceOfferError(
-        formatFirestoreUiError(err, "No se pudo eliminar la oferta de Firestore.")
+        formatFirestoreUiError(err, "No se pudo eliminar la oferta.")
       );
     }
   };
@@ -1090,7 +1090,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md shadow-indigo-900/30 transition-all inline-flex items-center gap-2 disabled:opacity-60"
                 >
                   {isSavingOffer && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{isSavingOffer ? "Guardando en Firestore..." : ol.saveAndAnalyzeBtn}</span>
+                  <span>{isSavingOffer ? "Guardando..." : ol.saveAndAnalyzeBtn}</span>
                 </button>
               </div>
             </form>

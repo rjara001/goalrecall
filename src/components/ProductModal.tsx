@@ -106,7 +106,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setCompressing(true);
       const { dataUrl, sizeKb } = await compressImageToWebP(file);
       setImageUrl(dataUrl);
-      setImageSizeNote(`Optimizada: ${sizeKb} KB (WebP < 150 KB) · Protege cuota Spark`);
+      setImageSizeNote(`Optimizada: ${sizeKb} KB (WebP < 150 KB)`);
     } catch (err) {
       console.warn("Error comprimiendo imagen:", err);
     } finally {
@@ -189,7 +189,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       onClose();
     } catch (err) {
       setSaveError(
-        formatFirestoreUiError(err, "No se pudo guardar el producto en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar el producto.")
       );
     } finally {
       setIsSaving(false);
@@ -355,7 +355,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
             {/* Spark Free Tier Advisory */}
             <div className="p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-800/40 text-[11px] text-cyan-200/90 leading-relaxed">
-              💡 <strong>Cero consumo de Hosting:</strong> Para mantener la transferencia bajo los 360 MB/día de Firebase Spark, se recomienda usar enlaces directos a imágenes alojadas en GitHub Raw, Cloudinary o Imgur. Si subes un archivo local, nuestro optimizador lo comprimirá a WebP (&lt; 150 KB).
+              💡 <strong>Optimización automática:</strong> Puedes pegar un enlace directo a tu imagen o subir un archivo desde tu equipo (nuestro optimizador lo ajustará automáticamente para cargar más rápido).
             </div>
 
             {/* Quick screenshot selectors */}

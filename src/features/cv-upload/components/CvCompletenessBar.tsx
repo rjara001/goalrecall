@@ -14,7 +14,7 @@ interface CvCompletenessBarProps {
 const FALLBACK_LABELS: Record<CvFallbackReason, string> = {
   unauthenticated: "Inicia sesión para habilitar extracción asistida por IA; procesado localmente con éxito.",
   timeout: "El servicio de IA tardó más de lo esperado; procesado automáticamente con el extractor local.",
-  network: "Sin conexión al backend de IA; procesado automáticamente con el extractor local.",
+  network: "Servicio en línea no disponible temporalmente; procesado automáticamente con el lector local.",
   server_error: "Servicio de IA temporalmente no disponible; procesado automáticamente con el extractor local.",
   forced_local: "Procesado localmente a costo $0.00.",
 };

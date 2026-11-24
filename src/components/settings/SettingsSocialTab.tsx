@@ -426,7 +426,7 @@ export const SettingsSocialTab: React.FC<SettingsSocialTabProps> = ({
           {isSaving ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Guardando en Firestore...</span>
+              <span>Guardando...</span>
             </>
           ) : (
             <>

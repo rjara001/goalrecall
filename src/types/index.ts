@@ -39,6 +39,8 @@ export interface WorkExperience {
   bullets?: string[]; // real textual bullets extracted from CV
   technologies?: string[]; // primary tech stack
   isPersonalProjects?: boolean; // true if this is the personal projects container
+  updatesCount?: number; // Number of content revisions after initial creation (vN - 1)
+  deletedAt?: number; // Epoch ms timestamp when moved to history trash
   createdAt: number;
   updatedAt: number;
 }
@@ -67,9 +69,65 @@ export interface LogEntry {
   tags: string[];
   isPublic: boolean; // Default false (Bóveda Privada / Confidencial). If true, appears in Public Deck & First Mate
   sortOrder?: number; // Índice manual no negativo para ordenar logros dentro de su Experiencia y Bitácora
+  updatesCount?: number; // Número de modificaciones de contenido registradas tras su creación (vN - 1)
+  deletedAt?: number; // Epoch ms timestamp when moved to history trash
   createdAt: number;
   updatedAt: number;
 }
+
+export type RevisionEntityType = "log" | "experience";
+
+export type RevisionSource =
+  | "initial"
+  | "manual_form"
+  | "json_editor"
+  | "json_import"
+  | "restore";
+
+export interface LogRevisionSnapshot {
+  date: string;
+  client: string;
+  project: string;
+  category: string;
+  title: string;
+  whatWasSought: string;
+  whyImportant: string;
+  howApplied: string;
+  impact: string;
+  description: string;
+  tags: string[];
+  experienceId: string;
+}
+
+export interface ExperienceRevisionSnapshot {
+  company: string;
+  role: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  location: string;
+  summary: string;
+  bullets: string[];
+  technologies: string[];
+  isPersonalProjects: boolean;
+}
+
+export interface EntityRevision<
+  TSnapshot = LogRevisionSnapshot | ExperienceRevisionSnapshot,
+> {
+  id: string;
+  userId: string;
+  parentId: string;
+  entityType: RevisionEntityType;
+  versionNumber: number;
+  source: RevisionSource;
+  changedFields: string[];
+  snapshot: TSnapshot;
+  createdAt: number;
+}
+
+export type LogRevision = EntityRevision<LogRevisionSnapshot>;
+export type ExperienceRevision = EntityRevision<ExperienceRevisionSnapshot>;
 
 export interface AiUsageRecord {
   monthKey: string; // e.g. "2026-10"

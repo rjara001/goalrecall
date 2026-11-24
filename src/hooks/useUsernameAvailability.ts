@@ -59,7 +59,7 @@ export function useUsernameAvailability({
           setStatus({
             checking: false,
             available: undefined,
-            reason: "No se pudo verificar disponibilidad en Firestore.",
+            reason: "No se pudo verificar disponibilidad del enlace.",
           });
         }
       }

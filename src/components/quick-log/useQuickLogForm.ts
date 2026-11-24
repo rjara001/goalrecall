@@ -4,8 +4,10 @@ import {
   LogCategory,
   LogEntry,
   PresetTemplate,
+  RevisionSource,
   WorkExperience,
 } from "../../types";
+import type { RestoredLogDraft } from "../../hooks/useAppModals";
 import { formatFirestoreUiError } from "../../utils/firestore/errors";
 import {
   DEFAULT_TECH_CATEGORIES,
@@ -19,10 +21,14 @@ interface UseQuickLogFormOptions {
   existingLogs: LogEntry[];
   experiences: WorkExperience[];
   initialData?: LogEntry | null;
+  restoredDraft?: RestoredLogDraft | null;
   initialExperienceId?: string;
   initialBulletText?: string;
   initialDraft?: InboxAchievementDraft | null;
-  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onSave: (
+    entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
+    source?: RevisionSource
+  ) => Promise<void>;
   onCreateExperience?: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
   ) => Promise<WorkExperience>;
@@ -35,6 +41,7 @@ export function useQuickLogForm({
   existingLogs,
   experiences,
   initialData,
+  restoredDraft,
   initialExperienceId,
   initialBulletText,
   initialDraft,
@@ -119,7 +126,28 @@ export function useQuickLogForm({
 
     const exps = experiences || [];
 
-    if (initialData) {
+    if (restoredDraft) {
+      const snap = restoredDraft.snapshot;
+      setTitle(snap.title);
+      setWhatWasSought(snap.whatWasSought || "");
+      setWhyImportant(snap.whyImportant || "");
+      setHowApplied(snap.howApplied || "");
+      setImpact(snap.impact || "");
+      setDescription(snap.description || "");
+      setDate(snap.date || new Date().toISOString().substring(0, 10));
+      setExperienceId(snap.experienceId || initialData?.experienceId || exps[0]?.id || "exp-personal");
+      setClient(snap.client || initialData?.client || "");
+      setProject(snap.project || initialData?.project || "");
+      setCategory(snap.category || "Feature ✨");
+      setTags(snap.tags || []);
+      setIsPublic(initialData ? initialData.isPublic : false);
+      setIncludeInCv(initialData ? initialData.includeInCv !== false : true);
+      if (snap.whatWasSought) setIsWhatSoughtOpen(true);
+      if (snap.whyImportant) setIsWhyImportantOpen(true);
+      if (snap.howApplied) setIsHowAppliedOpen(true);
+      if (snap.impact) setIsImpactOpen(true);
+      if (snap.description) setIsDescriptionOpen(true);
+    } else if (initialData) {
       setTitle(initialData.title);
       setWhatWasSought(initialData.whatWasSought || "");
       setWhyImportant(initialData.whyImportant || "");
@@ -192,6 +220,7 @@ export function useQuickLogForm({
     setTimeout(() => titleInputRef.current?.focus(), 100);
   }, [
     initialData,
+    restoredDraft,
     isOpen,
     initialExperienceId,
     initialBulletText,
@@ -253,7 +282,7 @@ export function useQuickLogForm({
 
       if (isCreatingNewExp && newExpCompany.trim()) {
         if (!onCreateExperience) {
-          throw new Error("No se pudo crear la empresa en Firestore.");
+          throw new Error("No se pudo crear la empresa.");
         }
         const createdExp = await onCreateExperience({
           company: newExpCompany.trim(),
@@ -267,30 +296,33 @@ export function useQuickLogForm({
         targetClient = createdExp.company;
       }
 
-      await onSave({
-        date,
-        experienceId: targetExpId,
-        client: targetClient.trim() || "Empresa",
-        project: project.trim() || "General",
-        category,
-        title: title.trim(),
-        logro: title.trim(),
-        whatWasSought: whatWasSought.trim() || undefined,
-        whyImportant: whyImportant.trim() || undefined,
-        howApplied: howApplied.trim() || undefined,
-        description: description.trim() || undefined,
-        impact: finalImpact,
-        tags,
-        isPublic,
-        includeInCv,
-      });
+      await onSave(
+        {
+          date,
+          experienceId: targetExpId,
+          client: targetClient.trim() || "Empresa",
+          project: project.trim() || "General",
+          category,
+          title: title.trim(),
+          logro: title.trim(),
+          whatWasSought: whatWasSought.trim() || undefined,
+          whyImportant: whyImportant.trim() || undefined,
+          howApplied: howApplied.trim() || undefined,
+          description: description.trim() || undefined,
+          impact: finalImpact,
+          tags,
+          isPublic,
+          includeInCv,
+        },
+        restoredDraft ? "restore" : "manual_form"
+      );
 
       onClose();
     } catch (err) {
       setSaveError(
         formatFirestoreUiError(
           err,
-          "No se pudo guardar el logro en Firestore. Inténtalo de nuevo."
+          "No se pudo guardar el logro. Inténtalo de nuevo."
         )
       );
     } finally {

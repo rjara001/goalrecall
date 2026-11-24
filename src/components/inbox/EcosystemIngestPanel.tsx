@@ -106,7 +106,7 @@ export const EcosystemIngestPanel: React.FC<EcosystemIngestPanelProps> = ({
       );
     } catch (err: unknown) {
       setErrorMsg(
-        err instanceof Error ? err.message : "Error de red al conectar con el servidor."
+        err instanceof Error ? err.message : "Error de conexión al sincronizar."
       );
     } finally {
       setIsLoading(false);
@@ -346,7 +346,7 @@ export const EcosystemIngestPanel: React.FC<EcosystemIngestPanelProps> = ({
                 onChange={(e) => setGitToken(e.target.value)}
                 placeholder={
                   provider === "github"
-                    ? "GitHub PAT opcional (no se almacena en servidor)"
+                    ? "Token personal de GitHub opcional (solo para esta consulta)"
                     : "GitLab Personal Access Token opcional"
                 }
                 className="sm:col-span-2 px-3 py-2 rounded-lg bg-[#080C14] border border-slate-800 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500/60"

@@ -17,10 +17,18 @@ import {
   AiUsageRecord,
   CareerGoal,
   CareerGoalStatus,
+  EntityRevision,
+  ExperienceRevision,
+  ExperienceRevisionSnapshot,
   ExtractedCvData,
   JobOffer,
+  JobOfferStatus,
   LogEntry,
+  LogRevision,
+  LogRevisionSnapshot,
   Product,
+  RevisionEntityType,
+  RevisionSource,
   TechnicalCertification,
   UserProfile,
   VisitorMessage,
@@ -34,6 +42,7 @@ import {
   buildCareerGoalUpdatePayload,
   buildCertificationCreatePayload,
   buildCertificationUpdatePayload,
+  buildExperienceRevisionCreatePayload,
   buildInboxMessageCreatePayload,
   buildInboxMessageUpdatePayload,
   buildJobOfferCreatePayload,
@@ -41,6 +50,7 @@ import {
   buildLogEntryCreatePayload,
   buildLogEntryUpdatePayload,
   buildLogMetadataUpdatePayload,
+  buildLogRevisionCreatePayload,
   buildLogSortOrderUpdatePayload,
   buildProductCreatePayload,
   buildProductUpdatePayload,
@@ -52,13 +62,16 @@ import {
   buildUserProfileCreatePayload,
   buildUserProfileUpdatePayload,
   buildWorkExperienceCreatePayload,
+  buildWorkExperienceMetadataUpdatePayload,
   buildWorkExperienceUpdatePayload,
   docToAiQuota,
   docToCareerGoal,
   docToCertification,
+  docToExperienceRevision,
   docToInboxMessage,
   docToJobOffer,
   docToLogEntry,
+  docToLogRevision,
   docToProduct,
   docToStoredCv,
   docToUserProfile,
@@ -73,6 +86,13 @@ import {
   compareLogEntriesByOrder,
   inferCategoryForSavedExperienceBullet,
 } from "../bulletToLogMapper";
+import {
+  buildExperienceRevisionSnapshot,
+  buildLogRevisionSnapshot,
+  computeExperienceChangedFields,
+  computeLogChangedFields,
+  MAX_REVISIONS_PER_ENTITY,
+} from "../revisions/snapshot";
 
 export interface ExperienceProjectionSync {
   experience: WorkExperience;
@@ -83,7 +103,9 @@ export interface FirestoreWorkspaceData {
   user: UserProfile;
   cv: ExtractedCvData | null;
   experiences: WorkExperience[];
+  deletedExperiences: WorkExperience[];
   logs: LogEntry[];
+  deletedLogs: LogEntry[];
   inbox: VisitorMessage[];
   jobOffers: JobOffer[];
   products: Product[];
@@ -252,8 +274,8 @@ export async function loadWorkspaceFromFirestore(
   const [
     cvSnap,
     quotaSnap,
-    experiences,
-    logs,
+    allExperiences,
+    allLogs,
     inbox,
     jobOffers,
     products,
@@ -278,8 +300,20 @@ export async function loadWorkspaceFromFirestore(
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  logs.sort(compareLogEntriesByOrder);
-  experiences.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const experiences = allExperiences
+    .filter((e) => !e.deletedAt)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const deletedExperiences = allExperiences
+    .filter((e) => Boolean(e.deletedAt))
+    .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
+  const logs = allLogs
+    .filter((l) => !l.deletedAt)
+    .sort(compareLogEntriesByOrder);
+  const deletedLogs = allLogs
+    .filter((l) => Boolean(l.deletedAt))
+    .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
   certifications.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   careerGoals.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   jobOffers.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -292,7 +326,9 @@ export async function loadWorkspaceFromFirestore(
       ? docToStoredCv(cvSnap.data() as Record<string, unknown>)
       : null,
     experiences,
+    deletedExperiences,
     logs,
+    deletedLogs,
     inbox,
     jobOffers,
     products,
@@ -375,18 +411,33 @@ export async function saveCvAndApplyBatchFirestore(params: {
 
   const savedExperiences: WorkExperience[] = params.updatedExperiences.map((exp, idx) => {
     const safeId = sanitizeDocId(exp.id, `exp_${now}_${idx}`);
+    const isNew = !existingExpIds.has(safeId);
     const normalizedExp: WorkExperience = {
       ...exp,
       id: safeId,
       userId: uid,
+      ...(isNew ? { updatesCount: 0 } : {}),
       createdAt: exp.createdAt || now,
       updatedAt: now,
     };
     const expRef = doc(firestore, "users", uid, "experiences", safeId);
-    if (existingExpIds.has(safeId)) {
+    if (!isNew) {
       batch.update(expRef, buildWorkExperienceUpdatePayload(normalizedExp));
     } else {
       batch.set(expRef, buildWorkExperienceCreatePayload(normalizedExp, uid, safeId));
+      const revId = buildRevisionDocId(1, `e${idx}`);
+      batch.set(
+        doc(firestore, "users", uid, "experiences", safeId, "revisions", revId),
+        buildExperienceRevisionCreatePayload({
+          revisionId: revId,
+          uid,
+          experienceId: safeId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: buildExperienceRevisionSnapshot(normalizedExp),
+        })
+      );
     }
     return normalizedExp;
   });
@@ -399,10 +450,24 @@ export async function saveCvAndApplyBatchFirestore(params: {
       id: logId,
       userId: uid,
       isPublic: Boolean(entry.isPublic),
+      updatesCount: 0,
       createdAt: now,
       updatedAt: now,
     };
     batch.set(logRef, buildLogEntryCreatePayload(materialized, uid, logId));
+    const revId = buildRevisionDocId(1, `l${idx}`);
+    batch.set(
+      doc(firestore, "users", uid, "logs", logId, "revisions", revId),
+      buildLogRevisionCreatePayload({
+        revisionId: revId,
+        uid,
+        logId,
+        versionNumber: 1,
+        source: "initial",
+        changedFields: [],
+        snapshot: buildLogRevisionSnapshot(materialized),
+      })
+    );
     return materialized;
   });
 
@@ -417,6 +482,442 @@ export async function saveCvAndApplyBatchFirestore(params: {
     savedExperiences,
     savedLogs,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Revision Snapshots Helpers (On-Demand Load + Backfill + 25-Cap Pruning)
+// ---------------------------------------------------------------------------
+function buildRevisionDocId(versionNumber: number, suffix?: string): string {
+  const rand = Math.random().toString(36).slice(2, 6);
+  return sanitizeDocId(
+    `rev-v${versionNumber}-${Date.now()}-${suffix || rand}`,
+    "rev"
+  );
+}
+
+async function fetchStoredRevisionsAscending(
+  firestore: ReturnType<typeof getDbOrThrow>,
+  uid: string,
+  entityType: RevisionEntityType,
+  parentId: string
+): Promise<{
+  docs: Array<{ id: string; versionNumber: number; createdAt: number; snapshot: unknown }>;
+}> {
+  const parentCol = entityType === "log" ? "logs" : "experiences";
+  const safeParentId = sanitizeDocId(parentId, entityType === "log" ? "log" : "exp");
+  const path = `users/${uid}/${parentCol}/${safeParentId}/revisions`;
+
+  try {
+    const q = query(
+      collection(firestore, "users", uid, parentCol, safeParentId, "revisions"),
+      where("userId", "==", uid)
+    );
+    const snap = await getDocs(q);
+    const docs = snap.docs
+      .map((d) => {
+        const parsed =
+          entityType === "log"
+            ? docToLogRevision(d.data() as Record<string, unknown>, d.id)
+            : docToExperienceRevision(d.data() as Record<string, unknown>, d.id);
+        return parsed;
+      })
+      .sort(
+        (a, b) =>
+          a.versionNumber - b.versionNumber || a.createdAt - b.createdAt
+      );
+    return { docs };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function listEntityRevisionsFirestore(
+  entityType: "log",
+  parentId: string
+): Promise<LogRevision[]>;
+export async function listEntityRevisionsFirestore(
+  entityType: "experience",
+  parentId: string
+): Promise<ExperienceRevision[]>;
+export async function listEntityRevisionsFirestore(
+  entityType: RevisionEntityType,
+  parentId: string
+): Promise<EntityRevision[]>;
+export async function listEntityRevisionsFirestore(
+  entityType: RevisionEntityType,
+  parentId: string
+): Promise<EntityRevision[]> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const parentCol = entityType === "log" ? "logs" : "experiences";
+  const safeParentId = sanitizeDocId(parentId, entityType === "log" ? "log" : "exp");
+  const path = `users/${uid}/${parentCol}/${safeParentId}/revisions`;
+
+  try {
+    const q = query(
+      collection(firestore, "users", uid, parentCol, safeParentId, "revisions"),
+      where("userId", "==", uid)
+    );
+    const snap = await getDocs(q);
+    const mapped: EntityRevision[] = snap.docs.map((d) =>
+      entityType === "log"
+        ? docToLogRevision(d.data() as Record<string, unknown>, d.id)
+        : docToExperienceRevision(d.data() as Record<string, unknown>, d.id)
+    );
+    return mapped
+      .sort(
+        (a, b) =>
+          b.versionNumber - a.versionNumber || b.createdAt - a.createdAt
+      )
+      .slice(0, MAX_REVISIONS_PER_ENTITY);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function syncEntityUpdatesCountFirestore(
+  entityType: RevisionEntityType,
+  parentId: string,
+  updatesCount: number
+): Promise<void> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const clamped = Math.max(0, Math.min(1000000, Math.trunc(updatesCount)));
+  if (entityType === "log") {
+    const safeId = sanitizeDocId(parentId, "log");
+    const path = `users/${uid}/logs/${safeId}`;
+    try {
+      await updateDoc(
+        doc(firestore, "users", uid, "logs", safeId),
+        buildLogMetadataUpdatePayload({ updatesCount: clamped })
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+    return;
+  }
+
+  const safeId = sanitizeDocId(parentId, "exp");
+  const path = `users/${uid}/experiences/${safeId}`;
+  try {
+    await updateDoc(
+      doc(firestore, "users", uid, "experiences", safeId),
+      buildWorkExperienceMetadataUpdatePayload({ updatesCount: clamped })
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+interface PreparedRevisionOpsResult {
+  ops: Array<(batch: WriteBatch) => void>;
+  updatesCount: number | null;
+}
+
+async function prepareLogRevisionOps(params: {
+  firestore: ReturnType<typeof getDbOrThrow>;
+  uid: string;
+  logId: string;
+  previousEntry?: LogEntry | null;
+  nextEntry: LogEntry;
+  source: RevisionSource;
+}): Promise<PreparedRevisionOpsResult> {
+  const { firestore, uid, logId, previousEntry, nextEntry, source } = params;
+  const safeLogId = sanitizeDocId(logId, "log");
+  const nextSnap = buildLogRevisionSnapshot(nextEntry);
+
+  if (previousEntry) {
+    const fastDiff = computeLogChangedFields(previousEntry, nextSnap);
+    if (fastDiff.length === 0) {
+      return { ops: [], updatesCount: null };
+    }
+  }
+
+  const { docs: existingRevs } = await fetchStoredRevisionsAscending(
+    firestore,
+    uid,
+    "log",
+    safeLogId
+  );
+
+  const ops: Array<(batch: WriteBatch) => void> = [];
+
+  if (existingRevs.length === 0) {
+    if (previousEntry) {
+      const prevSnap = buildLogRevisionSnapshot(previousEntry);
+      const changed = computeLogChangedFields(prevSnap, nextSnap);
+      if (changed.length === 0) return { ops: [], updatesCount: null };
+
+      const v1Id = buildRevisionDocId(1, "v1");
+      const v2Id = buildRevisionDocId(2, "v2");
+      ops.push((b) =>
+        b.set(
+          doc(firestore, "users", uid, "logs", safeLogId, "revisions", v1Id),
+          buildLogRevisionCreatePayload({
+            revisionId: v1Id,
+            uid,
+            logId: safeLogId,
+            versionNumber: 1,
+            source: "initial",
+            changedFields: [],
+            snapshot: prevSnap,
+          })
+        )
+      );
+      ops.push((b) =>
+        b.set(
+          doc(firestore, "users", uid, "logs", safeLogId, "revisions", v2Id),
+          buildLogRevisionCreatePayload({
+            revisionId: v2Id,
+            uid,
+            logId: safeLogId,
+            versionNumber: 2,
+            source,
+            changedFields: changed,
+            snapshot: nextSnap,
+          })
+        )
+      );
+      return { ops, updatesCount: 1 };
+    }
+
+    const v1Id = buildRevisionDocId(1, "v1");
+    ops.push((b) =>
+      b.set(
+        doc(firestore, "users", uid, "logs", safeLogId, "revisions", v1Id),
+        buildLogRevisionCreatePayload({
+          revisionId: v1Id,
+          uid,
+          logId: safeLogId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: nextSnap,
+        })
+      )
+    );
+    return { ops, updatesCount: 0 };
+  }
+
+  const latest = existingRevs[existingRevs.length - 1];
+  const changed = computeLogChangedFields(
+    latest.snapshot as LogRevisionSnapshot,
+    nextSnap
+  );
+  if (changed.length === 0) {
+    return {
+      ops: [],
+      updatesCount: Math.max(0, latest.versionNumber - 1),
+    };
+  }
+
+  const nextVersion = latest.versionNumber + 1;
+  const revId = buildRevisionDocId(nextVersion);
+
+  const excessCount = existingRevs.length + 1 - MAX_REVISIONS_PER_ENTITY;
+  if (excessCount > 0) {
+    for (const stale of existingRevs.slice(0, excessCount)) {
+      ops.push((b) =>
+        b.delete(
+          doc(firestore, "users", uid, "logs", safeLogId, "revisions", stale.id)
+        )
+      );
+    }
+  }
+
+  ops.push((b) =>
+    b.set(
+      doc(firestore, "users", uid, "logs", safeLogId, "revisions", revId),
+      buildLogRevisionCreatePayload({
+        revisionId: revId,
+        uid,
+        logId: safeLogId,
+        versionNumber: nextVersion,
+        source,
+        changedFields: changed,
+        snapshot: nextSnap,
+      })
+    )
+  );
+
+  return { ops, updatesCount: Math.max(0, nextVersion - 1) };
+}
+
+async function prepareExperienceRevisionOps(params: {
+  firestore: ReturnType<typeof getDbOrThrow>;
+  uid: string;
+  experienceId: string;
+  previousExperience?: WorkExperience | null;
+  previousBullets?: string[];
+  nextExperience: WorkExperience;
+  nextBullets: string[];
+  source: RevisionSource;
+}): Promise<PreparedRevisionOpsResult> {
+  const {
+    firestore,
+    uid,
+    experienceId,
+    previousExperience,
+    previousBullets,
+    nextExperience,
+    nextBullets,
+    source,
+  } = params;
+  const safeExpId = sanitizeDocId(experienceId, "exp");
+  const nextSnap = buildExperienceRevisionSnapshot(nextExperience, nextBullets);
+
+  if (previousExperience) {
+    const prevSnap = buildExperienceRevisionSnapshot(
+      previousExperience,
+      previousBullets
+    );
+    const fastDiff = computeExperienceChangedFields(prevSnap, nextSnap);
+    if (fastDiff.length === 0) {
+      return { ops: [], updatesCount: null };
+    }
+  }
+
+  const { docs: existingRevs } = await fetchStoredRevisionsAscending(
+    firestore,
+    uid,
+    "experience",
+    safeExpId
+  );
+
+  const ops: Array<(batch: WriteBatch) => void> = [];
+
+  if (existingRevs.length === 0) {
+    if (previousExperience) {
+      const prevSnap = buildExperienceRevisionSnapshot(
+        previousExperience,
+        previousBullets
+      );
+      const changed = computeExperienceChangedFields(prevSnap, nextSnap);
+      if (changed.length === 0) return { ops: [], updatesCount: null };
+
+      const v1Id = buildRevisionDocId(1, "v1");
+      const v2Id = buildRevisionDocId(2, "v2");
+      ops.push((b) =>
+        b.set(
+          doc(firestore, "users", uid, "experiences", safeExpId, "revisions", v1Id),
+          buildExperienceRevisionCreatePayload({
+            revisionId: v1Id,
+            uid,
+            experienceId: safeExpId,
+            versionNumber: 1,
+            source: "initial",
+            changedFields: [],
+            snapshot: prevSnap,
+          })
+        )
+      );
+      ops.push((b) =>
+        b.set(
+          doc(firestore, "users", uid, "experiences", safeExpId, "revisions", v2Id),
+          buildExperienceRevisionCreatePayload({
+            revisionId: v2Id,
+            uid,
+            experienceId: safeExpId,
+            versionNumber: 2,
+            source,
+            changedFields: changed,
+            snapshot: nextSnap,
+          })
+        )
+      );
+      return { ops, updatesCount: 1 };
+    }
+
+    const v1Id = buildRevisionDocId(1, "v1");
+    ops.push((b) =>
+      b.set(
+        doc(firestore, "users", uid, "experiences", safeExpId, "revisions", v1Id),
+        buildExperienceRevisionCreatePayload({
+          revisionId: v1Id,
+          uid,
+          experienceId: safeExpId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: nextSnap,
+        })
+      )
+    );
+    return { ops, updatesCount: 0 };
+  }
+
+  const latest = existingRevs[existingRevs.length - 1];
+  const changed = computeExperienceChangedFields(
+    latest.snapshot as ExperienceRevisionSnapshot,
+    nextSnap
+  );
+  if (changed.length === 0) {
+    return {
+      ops: [],
+      updatesCount: Math.max(0, latest.versionNumber - 1),
+    };
+  }
+
+  const nextVersion = latest.versionNumber + 1;
+  const revId = buildRevisionDocId(nextVersion);
+
+  const excessCount = existingRevs.length + 1 - MAX_REVISIONS_PER_ENTITY;
+  if (excessCount > 0) {
+    for (const stale of existingRevs.slice(0, excessCount)) {
+      ops.push((b) =>
+        b.delete(
+          doc(
+            firestore,
+            "users",
+            uid,
+            "experiences",
+            safeExpId,
+            "revisions",
+            stale.id
+          )
+        )
+      );
+    }
+  }
+
+  ops.push((b) =>
+    b.set(
+      doc(firestore, "users", uid, "experiences", safeExpId, "revisions", revId),
+      buildExperienceRevisionCreatePayload({
+        revisionId: revId,
+        uid,
+        experienceId: safeExpId,
+        versionNumber: nextVersion,
+        source,
+        changedFields: changed,
+        snapshot: nextSnap,
+      })
+    )
+  );
+
+  return { ops, updatesCount: Math.max(0, nextVersion - 1) };
+}
+
+async function prepareDeleteAllRevisionsOps(
+  firestore: ReturnType<typeof getDbOrThrow>,
+  uid: string,
+  entityType: RevisionEntityType,
+  parentId: string
+): Promise<Array<(batch: WriteBatch) => void>> {
+  const parentCol = entityType === "log" ? "logs" : "experiences";
+  const safeParentId = sanitizeDocId(parentId, entityType === "log" ? "log" : "exp");
+  const { docs } = await fetchStoredRevisionsAscending(
+    firestore,
+    uid,
+    entityType,
+    safeParentId
+  );
+  return docs.map(
+    (rev) => (b: WriteBatch) =>
+      b.delete(
+        doc(firestore, "users", uid, parentCol, safeParentId, "revisions", rev.id)
+      )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -461,25 +962,32 @@ export async function createLogFirestore(
     userId: uid,
     isPublic: Boolean(entry.isPublic),
     includeInCv: entry.includeInCv !== false,
+    updatesCount: 0,
     createdAt: now,
     updatedAt: now,
   };
 
   try {
-    if (parentExpsToSync && parentExpsToSync.length > 0) {
-      const batch = writeBatch(firestore);
-      batch.set(
-        doc(firestore, "users", uid, "logs", logId),
-        buildLogEntryCreatePayload(fullEntry, uid, logId)
-      );
-      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
-      await batch.commit();
-    } else {
-      await setDoc(
-        doc(firestore, "users", uid, "logs", logId),
-        buildLogEntryCreatePayload(fullEntry, uid, logId)
-      );
-    }
+    const batch = writeBatch(firestore);
+    batch.set(
+      doc(firestore, "users", uid, "logs", logId),
+      buildLogEntryCreatePayload(fullEntry, uid, logId)
+    );
+    const revId = buildRevisionDocId(1, "v1");
+    batch.set(
+      doc(firestore, "users", uid, "logs", logId, "revisions", revId),
+      buildLogRevisionCreatePayload({
+        revisionId: revId,
+        uid,
+        logId,
+        versionNumber: 1,
+        source: "initial",
+        changedFields: [],
+        snapshot: buildLogRevisionSnapshot(fullEntry),
+      })
+    );
+    appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+    await batch.commit();
     return fullEntry;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -488,7 +996,11 @@ export async function createLogFirestore(
 
 export async function updateLogFirestore(
   entry: LogEntry,
-  parentExpsToSync?: ExperienceProjectionSync[]
+  parentExpsToSync?: ExperienceProjectionSync[],
+  revisionOptions?: {
+    previousEntry?: LogEntry | null;
+    source?: RevisionSource;
+  }
 ): Promise<LogEntry> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
@@ -503,20 +1015,29 @@ export async function updateLogFirestore(
     updatedAt: now,
   };
   try {
-    if (parentExpsToSync && parentExpsToSync.length > 0) {
-      const batch = writeBatch(firestore);
-      batch.update(
-        doc(firestore, "users", uid, "logs", logId),
-        buildLogEntryUpdatePayload(updated)
-      );
-      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
-      await batch.commit();
-    } else {
-      await updateDoc(
-        doc(firestore, "users", uid, "logs", logId),
-        buildLogEntryUpdatePayload(updated)
-      );
+    const revResult = await prepareLogRevisionOps({
+      firestore,
+      uid,
+      logId,
+      previousEntry: revisionOptions?.previousEntry,
+      nextEntry: updated,
+      source: revisionOptions?.source || "manual_form",
+    });
+
+    if (revResult.updatesCount !== null) {
+      updated.updatesCount = revResult.updatesCount;
     }
+
+    const batch = writeBatch(firestore);
+    batch.update(
+      doc(firestore, "users", uid, "logs", logId),
+      buildLogEntryUpdatePayload(updated)
+    );
+    for (const applyRevOp of revResult.ops) {
+      applyRevOp(batch);
+    }
+    appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+    await batch.commit();
     return updated;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -570,6 +1091,66 @@ export async function updateLogMetadataFirestore(
 export async function deleteLogFirestore(
   logId: string,
   parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<number> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const now = Date.now();
+  const safeId = sanitizeDocId(logId, "log");
+  const path = `users/${uid}/logs/${safeId}`;
+  try {
+    const batch = writeBatch(firestore);
+    batch.update(
+      doc(firestore, "users", uid, "logs", safeId),
+      buildLogMetadataUpdatePayload({
+        deletedAt: now,
+        isPublic: false,
+      })
+    );
+    appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+    await batch.commit();
+    return now;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function restoreLogFirestore(
+  entry: LogEntry,
+  parentExpsToSync?: ExperienceProjectionSync[]
+): Promise<LogEntry> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const now = Date.now();
+  const safeId = sanitizeDocId(entry.id, "log");
+  const path = `users/${uid}/logs/${safeId}`;
+  const payload = buildLogMetadataUpdatePayload({
+    deletedAt: null,
+    ...(typeof entry.experienceId === "string"
+      ? { experienceId: entry.experienceId }
+      : {}),
+    ...(entry.client ? { client: entry.client } : {}),
+  });
+
+  try {
+    const batch = writeBatch(firestore);
+    batch.update(doc(firestore, "users", uid, "logs", safeId), payload);
+    appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+    await batch.commit();
+    const { deletedAt: _ignored, ...rest } = entry;
+    void _ignored;
+    return {
+      ...rest,
+      id: safeId,
+      userId: uid,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function permanentlyDeleteLogFirestore(
+  logId: string,
+  parentExpsToSync?: ExperienceProjectionSync[]
 ): Promise<void> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
@@ -577,14 +1158,19 @@ export async function deleteLogFirestore(
   const safeId = sanitizeDocId(logId, "log");
   const path = `users/${uid}/logs/${safeId}`;
   try {
-    if (parentExpsToSync && parentExpsToSync.length > 0) {
-      const batch = writeBatch(firestore);
-      batch.delete(doc(firestore, "users", uid, "logs", safeId));
-      appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
-      await batch.commit();
-    } else {
-      await deleteDoc(doc(firestore, "users", uid, "logs", safeId));
+    const deleteRevOps = await prepareDeleteAllRevisionsOps(
+      firestore,
+      uid,
+      "log",
+      safeId
+    );
+    const batch = writeBatch(firestore);
+    for (const applyDeleteOp of deleteRevOps) {
+      applyDeleteOp(batch);
     }
+    batch.delete(doc(firestore, "users", uid, "logs", safeId));
+    appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -598,8 +1184,8 @@ export async function createLogsBatchFirestore(
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
   const now = Date.now();
-  const batch = writeBatch(firestore);
   const created: LogEntry[] = [];
+  const ops: Array<(batch: WriteBatch) => void> = [];
 
   entries.forEach((entry, idx) => {
     const logId = sanitizeDocId(`log-${now}-${idx}-${Math.random().toString(36).slice(2, 6)}`, "log");
@@ -609,20 +1195,45 @@ export async function createLogsBatchFirestore(
       userId: uid,
       isPublic: Boolean(entry.isPublic),
       includeInCv: entry.includeInCv !== false,
+      updatesCount: 0,
       createdAt: now,
       updatedAt: now,
     };
-    batch.set(
-      doc(firestore, "users", uid, "logs", logId),
-      buildLogEntryCreatePayload(fullEntry, uid, logId)
-    );
+    const revId = buildRevisionDocId(1, `b${idx}`);
+    ops.push((b) => {
+      b.set(
+        doc(firestore, "users", uid, "logs", logId),
+        buildLogEntryCreatePayload(fullEntry, uid, logId)
+      );
+      b.set(
+        doc(firestore, "users", uid, "logs", logId, "revisions", revId),
+        buildLogRevisionCreatePayload({
+          revisionId: revId,
+          uid,
+          logId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: buildLogRevisionSnapshot(fullEntry),
+        })
+      );
+    });
     created.push(fullEntry);
   });
 
-  appendParentSyncsToBatch(batch, firestore, uid, parentExpsToSync, now);
+  if (parentExpsToSync && parentExpsToSync.length > 0) {
+    ops.push((b) => appendParentSyncsToBatch(b, firestore, uid, parentExpsToSync, now));
+  }
 
   try {
-    await batch.commit();
+    // Each entry generates 2 Firestore writes, so chunk by 150 callbacks (~300 ops max)
+    for (let i = 0; i < ops.length; i += 150) {
+      const batch = writeBatch(firestore);
+      for (const applyOp of ops.slice(i, i + 150)) {
+        applyOp(batch);
+      }
+      await batch.commit();
+    }
     return created;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `users/${uid}/logs`);
@@ -686,6 +1297,7 @@ export async function createExperienceFirestore(
     ...exp,
     id: expId,
     userId: uid,
+    updatesCount: 0,
     createdAt: now,
     updatedAt: now,
   };
@@ -694,6 +1306,19 @@ export async function createExperienceFirestore(
   batch.set(
     doc(firestore, "users", uid, "experiences", expId),
     buildWorkExperienceCreatePayload(createdExp, uid, expId)
+  );
+  const expRevId = buildRevisionDocId(1, "ev1");
+  batch.set(
+    doc(firestore, "users", uid, "experiences", expId, "revisions", expRevId),
+    buildExperienceRevisionCreatePayload({
+      revisionId: expRevId,
+      uid,
+      experienceId: expId,
+      versionNumber: 1,
+      source: "initial",
+      changedFields: [],
+      snapshot: buildExperienceRevisionSnapshot(createdExp),
+    })
   );
 
   const createdLogs: LogEntry[] = [];
@@ -718,12 +1343,26 @@ export async function createExperienceFirestore(
         tags: (createdExp.technologies || []).slice(0, 4).map((t) => `#${t.replace(/\s+/g, "")}`),
         isPublic: false,
         includeInCv: true,
+        updatesCount: 0,
         createdAt: now,
         updatedAt: now,
       };
       batch.set(
         doc(firestore, "users", uid, "logs", logId),
         buildLogEntryCreatePayload(entry, uid, logId)
+      );
+      const logRevId = buildRevisionDocId(1, `lv${idx}`);
+      batch.set(
+        doc(firestore, "users", uid, "logs", logId, "revisions", logRevId),
+        buildLogRevisionCreatePayload({
+          revisionId: logRevId,
+          uid,
+          logId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: buildLogRevisionSnapshot(entry),
+        })
       );
       createdLogs.push(entry);
     });
@@ -741,7 +1380,14 @@ export async function updateExperienceFirestore(
   updatedExp: WorkExperience,
   logsToUpdate: LogEntry[],
   newLogBulletsToCreate?: string[],
-  metadataOnlyLogs: LogEntry[] = []
+  metadataOnlyLogs: LogEntry[] = [],
+  revisionOptions?: {
+    previousExperience?: WorkExperience | null;
+    previousBullets?: string[];
+    nextBullets?: string[];
+    previousLogsById?: Map<string, LogEntry>;
+    source?: RevisionSource;
+  }
 ): Promise<{
   experience: WorkExperience;
   updatedLogs: LogEntry[];
@@ -752,6 +1398,7 @@ export async function updateExperienceFirestore(
   const expId = sanitizeDocId(updatedExp.id, "exp");
   const path = `users/${uid}/experiences/${expId}`;
   const now = Date.now();
+  const source = revisionOptions?.source || "manual_form";
 
   const savedExp: WorkExperience = {
     ...updatedExp,
@@ -760,24 +1407,63 @@ export async function updateExperienceFirestore(
     updatedAt: now,
   };
 
-  const batch = writeBatch(firestore);
-  batch.update(
-    doc(firestore, "users", uid, "experiences", expId),
-    buildWorkExperienceUpdatePayload(savedExp)
+  const expRevResult = await prepareExperienceRevisionOps({
+    firestore,
+    uid,
+    experienceId: expId,
+    previousExperience: revisionOptions?.previousExperience,
+    previousBullets: revisionOptions?.previousBullets,
+    nextExperience: savedExp,
+    nextBullets: revisionOptions?.nextBullets ?? savedExp.bullets ?? [],
+    source,
+  });
+
+  if (expRevResult.updatesCount !== null) {
+    savedExp.updatesCount = expRevResult.updatesCount;
+  }
+
+  const ops: Array<(batch: WriteBatch) => void> = [];
+  ops.push((b) =>
+    b.update(
+      doc(firestore, "users", uid, "experiences", expId),
+      buildWorkExperienceUpdatePayload(savedExp)
+    )
   );
+  for (const applyRev of expRevResult.ops) {
+    ops.push(applyRev);
+  }
 
   const updatedLogs: LogEntry[] = [];
   for (const log of logsToUpdate) {
+    const safeId = sanitizeDocId(log.id, "log");
     const nextLog: LogEntry = {
       ...log,
+      id: safeId,
+      userId: uid,
       experienceId: log.experienceId || expId,
       client: savedExp.company,
       updatedAt: now,
     };
-    batch.update(
-      doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
-      buildLogEntryUpdatePayload(nextLog)
-    );
+    const logRevResult = await prepareLogRevisionOps({
+      firestore,
+      uid,
+      logId: safeId,
+      previousEntry: revisionOptions?.previousLogsById?.get(log.id),
+      nextEntry: nextLog,
+      source,
+    });
+    if (logRevResult.updatesCount !== null) {
+      nextLog.updatesCount = logRevResult.updatesCount;
+    }
+    ops.push((b) => {
+      b.update(
+        doc(firestore, "users", uid, "logs", safeId),
+        buildLogEntryUpdatePayload(nextLog)
+      );
+      for (const applyRev of logRevResult.ops) {
+        applyRev(b);
+      }
+    });
     updatedLogs.push(nextLog);
   }
 
@@ -795,9 +1481,11 @@ export async function updateExperienceFirestore(
         : {}),
     });
     if (Object.keys(metadataPayload).length > 0) {
-      batch.update(
-        doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
-        metadataPayload
+      ops.push((b) =>
+        b.update(
+          doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
+          metadataPayload
+        )
       );
     }
     updatedLogs.push(nextLog);
@@ -825,23 +1513,46 @@ export async function updateExperienceFirestore(
         tags: (savedExp.technologies || []).slice(0, 4).map((t) => `#${t.replace(/\s+/g, "")}`),
         isPublic: false,
         includeInCv: true,
+        updatesCount: 0,
         createdAt: now,
         updatedAt: now,
       };
-      batch.set(
-        doc(firestore, "users", uid, "logs", logId),
-        buildLogEntryCreatePayload(entry, uid, logId)
-      );
+      const logRevId = buildRevisionDocId(1, `ul${idx}`);
+      ops.push((b) => {
+        b.set(
+          doc(firestore, "users", uid, "logs", logId),
+          buildLogEntryCreatePayload(entry, uid, logId)
+        );
+        b.set(
+          doc(firestore, "users", uid, "logs", logId, "revisions", logRevId),
+          buildLogRevisionCreatePayload({
+            revisionId: logRevId,
+            uid,
+            logId,
+            versionNumber: 1,
+            source: "initial",
+            changedFields: [],
+            snapshot: buildLogRevisionSnapshot(entry),
+          })
+        );
+      });
       createdLogs.push(entry);
     });
   }
 
-  try {
-    await batch.commit();
-    return { experience: savedExp, updatedLogs, createdLogs };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+  for (let i = 0; i < ops.length; i += 350) {
+    const batch = writeBatch(firestore);
+    for (const applyOp of ops.slice(i, i + 350)) {
+      applyOp(batch);
+    }
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
   }
+
+  return { experience: savedExp, updatedLogs, createdLogs };
 }
 
 export async function importExperienceJsonFirestore(params: {
@@ -850,17 +1561,24 @@ export async function importExperienceJsonFirestore(params: {
   metadataOnlyLogs: LogEntry[];
   logsToCreate: Array<Omit<LogEntry, "id" | "createdAt" | "updatedAt">>;
   logsToDelete: LogEntry[];
+  previousExperience?: WorkExperience | null;
+  previousBullets?: string[];
+  nextBullets?: string[];
+  previousLogsById?: Map<string, LogEntry>;
+  source?: "json_editor" | "json_import";
 }): Promise<{
   experience: WorkExperience;
   updatedLogs: LogEntry[];
   createdLogs: LogEntry[];
   deletedLogIds: string[];
+  deletedAt: number;
 }> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
   const expId = sanitizeDocId(params.updatedExperience.id, "exp");
   const path = `users/${uid}/experiences/${expId}`;
   const now = Date.now();
+  const source: RevisionSource = params.source || "json_import";
 
   const savedExp: WorkExperience = {
     ...params.updatedExperience,
@@ -869,6 +1587,21 @@ export async function importExperienceJsonFirestore(params: {
     updatedAt: now,
   };
 
+  const expRevResult = await prepareExperienceRevisionOps({
+    firestore,
+    uid,
+    experienceId: expId,
+    previousExperience: params.previousExperience,
+    previousBullets: params.previousBullets,
+    nextExperience: savedExp,
+    nextBullets: params.nextBullets ?? savedExp.bullets ?? [],
+    source,
+  });
+
+  if (expRevResult.updatesCount !== null) {
+    savedExp.updatesCount = expRevResult.updatesCount;
+  }
+
   const ops: Array<(batch: WriteBatch) => void> = [];
   ops.push((b) =>
     b.update(
@@ -876,6 +1609,9 @@ export async function importExperienceJsonFirestore(params: {
       buildWorkExperienceUpdatePayload(savedExp)
     )
   );
+  for (const applyRev of expRevResult.ops) {
+    ops.push(applyRev);
+  }
 
   const updatedLogs: LogEntry[] = [];
   for (const log of params.contentEditedLogs) {
@@ -888,12 +1624,26 @@ export async function importExperienceJsonFirestore(params: {
       client: savedExp.company,
       updatedAt: now,
     };
-    ops.push((b) =>
+    const logRevResult = await prepareLogRevisionOps({
+      firestore,
+      uid,
+      logId: safeId,
+      previousEntry: params.previousLogsById?.get(log.id),
+      nextEntry: nextLog,
+      source,
+    });
+    if (logRevResult.updatesCount !== null) {
+      nextLog.updatesCount = logRevResult.updatesCount;
+    }
+    ops.push((b) => {
       b.update(
         doc(firestore, "users", uid, "logs", safeId),
         buildLogEntryUpdatePayload(nextLog)
-      )
-    );
+      );
+      for (const applyRev of logRevResult.ops) {
+        applyRev(b);
+      }
+    });
     updatedLogs.push(nextLog);
   }
 
@@ -928,7 +1678,15 @@ export async function importExperienceJsonFirestore(params: {
   const deletedLogIds: string[] = [];
   for (const log of params.logsToDelete) {
     const safeId = sanitizeDocId(log.id, "log");
-    ops.push((b) => b.delete(doc(firestore, "users", uid, "logs", safeId)));
+    ops.push((b) =>
+      b.update(
+        doc(firestore, "users", uid, "logs", safeId),
+        buildLogMetadataUpdatePayload({
+          deletedAt: now,
+          isPublic: false,
+        })
+      )
+    );
     deletedLogIds.push(safeId);
   }
 
@@ -951,21 +1709,35 @@ export async function importExperienceJsonFirestore(params: {
       impact: draft.impact || cleanTitle,
       isPublic: Boolean(draft.isPublic),
       includeInCv: draft.includeInCv !== false,
+      updatesCount: 0,
       createdAt: now,
       updatedAt: now,
     };
-    ops.push((b) =>
+    const logRevId = buildRevisionDocId(1, `jl${idx}`);
+    ops.push((b) => {
       b.set(
         doc(firestore, "users", uid, "logs", logId),
         buildLogEntryCreatePayload(entry, uid, logId)
-      )
-    );
+      );
+      b.set(
+        doc(firestore, "users", uid, "logs", logId, "revisions", logRevId),
+        buildLogRevisionCreatePayload({
+          revisionId: logRevId,
+          uid,
+          logId,
+          versionNumber: 1,
+          source: "initial",
+          changedFields: [],
+          snapshot: buildLogRevisionSnapshot(entry),
+        })
+      );
+    });
     createdLogs.push(entry);
   });
 
-  for (let i = 0; i < ops.length; i += 400) {
+  for (let i = 0; i < ops.length; i += 350) {
     const batch = writeBatch(firestore);
-    for (const applyOp of ops.slice(i, i + 400)) {
+    for (const applyOp of ops.slice(i, i + 350)) {
       applyOp(batch);
     }
     try {
@@ -975,37 +1747,109 @@ export async function importExperienceJsonFirestore(params: {
     }
   }
 
-  return { experience: savedExp, updatedLogs, createdLogs, deletedLogIds };
+  return { experience: savedExp, updatedLogs, createdLogs, deletedLogIds, deletedAt: now };
 }
 
 export async function deleteExperienceFirestore(
   expId: string,
   reassignedLogs: LogEntry[]
-): Promise<void> {
+): Promise<number> {
   const firestore = getDbOrThrow();
   const uid = requireVerifiedUid();
+  const now = Date.now();
   const safeId = sanitizeDocId(expId, "exp");
   const path = `users/${uid}/experiences/${safeId}`;
-  const batch = writeBatch(firestore);
+  const ops: Array<(batch: WriteBatch) => void> = [];
 
-  batch.delete(doc(firestore, "users", uid, "experiences", safeId));
+  ops.push((b) =>
+    b.update(
+      doc(firestore, "users", uid, "experiences", safeId),
+      buildWorkExperienceMetadataUpdatePayload({ deletedAt: now })
+    )
+  );
+
   for (const log of reassignedLogs) {
     const metadataPayload = buildLogMetadataUpdatePayload({
       experienceId: log.experienceId,
       client: log.client,
     });
     if (Object.keys(metadataPayload).length > 0) {
-      batch.update(
-        doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
-        metadataPayload
+      ops.push((b) =>
+        b.update(
+          doc(firestore, "users", uid, "logs", sanitizeDocId(log.id, "log")),
+          metadataPayload
+        )
       );
     }
   }
 
+  for (let i = 0; i < ops.length; i += 350) {
+    const batch = writeBatch(firestore);
+    for (const applyOp of ops.slice(i, i + 350)) {
+      applyOp(batch);
+    }
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  }
+
+  return now;
+}
+
+export async function restoreExperienceFirestore(
+  exp: WorkExperience
+): Promise<WorkExperience> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const safeId = sanitizeDocId(exp.id, "exp");
+  const path = `users/${uid}/experiences/${safeId}`;
   try {
-    await batch.commit();
+    await updateDoc(
+      doc(firestore, "users", uid, "experiences", safeId),
+      buildWorkExperienceMetadataUpdatePayload({ deletedAt: null })
+    );
+    const { deletedAt: _ignored, ...rest } = exp;
+    void _ignored;
+    return {
+      ...rest,
+      id: safeId,
+      userId: uid,
+    };
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function permanentlyDeleteExperienceFirestore(expId: string): Promise<void> {
+  const firestore = getDbOrThrow();
+  const uid = requireVerifiedUid();
+  const safeId = sanitizeDocId(expId, "exp");
+  const path = `users/${uid}/experiences/${safeId}`;
+  const ops: Array<(batch: WriteBatch) => void> = [];
+
+  const deleteRevOps = await prepareDeleteAllRevisionsOps(
+    firestore,
+    uid,
+    "experience",
+    safeId
+  );
+  for (const applyDel of deleteRevOps) {
+    ops.push(applyDel);
+  }
+  ops.push((b) => b.delete(doc(firestore, "users", uid, "experiences", safeId)));
+
+  for (let i = 0; i < ops.length; i += 350) {
+    const batch = writeBatch(firestore);
+    for (const applyOp of ops.slice(i, i + 350)) {
+      applyOp(batch);
+    }
+    try {
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
   }
 }
 

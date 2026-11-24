@@ -5,7 +5,8 @@
 1. **Verified Google Identity Gate**:
    - Every write operation across all collections requires `request.auth != null && request.auth.token.email_verified == true`. Anonymous (`signInAnonymously`) or unverified accounts are rejected at the Firestore layer.
 2. **Strict Ownership & PII Isolation**:
-   - Private user profile (`/users/{userId}` with `email`) and all 9 private subcollections (`cv`, `logs`, `experiences`, `products`, `certifications`, `careerGoals`, `offers`, `inbox`, `quotas`) are readable and writable **only** when `request.auth.uid == userId` AND the document's `userId` (or `id` on `/users/{userId}`) strictly equals `request.auth.uid`.
+   - Private user profile (`/users/{userId}` with `email`), all 9 private subcollections (`cv`, `logs`, `experiences`, `products`, `certifications`, `careerGoals`, `offers`, `inbox`, `quotas`), and the 2 nested revision history subcollections (`logs/{logId}/revisions`, `experiences/{experienceId}/revisions`) are readable and writable **only** when `request.auth.uid == userId` AND the document's `userId` (or `id` on `/users/{userId}`) strictly equals `request.auth.uid`.
+   - Revisions subcollections are strictly immutable (`allow update: if false`), validate parent document existence (`exists`/`existsAfter` on `create`), and allow verified owner deletion solely for >25 retention pruning or parent cascade cleanup.
    - `allow list` on `/users/{userId}` and `/publicShowcases/{username}` and `/proWaitlist/{entryId}` is permanently `false` to prevent enumeration and scraping.
    - `allow list` on `/users/{userId}/<subcollection>` explicitly validates `resource.data.userId == request.auth.uid` on every queried document.
 3. **Master Gate & Atomicity (`exists` / `existsAfter`)**:

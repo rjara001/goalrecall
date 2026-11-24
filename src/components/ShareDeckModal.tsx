@@ -182,7 +182,7 @@ ${user.name || "Usuario"}`;
     } catch (err) {
       console.error("Error creating showcase link:", err);
       setOperateError(
-        formatFirestoreUiError(err, "No se pudo publicar tu vitrina pública en Firestore.")
+        formatFirestoreUiError(err, "No se pudo publicar tu vitrina pública.")
       );
     } finally {
       setIsOperating(false);
@@ -200,7 +200,7 @@ ${user.name || "Usuario"}`;
     } catch (err) {
       console.error("Error deleting showcase link:", err);
       setOperateError(
-        formatFirestoreUiError(err, "No se pudo despublicar la vitrina en Firestore.")
+        formatFirestoreUiError(err, "No se pudo despublicar la vitrina.")
       );
     } finally {
       setIsOperating(false);

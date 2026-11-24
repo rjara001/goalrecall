@@ -138,6 +138,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
               quotaExhausted={state.phase === "quota_exceeded"}
               aiUsageCount={state.aiUsage.count}
               errorMessage={state.errorMessage}
+              canFallbackLocally={state.canFallbackLocally}
               onRunLocalExtractor={state.handleRunLocalExtractor}
               onShowProModal={() => state.setShowProModal(true)}
             />
@@ -158,7 +159,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                     <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold text-red-100">
-                        Error al guardar en Firestore
+                        Error al guardar
                       </p>
                       <p className="text-red-200/90 mt-0.5">{state.saveError}</p>
                     </div>
@@ -239,7 +240,7 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                 {state.isSaving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Guardando en Firestore...
+                    Guardando cambios...
                   </>
                 ) : (
                   <>

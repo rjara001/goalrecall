@@ -18,6 +18,18 @@ export interface ExtractCvResult {
   fallbackReason?: CvFallbackReason;
 }
 
+export class CvAiExtractionError extends Error {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(message: string, code = "GEMINI_UPSTREAM_ERROR", status = 502) {
+    super(message);
+    this.name = "CvAiExtractionError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export function extractCvLocally(
   payload: CvExtractionPayload,
   fallbackReason?: CvFallbackReason
@@ -82,18 +94,39 @@ export async function extractCvWithAi(
       };
     }
 
+    if (contentType.includes("application/json")) {
+      try {
+        const errBody = (await response.json()) as { code?: string; error?: string };
+        if (errBody?.code && errBody.code.startsWith("GEMINI_")) {
+          throw new CvAiExtractionError(
+            errBody.error ||
+              "No se pudo completar el análisis inteligente. Verifica la configuración en Settings > Secrets o usa el lector local.",
+            errBody.code,
+            response.status
+          );
+        }
+      } catch (parseErr) {
+        if (parseErr instanceof CvAiExtractionError) {
+          throw parseErr;
+        }
+      }
+    }
+
     if (response.status === 401 || response.status === 403) {
       fallbackReason = "unauthenticated";
       console.warn(
-        "Cloud Function requiere autenticación. Activando extractor local verídico."
+        "Se requiere sesión activa para el análisis inteligente. Usando lector local."
       );
     } else {
       fallbackReason = "server_error";
       console.warn(
-        "Backend API no disponible o estático. Activando extractor local verídico automático."
+        "Servicio en línea no disponible temporalmente. Usando lector local."
       );
     }
   } catch (err: unknown) {
+    if (err instanceof CvAiExtractionError) {
+      throw err;
+    }
     if (
       err &&
       typeof err === "object" &&

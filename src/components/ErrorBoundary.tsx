@@ -36,7 +36,7 @@ export class ErrorBoundary extends React.Component<
     const fsInfo = parseFirestoreErrorInfo(this.state.error);
     const uiMessage = formatFirestoreUiError(
       this.state.error,
-      "Ocurrió un error inesperado al sincronizar con la base de datos."
+      "Ocurrió un error inesperado al sincronizar tus datos."
     );
 
     return (

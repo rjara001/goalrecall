@@ -580,7 +580,7 @@ export const FeaturesView: React.FC<FeaturesViewProps> = ({
                     <span>Esquema Abierto de Sincronización & JSON (Cero Lock-In)</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Persistencia directa en Cloud Firestore (users/{"{uid}"}) y exportación universal JSON
+                    Sincronización automática en tu cuenta privada y exportación portátil en JSON
                   </p>
                 </div>
                 <span className="text-[10px] font-mono text-teal-300 bg-teal-950 px-2 py-0.5 rounded-full border border-teal-800/60 self-start sm:self-auto">

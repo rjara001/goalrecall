@@ -266,7 +266,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "¿Mis datos están seguros si uso una computadora corporativa o del trabajo?",
-          a: "Sí. GoalRecall es una Progressive Web App (PWA) con arquitectura Local-First. Todo se almacena localmente en el almacenamiento privado de tu navegador. Si trabajas en un banco o empresa con proxies estrictos, tus notas confidenciales no viajan a servidores públicos salvo que tú actives explícitamente el respaldo o decidas publicar un logro.",
+          a: "Sí. GoalRecall protege tu información en tu espacio privado y nunca comparte tus notas confidenciales ni tus proyectos privados salvo que tú decidas publicarlos en tu vitrina.",
         },
         {
           q: "¿Cómo cambio mi foto de perfil?",
@@ -274,7 +274,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "¿Tengo que pagar para usar GoalRecall?",
-          a: "No. El uso básico de la bitácora, la captura por voz, la vitrina pública y la exportación de datos son completamente gratuitos. Tienes cuotas de cortesía mensuales para el asistente de IA con Google Gemini.",
+          a: "No. El uso básico de la bitácora, la captura por voz, la vitrina pública y la exportación de datos son completamente gratuitos. Además cuentas con cuotas mensuales de cortesía para la extracción inteligente.",
         },
         {
           q: "¿Puedo usarlo sin conexión a internet?",
@@ -282,7 +282,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "¿Qué pasa si cambio de navegador o borro las cookies?",
-          a: "Si inicias sesión con tu cuenta, GoalRecall cuenta con Cloud Sync automático que respalda tus datos de forma segura en la nube. Además, en la pestaña de Ajustes (⚙️) puedes descargar en cualquier momento un archivo JSON con toda tu base de datos para restaurarla donde quieras.",
+          a: "Si inicias sesión con tu cuenta, tus datos se respaldan automáticamente en la nube. Además, en la pestaña de Ajustes (⚙️) puedes descargar en cualquier momento una copia completa para restaurarla donde quieras.",
         },
         {
           q: "¿Cómo comparto mi Vitrina Pública con reclutadores?",
@@ -428,7 +428,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "Are my confidential company projects safe on a work computer?",
-          a: "Yes. GoalRecall is a Local-First Progressive Web App (PWA). All data is stored locally in your browser's private storage. If you work in a bank or regulated enterprise, confidential records never touch public servers unless you explicitly configure cloud sync or publish a project.",
+          a: "Yes. GoalRecall keeps your entries private by default in your protected workspace. Confidential records are never shared publicly unless you explicitly decide to publish them to your showcase.",
         },
         {
           q: "How do I update my profile picture or avatar?",
@@ -436,15 +436,15 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "Do I have to pay to use GoalRecall?",
-          a: "No. Core logbook tracking, voice dictation, the public recruiter deck, and data exports are completely free. Generous monthly quotas are included for Google Gemini AI synthesis.",
+          a: "No. Core logbook tracking, voice dictation, the public recruiter deck, and data exports are completely free. Generous monthly quotas are also included for smart resume parsing.",
         },
         {
           q: "Can I use GoalRecall offline without an internet connection?",
-          a: "Yes. You can install GoalRecall as a PWA desktop or mobile app. Even on an airplane without Wi-Fi, you can open your logbook, dictate notes, and log achievements locally.",
+          a: "Yes. You can install GoalRecall as a desktop or mobile app. Even on an airplane without Wi-Fi, you can open your logbook, dictate notes, and log achievements.",
         },
         {
           q: "What happens if I change browsers or clear my cache?",
-          a: "If you log into your free account, GoalRecall provides automatic Cloud Sync to back up your records securely. You can also download a JSON backup from Settings (⚙️) anytime to restore on any machine.",
+          a: "If you log into your free account, your records are automatically synced and backed up safely. You can also download a portable backup from Settings (⚙️) anytime to restore anywhere.",
         },
         {
           q: "How do I share my Public Showcase with recruiters?",
@@ -590,7 +590,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "Meus dados estão seguros usando um computador corporativo?",
-          a: "Sim. O GoalRecall é um PWA com arquitetura Local-First. Todos os registros ficam guardados no armazenamento local do navegador e nunca são transmitidos sem autorização.",
+          a: "Sim. O GoalRecall mantém seus registros privados por padrão e nada é compartilhado sem a sua autorização.",
         },
         {
           q: "Como altero minha foto de perfil?",
@@ -752,7 +752,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "Mes données sont-elles protégées sur mon poste d'entreprise ?",
-          a: "Oui. GoalRecall fonctionne en architecture Local-First. Toutes les données sont enregistrées localement dans votre navigateur et ne circulent pas sur des serveurs publics à votre insu.",
+          a: "Oui. GoalRecall protège vos données en mode privé par défaut et rien n'est partagé sans votre autorisation.",
         },
         {
           q: "Comment changer ma photo de profil ?",
@@ -764,7 +764,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "Puis-je l'utiliser hors connexion ?",
-          a: "Oui. Installable en PWA, GoalRecall fonctionne en mode avion sans connexion Internet.",
+          a: "Oui. GoalRecall peut être installé comme application et utilisé même en mode avion sans connexion Internet.",
         },
         {
           q: "Que se passe-t-il si je vide mon cache navigateur ?",
@@ -914,7 +914,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "Sind meine Daten auf Firmenrechnern geschützt?",
-          a: "Ja. GoalRecall nutzt eine Local-First-Architektur. Alle Einträge verbleiben im lokalen Speicher Ihres Browsers und gelangen nicht ohne Freigabe auf externe Server.",
+          a: "Ja. GoalRecall schützt Ihre Einträge standardmäßig privat und teilt nichts ohne Ihre ausdrückliche Freigabe.",
         },
         {
           q: "Wie ändere ich mein Profilbild?",
@@ -926,7 +926,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "Funktioniert die App auch offline?",
-          a: "Ja. Als PWA installiert, können Sie Notizen auch im Flugzeug ohne Internetverbindung erfassen.",
+          a: "Ja. Als App installiert, können Sie Notizen auch im Flugzeug ohne Internetverbindung erfassen.",
         },
         {
           q: "Was geschieht beim Leeren des Browser-Caches?",
@@ -1076,7 +1076,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
       items: [
         {
           q: "会社のPCで使用しても機密情報は安全ですか？",
-          a: "はい。GoalRecallはローカルファーストのPWAです。すべてのデータはブラウザのローカルストレージに保管され、自ら公開設定をしない限り外部サーバーへ送信されることはありません。",
+          a: "はい。GoalRecallでは記録は初期状態で非公開保護され、ご自身で公開設定をしない限り外部に共有されることはありません。",
         },
         {
           q: "プロフィール画像はどのように変更できますか？",
@@ -1088,7 +1088,7 @@ export const DOCS_LOCALES: Record<SupportedLanguage, DocsViewLocale> = {
         },
         {
           q: "オフラインでも利用できますか？",
-          a: "はい。PWAアプリとしてインストールすることで、飛行機の中や電波のない環境でもオフラインで記録できます。",
+          a: "はい。アプリとしてインストールすることで、飛行機の中や電波のない環境でもオフラインで記録できます。",
         },
         {
           q: "ブラウザのキャッシュを削除した場合はどうなりますか？",

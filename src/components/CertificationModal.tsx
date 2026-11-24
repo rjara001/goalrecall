@@ -129,7 +129,7 @@ export const CertificationModal: React.FC<CertificationModalProps> = ({
       onClose();
     } catch (err) {
       setSaveError(
-        formatFirestoreUiError(err, "No se pudo guardar la certificación en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar la certificación.")
       );
     } finally {
       setIsSaving(false);

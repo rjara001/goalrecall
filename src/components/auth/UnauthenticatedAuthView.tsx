@@ -25,11 +25,10 @@ export const UnauthenticatedAuthView: React.FC<UnauthenticatedAuthViewProps> = (
       <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
         <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Acceso Seguro con Google Auth</span>
+          <span>Acceso Seguro con Google</span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          GoalRecall sincroniza tu bitácora, CV, experiencias y vitrina directamente con{" "}
-          <strong className="text-white">Cloud Firestore</strong>. Para leer o guardar cambios en la base de datos se requiere una cuenta de Google con correo verificado.
+          GoalRecall sincroniza tu bitácora, CV, experiencias y vitrina de forma privada en tu cuenta. Para consultar o guardar tus cambios se requiere una cuenta de Google verificada.
         </p>
       </div>
 

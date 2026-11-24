@@ -1,19 +1,18 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Braces,
   Briefcase,
   Building,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Download,
   Edit3,
-  Eye,
   EyeOff,
   FileUp,
   GripVertical,
+  History,
   Loader2,
   MapPin,
   Plus,
@@ -41,7 +40,12 @@ import {
   formatRelativeUpdatedTime,
   isRecentlyUpdatedLog,
 } from "./timelineUtils";
+import {
+  formatHistoryButtonLabel,
+  normalizeRevisionUpdatesCount,
+} from "../../utils/revisions/snapshot";
 import { ExperienceJsonEditorModal } from "./ExperienceJsonEditorModal";
+import { AchievementRowActions } from "./AchievementRowActions";
 
 interface TimelineExperiencesTabProps {
   experiences: WorkExperience[];
@@ -53,13 +57,18 @@ interface TimelineExperiencesTabProps {
   onOpenCvUpload: () => void;
   onAddExperience: () => void;
   onEditExperience: (exp: WorkExperience) => void;
+  onOpenExperienceHistory?: (exp: WorkExperience) => void;
   onDeleteExperience: (id: string) => void;
   onImportExperienceJson?: (
     experienceId: string,
-    parsed: ParsedExperienceJson
+    parsed: ParsedExperienceJson,
+    source?: "json_editor" | "json_import"
   ) => Promise<void> | void;
+  jsonEditorResetNonce?: number;
   onAddLogToExperience: (experienceId: string) => void;
   onEditLog?: (entry: LogEntry) => void;
+  onOpenLogHistory?: (entry: LogEntry) => void;
+  onDeleteLog?: (id: string) => void;
   onToggleIncludeInCv?: (id: string) => void;
   onReorderLogs?: (
     sourceLogId: string,
@@ -88,10 +97,14 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   onOpenCvUpload,
   onAddExperience,
   onEditExperience,
+  onOpenExperienceHistory,
   onDeleteExperience,
   onImportExperienceJson,
+  jsonEditorResetNonce,
   onAddLogToExperience,
   onEditLog,
+  onOpenLogHistory,
+  onDeleteLog,
   onToggleIncludeInCv,
   onReorderLogs,
   onExtractBulletToLog,
@@ -117,10 +130,17 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
   const [importingExpId, setImportingExpId] = useState<string | null>(null);
   const [jsonErrorByExpId, setJsonErrorByExpId] = useState<Record<string, string>>({});
   const [editingJsonExpId, setEditingJsonExpId] = useState<string | null>(null);
+  const [openActionMenuKey, setOpenActionMenuKey] = useState<string | null>(null);
 
   const editingJsonExp = editingJsonExpId
     ? experiences.find((exp) => exp.id === editingJsonExpId) || null
     : null;
+
+  useEffect(() => {
+    if (jsonEditorResetNonce) {
+      setEditingJsonExpId(null);
+    }
+  }, [jsonEditorResetNonce]);
 
   const toggleHiddenDrawer = (expId: string) => {
     setExpandedHiddenDrawer((prev) => ({ ...prev, [expId]: !prev[expId] }));
@@ -173,7 +193,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
       if (!onImportExperienceJson) return;
 
       setImportingExpId(targetExpId);
-      await onImportExperienceJson(targetExpId, parsed.data);
+      await onImportExperienceJson(targetExpId, parsed.data, "json_import");
     } catch (err) {
       setJsonErrorByExpId((prev) => ({
         ...prev,
@@ -505,6 +525,32 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                       <span className="hidden sm:inline">{tl.manualLogBtn}</span>
                     </button>
 
+                    {onOpenExperienceHistory && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenExperienceHistory(exp)}
+                        className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-medium rounded-lg flex items-center gap-1.5 tabular-nums transition-colors whitespace-nowrap shrink-0"
+                        title={
+                          language === "en"
+                            ? "View revision history for this experience"
+                            : "Ver historial de revisiones de esta experiencia"
+                        }
+                      >
+                        <History className="w-3.5 h-3.5 text-cyan-400" />
+                        {normalizeRevisionUpdatesCount(exp.updatesCount) > 0 && (
+                          <span className="sm:hidden">
+                            ({normalizeRevisionUpdatesCount(exp.updatesCount)})
+                          </span>
+                        )}
+                        <span className="hidden sm:inline">
+                          {formatHistoryButtonLabel(
+                            exp.updatesCount,
+                            language === "en" ? "en" : "es"
+                          )}
+                        </span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => onEditExperience(exp)}
@@ -517,13 +563,10 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     {!exp.isPersonalProjects && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(tl.deleteCompanyConfirm(exp.company))) {
-                            onDeleteExperience(exp.id);
-                          }
-                        }}
+                        onClick={() => onDeleteExperience(exp.id)}
                         className="p-1.5 bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-800/60 rounded-lg transition-colors shrink-0"
                         title={tl.deleteCompanyTooltip}
+                        aria-label={tl.deleteCompanyTooltip}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -612,7 +655,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                   ? (e) => handleRowDrop(e, childLog.id, exp.id, "cv")
                                   : undefined
                               }
-                              className={`flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl border transition-colors ${
+                              className={`flex items-start justify-between gap-3 text-xs text-slate-300 leading-relaxed p-2.5 rounded-xl border transition-colors ${
                                 isDragging
                                   ? "opacity-50 border-cyan-500/60 bg-slate-950/40"
                                   : isRecent
@@ -660,38 +703,25 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                 </div>
                               </div>
 
-                            <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center pl-4 sm:pl-0">
+                            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                               {childLog ? (
-                                <>
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400/90 px-2 py-1">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    Logro vinculado
-                                  </span>
-
-                                  {onEditLog && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onEditLog(childLog)}
-                                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-200 hover:text-cyan-200 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
-                                      title="Editar título, impacto y detalles STAR del logro"
-                                    >
-                                      <Edit3 className="w-3 h-3 text-cyan-400" />
-                                      <span>Editar</span>
-                                    </button>
-                                  )}
-
-                                  {onToggleIncludeInCv && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onToggleIncludeInCv(childLog.id)}
-                                      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-amber-300 bg-slate-900 hover:bg-amber-950/30 border border-slate-800 hover:border-amber-800/60 px-2 py-1 rounded-md transition-colors"
-                                      title="Ocultar del resumen de esta experiencia (se mantiene completo en Bitácora)"
-                                    >
-                                      <EyeOff className="w-3 h-3" />
-                                      <span>Quitar del CV</span>
-                                    </button>
-                                  )}
-                                </>
+                                <AchievementRowActions
+                                  log={childLog}
+                                  isOpen={openActionMenuKey === `cv:${childLog.id}`}
+                                  onToggleOpen={() =>
+                                    setOpenActionMenuKey((prev) =>
+                                      prev === `cv:${childLog.id}` ? null : `cv:${childLog.id}`
+                                    )
+                                  }
+                                  onCloseMenu={() => setOpenActionMenuKey(null)}
+                                  onEdit={onEditLog}
+                                  onOpenHistory={onOpenLogHistory}
+                                  onToggleIncludeInCv={onToggleIncludeInCv}
+                                  onDelete={onDeleteLog}
+                                  deleteTooltip={tl.deleteLogTooltip}
+                                  isIncludedInCv
+                                  showLinkedIndicator
+                                />
                               ) : (
                                 <button
                                   type="button"
@@ -737,11 +767,11 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                   )}
 
                   {hiddenFromCvLogs.length > 0 && (
-                    <div className="border border-slate-800/70 rounded-xl bg-slate-950/30 overflow-hidden">
+                    <div className="border border-slate-800/70 rounded-xl bg-slate-950/30">
                       <button
                         type="button"
                         onClick={() => toggleHiddenDrawer(exp.id)}
-                        className="w-full px-3 py-2 flex items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/50 transition-colors"
+                        className="w-full px-3 py-2 flex items-center justify-between text-[11px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/50 rounded-xl transition-colors"
                       >
                         <span className="flex items-center gap-2">
                           <EyeOff className="w-3.5 h-3.5 text-slate-500" />
@@ -799,7 +829,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                       ? (e) => handleRowDrop(e, hiddenLog.id, exp.id, "hidden")
                                       : undefined
                                   }
-                                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-lg border text-xs transition-colors ${
+                                  className={`flex items-start justify-between gap-3 p-2.5 rounded-lg border text-xs transition-colors ${
                                     isDraggingHidden
                                       ? "opacity-50 border-cyan-500/60 bg-slate-900/60"
                                       : isHiddenRecent
@@ -844,26 +874,25 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    {onEditLog && (
-                                      <button
-                                        type="button"
-                                        onClick={() => onEditLog(hiddenLog)}
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded-md transition-colors"
-                                      >
-                                        <Edit3 className="w-3 h-3" />
-                                        <span>Editar</span>
-                                      </button>
-                                    )}
-                                    {onToggleIncludeInCv && (
-                                      <button
-                                        type="button"
-                                        onClick={() => onToggleIncludeInCv(hiddenLog.id)}
-                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:text-cyan-100 bg-cyan-950/70 hover:bg-cyan-900 border border-cyan-800/70 px-2 py-1 rounded-md transition-colors"
-                                      >
-                                        <Eye className="w-3 h-3" />
-                                        <span>Incluir en CV</span>
-                                      </button>
-                                    )}
+                                    <AchievementRowActions
+                                      log={hiddenLog}
+                                      isOpen={openActionMenuKey === `hidden:${hiddenLog.id}`}
+                                      onToggleOpen={() =>
+                                        setOpenActionMenuKey((prev) =>
+                                          prev === `hidden:${hiddenLog.id}`
+                                            ? null
+                                            : `hidden:${hiddenLog.id}`
+                                        )
+                                      }
+                                      onCloseMenu={() => setOpenActionMenuKey(null)}
+                                      onEdit={onEditLog}
+                                      onOpenHistory={onOpenLogHistory}
+                                      onToggleIncludeInCv={onToggleIncludeInCv}
+                                      onDelete={onDeleteLog}
+                                      deleteTooltip={tl.deleteLogTooltip}
+                                      isIncludedInCv={false}
+                                      showLinkedIndicator={false}
+                                    />
                                   </div>
                                 </div>
                                 {showHiddenAfter && (
@@ -929,9 +958,10 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
         allLogs={logs}
         language={language}
         onClose={() => setEditingJsonExpId(null)}
+        onOpenHistory={onOpenExperienceHistory}
         onSave={async (expId, parsed) => {
           if (onImportExperienceJson) {
-            await onImportExperienceJson(expId, parsed);
+            await onImportExperienceJson(expId, parsed, "json_editor");
           }
         }}
       />

@@ -58,21 +58,21 @@ export function describeAuthError(error: any): { key: string; fallbackMessage: s
     return {
       key: "firebase_unauthorized_domain",
       fallbackMessage:
-        "This domain is not authorized in Firebase Console -> Authentication -> Authorized domains.",
+        "This domain is not authorized for sign-in.",
     };
   }
 
   if (code.includes("auth/network-request-failed") || message.includes("network")) {
     return {
       key: "auth_network_error",
-      fallbackMessage: "Network connection error while communicating with Google Auth servers.",
+      fallbackMessage: "Network connection error while communicating with the sign-in service.",
     };
   }
 
   if (code.includes("auth/configuration-not-found") || code.includes("auth/invalid-api-key")) {
     return {
       key: "firebase_not_configured_correctly",
-      fallbackMessage: "Firebase Authentication is not configured correctly in environment variables.",
+      fallbackMessage: "Sign-in is not configured properly.",
     };
   }
 

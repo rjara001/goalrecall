@@ -5,20 +5,26 @@ import {
   buildCareerGoalCreatePayload,
   buildCareerGoalUpdatePayload,
   buildCertificationCreatePayload,
+  buildExperienceRevisionCreatePayload,
   buildInboxMessageCreatePayload,
   buildJobOfferCreatePayload,
   buildLogEntryCreatePayload,
   buildLogEntryUpdatePayload,
   buildLogMetadataUpdatePayload,
+  buildLogRevisionCreatePayload,
   buildLogSortOrderUpdatePayload,
   buildProductCreatePayload,
   buildProductUpdatePayload,
   buildPublicShowcaseCreatePayload,
   buildPublicUserProfile,
   buildStoredCvCreatePayload,
+  docToExperienceRevision,
   docToLogEntry,
+  docToLogRevision,
   buildUserProfileCreatePayload,
   buildWorkExperienceCreatePayload,
+  buildWorkExperienceMetadataUpdatePayload,
+  docToWorkExperience,
   isValidUsernameHandle,
   sanitizeDocId,
   sanitizeUsernameHandle,
@@ -454,5 +460,160 @@ describe("Firestore sanitizer payloads", () => {
       { touchUpdatedAt: false }
     ) as Record<string, unknown>;
     expect("updatedAt" in noTouchSavePayload).toBe(false);
+  });
+
+  it("builds strict schema-compliant LogRevision and ExperienceRevision payloads with zero undefined values", () => {
+    const logRev = buildLogRevisionCreatePayload({
+      revisionId: "rev/1",
+      uid: "uid-1",
+      logId: "log/1",
+      versionNumber: 2,
+      source: "manual_form",
+      changedFields: ["title", "impact"],
+      snapshot: {
+        title: "Reduced P99 latency",
+        whatWasSought: undefined,
+        tags: ["#Perf"],
+      },
+    });
+    assertNoUndefinedDeep(logRev);
+    expect(logRev.id).toBe("rev_1");
+    expect(logRev.parentId).toBe("log_1");
+    expect(logRev.entityType).toBe("log");
+    expect(Object.keys(logRev).sort()).toEqual([
+      "changedFields",
+      "createdAt",
+      "entityType",
+      "id",
+      "parentId",
+      "snapshot",
+      "source",
+      "userId",
+      "versionNumber",
+    ]);
+    expect(Object.keys(logRev.snapshot).sort()).toEqual([
+      "category",
+      "client",
+      "date",
+      "description",
+      "experienceId",
+      "howApplied",
+      "impact",
+      "project",
+      "tags",
+      "title",
+      "whatWasSought",
+      "whyImportant",
+    ]);
+
+    const parsedLogRev = docToLogRevision(
+      { ...logRev, createdAt: 1700000100000 },
+      logRev.id
+    );
+    expect(parsedLogRev.versionNumber).toBe(2);
+    expect(parsedLogRev.snapshot.title).toBe("Reduced P99 latency");
+    expect(parsedLogRev.snapshot.impact).toBe("Reduced P99 latency");
+
+    const expRev = buildExperienceRevisionCreatePayload({
+      revisionId: "rev-e1",
+      uid: "uid-1",
+      experienceId: "exp-1",
+      versionNumber: 1,
+      source: "json_editor",
+      changedFields: ["bullets", "endDate"],
+      snapshot: {
+        company: "Acme",
+        role: "Staff Engineer",
+        startDate: "2023-01",
+        endDate: "2024-01",
+        isCurrent: true,
+        bullets: ["Built pipeline"],
+        technologies: ["TypeScript"],
+      },
+    });
+    assertNoUndefinedDeep(expRev);
+    expect(expRev.entityType).toBe("experience");
+    expect(expRev.snapshot.endDate).toBe("");
+    expect(Object.keys(expRev.snapshot).sort()).toEqual([
+      "bullets",
+      "company",
+      "endDate",
+      "isCurrent",
+      "isPersonalProjects",
+      "location",
+      "role",
+      "startDate",
+      "summary",
+      "technologies",
+    ]);
+
+    const parsedExpRev = docToExperienceRevision(
+      { ...expRev, createdAt: 1700000200000 },
+      expRev.id
+    );
+    expect(parsedExpRev.source).toBe("json_editor");
+    expect(parsedExpRev.snapshot.bullets).toEqual(["Built pipeline"]);
+
+    const logWithCount = buildLogEntryCreatePayload(
+      { title: "Log con ediciones", impact: "x", updatesCount: 4.8 },
+      "uid-1",
+      "log-cnt"
+    ) as Record<string, unknown>;
+    expect(logWithCount.updatesCount).toBe(4);
+    expect(docToLogEntry(logWithCount, "log-cnt").updatesCount).toBe(4);
+
+    const logCountMeta = buildLogMetadataUpdatePayload({ updatesCount: 4 }) as Record<
+      string,
+      unknown
+    >;
+    expect(logCountMeta).toEqual({ updatesCount: 4 });
+    expect("updatedAt" in logCountMeta).toBe(false);
+
+    const expWithCount = buildWorkExperienceCreatePayload(
+      { company: "Acme", role: "Lead", startDate: "2024", updatesCount: 7 },
+      "uid-1",
+      "exp-cnt"
+    ) as Record<string, unknown>;
+    expect(expWithCount.updatesCount).toBe(7);
+    expect(docToWorkExperience(expWithCount, "exp-cnt").updatesCount).toBe(7);
+
+    const expCountMeta = buildWorkExperienceMetadataUpdatePayload({
+      updatesCount: -10,
+    }) as Record<string, unknown>;
+    expect(expCountMeta).toEqual({ updatesCount: 0 });
+    expect("updatedAt" in expCountMeta).toBe(false);
+
+    const logSoftDeleteMeta = buildLogMetadataUpdatePayload({
+      deletedAt: 1732400000123.9,
+      isPublic: false,
+    }) as Record<string, unknown>;
+    expect(logSoftDeleteMeta).toEqual({
+      deletedAt: 1732400000123,
+      isPublic: false,
+    });
+    expect(docToLogEntry({ ...logWithCount, deletedAt: 1732400000123 }, "log-del").deletedAt).toBe(
+      1732400000123
+    );
+
+    const logRestoreMeta = buildLogMetadataUpdatePayload({
+      deletedAt: null,
+    }) as Record<string, unknown>;
+    expect(logRestoreMeta.deletedAt).toEqual(deleteField());
+
+    const expSoftDeleteMeta = buildWorkExperienceMetadataUpdatePayload({
+      deletedAt: 1732400000555,
+    }) as Record<string, unknown>;
+    expect(expSoftDeleteMeta).toEqual({ deletedAt: 1732400000555 });
+    expect(
+      docToWorkExperience({ ...expWithCount, deletedAt: 1732400000555 }, "exp-del").deletedAt
+    ).toBe(1732400000555);
+
+    const expRestoreMeta = buildWorkExperienceMetadataUpdatePayload({
+      deletedAt: null,
+    }) as Record<string, unknown>;
+    expect(expRestoreMeta.deletedAt).toEqual(deleteField());
+    expect(
+      docToWorkExperience({ ...expWithCount, deletedAt: -50 }, "exp-invalid-del").deletedAt
+    ).toBeUndefined();
   });
 });

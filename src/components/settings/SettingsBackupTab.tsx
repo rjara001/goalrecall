@@ -78,7 +78,7 @@ export const SettingsBackupTab: React.FC<SettingsBackupTabProps> = ({
           {isImporting ? (
             <>
               <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
-              <span>Importando respaldo a Firestore...</span>
+              <span>Importando respaldo...</span>
             </>
           ) : (
             <>

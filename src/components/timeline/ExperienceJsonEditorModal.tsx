@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Download,
+  History,
   Loader2,
   RotateCcw,
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
   reconcileImportedExperienceJson,
 } from "../../utils/experienceJson";
 import { formatFirestoreUiError } from "../../utils/firestore/errors";
+import { formatHistoryButtonLabel } from "../../utils/revisions/snapshot";
 
 interface ExperienceJsonEditorModalProps {
   isOpen: boolean;
@@ -28,6 +30,7 @@ interface ExperienceJsonEditorModalProps {
   language: string;
   onClose: () => void;
   onSave: (experienceId: string, parsed: ParsedExperienceJson) => Promise<void> | void;
+  onOpenHistory?: (experience: WorkExperience) => void;
 }
 
 export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps> = ({
@@ -37,6 +40,7 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
   language,
   onClose,
   onSave,
+  onOpenHistory,
 }) => {
   const isEn = language === "en";
   const [previousSnapshotJson, setPreviousSnapshotJson] = useState("");
@@ -177,8 +181,8 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
         formatFirestoreUiError(
           err,
           isEn
-            ? "Could not save experience JSON to Firestore."
-            : "No se pudo guardar el JSON de la experiencia en Firestore."
+            ? "Could not save experience changes."
+            : "No se pudieron guardar los cambios de la experiencia."
         )
       );
       setShowPreSaveBackupPrompt(false);
@@ -308,6 +312,27 @@ export const ExperienceJsonEditorModal: React.FC<ExperienceJsonEditorModalProps>
               <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
               <span>{isEn ? "Restore Original" : "Restaurar original"}</span>
             </button>
+            {onOpenHistory && (
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => onOpenHistory(experience)}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-medium tabular-nums rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                title={
+                  isEn
+                    ? "View revision history for this experience"
+                    : "Ver historial de revisiones de esta experiencia"
+                }
+              >
+                <History className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  {formatHistoryButtonLabel(
+                    experience.updatesCount,
+                    isEn ? "en" : "es"
+                  )}
+                </span>
+              </button>
+            )}
           </div>
 
           <button

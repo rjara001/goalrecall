@@ -328,7 +328,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           {t.nav.privateVaultActive}
                         </span>
                         <span className="bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/40">
-                          {user.authProvider === "google" ? "Google Auth" : "Google"}
+                          Google
                         </span>
                       </div>
                     </div>

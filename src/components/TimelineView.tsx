@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2, Trash2, X } from "lucide-react";
 import {
   CareerGoal,
   CareerGoalStatus,
@@ -13,6 +13,7 @@ import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { ParsedExperienceJson } from "../utils/experienceJson";
+import { doesLogBelongToExperience } from "../utils/bulletToLogMapper";
 import {
   buildExtractedBulletSet,
   computeTotalBulletsCount,
@@ -29,13 +30,20 @@ import { TimelineAchievementsTab } from "./timeline/TimelineAchievementsTab";
 import { TimelineProductsTab } from "./timeline/TimelineProductsTab";
 import { TimelineCertificationsTab } from "./timeline/TimelineCertificationsTab";
 import { TimelineCareerGoalsTab } from "./timeline/TimelineCareerGoalsTab";
+import { TimelineHistoryTab } from "./timeline/TimelineHistoryTab";
 
 interface TimelineViewProps {
   logs: LogEntry[];
+  deletedLogs?: LogEntry[];
   experiences: WorkExperience[];
+  deletedExperiences?: WorkExperience[];
   products?: Product[];
   certifications?: TechnicalCertification[];
   careerGoals?: CareerGoal[];
+  onRestoreDeletedLog?: (id: string) => Promise<unknown> | void;
+  onRestoreDeletedExperience?: (id: string) => Promise<unknown> | void;
+  onPermanentDeleteLog?: (id: string) => Promise<void> | void;
+  onPermanentDeleteExperience?: (id: string) => Promise<void> | void;
   onTogglePublic: (id: string) => Promise<void> | void;
   onToggleIncludeInCv?: (id: string) => Promise<void> | void;
   onReorderLogs?: (
@@ -45,6 +53,7 @@ interface TimelineViewProps {
     experienceId?: string
   ) => Promise<void> | void;
   onEditLog: (entry: LogEntry) => void;
+  onOpenLogHistory?: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => Promise<void> | void;
   onDuplicateLog: (entry: LogEntry) => Promise<void> | void;
   onOpenQuickLog: () => void;
@@ -52,11 +61,14 @@ interface TimelineViewProps {
   onOpenCvUpload: () => void;
   onAddExperience: () => void;
   onEditExperience: (exp: WorkExperience) => void;
+  onOpenExperienceHistory?: (exp: WorkExperience) => void;
   onDeleteExperience: (id: string) => Promise<void> | void;
   onImportExperienceJson?: (
     experienceId: string,
-    parsed: ParsedExperienceJson
+    parsed: ParsedExperienceJson,
+    source?: "json_editor" | "json_import"
   ) => Promise<void> | void;
+  jsonEditorResetNonce?: number;
   onAddLogToExperience: (experienceId: string) => void;
   onExtractBulletToLog?: (
     experienceId: string,
@@ -83,17 +95,26 @@ interface TimelineViewProps {
   onConvertGoalToLog?: (goal: CareerGoal) => void;
 }
 
+const EMPTY_LOGS: LogEntry[] = [];
+const EMPTY_EXPERIENCES: WorkExperience[] = [];
 const EMPTY_PRODUCTS: Product[] = [];
 const EMPTY_CERTIFICATIONS: TechnicalCertification[] = [];
 const EMPTY_CAREER_GOALS: CareerGoal[] = [];
 
 export const TimelineView: React.FC<TimelineViewProps> = ({
   logs,
+  deletedLogs = EMPTY_LOGS,
   experiences,
+  deletedExperiences = EMPTY_EXPERIENCES,
+  onRestoreDeletedLog,
+  onRestoreDeletedExperience,
+  onPermanentDeleteLog,
+  onPermanentDeleteExperience,
   onTogglePublic,
   onToggleIncludeInCv,
   onReorderLogs,
   onEditLog,
+  onOpenLogHistory,
   onDeleteLog,
   onDuplicateLog,
   onOpenQuickLog,
@@ -101,8 +122,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onOpenCvUpload,
   onAddExperience,
   onEditExperience,
+  onOpenExperienceHistory,
   onDeleteExperience,
   onImportExperienceJson,
+  jsonEditorResetNonce,
   onAddLogToExperience,
   onExtractBulletToLog,
   onExtractAllBulletsForExperience,
@@ -125,8 +148,25 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onConvertGoalToCertification,
   onConvertGoalToLog,
 }) => {
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   const tl = VIEW_LOCALES[language]?.timeline || VIEW_LOCALES.en.timeline;
+
+  type PendingDeleteTarget =
+    | {
+        type: "experience";
+        id: string;
+        company: string;
+        role: string;
+        logsCount: number;
+        permanent?: boolean;
+      }
+    | {
+        type: "log";
+        id: string;
+        title: string;
+        client?: string;
+        permanent?: boolean;
+      };
 
   const [viewMode, setViewMode] = useState<TimelineViewMode>("by_experience");
   const [search, setSearch] = useState("");
@@ -139,6 +179,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   const [dateRange, setDateRange] = useState<"all" | "7d" | "30d" | "90d">("all");
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDeleteTarget | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [highlightedLogId, setHighlightedLogId] = useState<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -146,7 +188,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
   useEffect(() => {
     setNowMs(Date.now());
-  }, [logs]);
+  }, [logs, deletedLogs, deletedExperiences]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -191,6 +233,91 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
       await fn();
     } catch (err) {
       setActionError(formatFirestoreUiError(err, fallbackMsg));
+    }
+  };
+
+  const requestDeleteExperience = (id: string) => {
+    const exp = experiences.find((item) => item.id === id);
+    if (!exp || exp.isPersonalProjects) return;
+    const logsCount = logs.filter((l) => doesLogBelongToExperience(l, exp)).length;
+    setActionError(null);
+    setPendingDelete({
+      type: "experience",
+      id: exp.id,
+      company: exp.company,
+      role: exp.role,
+      logsCount,
+    });
+  };
+
+  const requestDeleteLog = (id: string) => {
+    const entry = logs.find((item) => item.id === id);
+    if (!entry) return;
+    setActionError(null);
+    setPendingDelete({
+      type: "log",
+      id: entry.id,
+      title: entry.title || entry.impact || "",
+      client: entry.client,
+    });
+  };
+
+  const requestPermanentDeleteExperience = (exp: WorkExperience) => {
+    setActionError(null);
+    setPendingDelete({
+      type: "experience",
+      id: exp.id,
+      company: exp.company,
+      role: exp.role,
+      logsCount: 0,
+      permanent: true,
+    });
+  };
+
+  const requestPermanentDeleteLog = (entry: LogEntry) => {
+    setActionError(null);
+    setPendingDelete({
+      type: "log",
+      id: entry.id,
+      title: entry.title || entry.impact || "",
+      client: entry.client,
+      permanent: true,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete || isConfirmingDelete) return;
+    setIsConfirmingDelete(true);
+    const target = pendingDelete;
+    try {
+      if (target.type === "experience") {
+        if (target.permanent) {
+          await runMutation(
+            () => onPermanentDeleteExperience?.(target.id),
+            "No se pudo eliminar definitivamente la experiencia."
+          );
+        } else {
+          await runMutation(
+            () => onDeleteExperience(target.id),
+            "No se pudo eliminar la experiencia."
+          );
+        }
+      } else {
+        if (target.permanent) {
+          await runMutation(
+            () => onPermanentDeleteLog?.(target.id),
+            "No se pudo eliminar definitivamente el logro."
+          );
+        } else {
+          await runMutation(
+            () => onDeleteLog(target.id),
+            "No se pudo eliminar el logro."
+          );
+        }
+      }
+      setPendingDelete(null);
+    } finally {
+      setIsConfirmingDelete(false);
     }
   };
 
@@ -262,6 +389,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         productsCount={products.length}
         certificationsCount={certifications.length}
         careerGoalsCount={careerGoals.length}
+        deletedHistoryCount={deletedLogs.length + deletedExperiences.length}
         viewMode={viewMode}
         onChangeViewMode={setViewMode}
         onOpenCvUpload={onOpenCvUpload}
@@ -303,19 +431,21 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           onOpenCvUpload={onOpenCvUpload}
           onAddExperience={onAddExperience}
           onEditExperience={onEditExperience}
-          onDeleteExperience={(id) =>
-            void runMutation(() => onDeleteExperience(id), "No se pudo eliminar la experiencia.")
-          }
+          onOpenExperienceHistory={onOpenExperienceHistory}
+          onDeleteExperience={requestDeleteExperience}
           onImportExperienceJson={
             onImportExperienceJson
-              ? async (expId, parsed) => {
+              ? async (expId, parsed, source) => {
                   setActionError(null);
-                  await onImportExperienceJson(expId, parsed);
+                  await onImportExperienceJson(expId, parsed, source);
                 }
               : undefined
           }
+          jsonEditorResetNonce={jsonEditorResetNonce}
           onAddLogToExperience={onAddLogToExperience}
           onEditLog={onEditLog}
+          onOpenLogHistory={onOpenLogHistory}
+          onDeleteLog={requestDeleteLog}
           onToggleIncludeInCv={
             onToggleIncludeInCv
               ? (id) =>
@@ -339,7 +469,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               ? (expId, company, role, bullet, technologies) =>
                   void runMutation(
                     () => onExtractBulletToLog(expId, company, role, bullet, technologies),
-                    "No se pudo guardar la viñeta en Firestore."
+                    "No se pudo guardar la viñeta en tu bitácora."
                   )
               : undefined
           }
@@ -348,7 +478,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               ? (expId) =>
                   void runMutation(
                     () => onExtractAllBulletsForExperience(expId),
-                    "No se pudieron extraer las viñetas a Firestore."
+                    "No se pudieron extraer las viñetas a tu bitácora."
                   )
               : undefined
           }
@@ -416,9 +546,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
               : undefined
           }
           onEditLog={onEditLog}
-          onDeleteLog={(id) =>
-            void runMutation(() => onDeleteLog(id), "No se pudo eliminar el logro.")
-          }
+          onOpenLogHistory={onOpenLogHistory}
+          onDeleteLog={requestDeleteLog}
           onDuplicateLog={(entry) =>
             void runMutation(() => onDuplicateLog(entry), "No se pudo duplicar el logro.")
           }
@@ -507,6 +636,179 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           onConvertGoalToCertification={onConvertGoalToCertification}
           onConvertGoalToLog={onConvertGoalToLog}
         />
+      )}
+
+      {viewMode === "history" && (
+        <TimelineHistoryTab
+          logs={logs}
+          deletedLogs={deletedLogs}
+          experiences={experiences}
+          deletedExperiences={deletedExperiences}
+          nowMs={nowMs}
+          onRestoreDeletedLog={
+            onRestoreDeletedLog
+              ? (id) =>
+                  runMutation(
+                    async () => {
+                      await onRestoreDeletedLog(id);
+                    },
+                    "No se pudo recuperar el logro."
+                  )
+              : undefined
+          }
+          onRestoreDeletedExperience={
+            onRestoreDeletedExperience
+              ? (id) =>
+                  runMutation(
+                    async () => {
+                      await onRestoreDeletedExperience(id);
+                    },
+                    "No se pudo recuperar la experiencia."
+                  )
+              : undefined
+          }
+          onRequestPermanentDeleteLog={
+            onPermanentDeleteLog ? requestPermanentDeleteLog : undefined
+          }
+          onRequestPermanentDeleteExperience={
+            onPermanentDeleteExperience ? requestPermanentDeleteExperience : undefined
+          }
+          onOpenLogHistory={onOpenLogHistory}
+          onOpenExperienceHistory={onOpenExperienceHistory}
+        />
+      )}
+
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[70] isolate flex items-center justify-center p-4 bg-black/80 animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          onClick={() => {
+            if (!isConfirmingDelete) setPendingDelete(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md bg-[#0B0F19] border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-900/70 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </div>
+                <h3 id="confirm-delete-title" className="text-sm font-bold text-white">
+                  {pendingDelete.permanent
+                    ? language === "en"
+                      ? "Delete permanently"
+                      : "Eliminar definitivamente"
+                    : pendingDelete.type === "experience"
+                      ? language === "en"
+                        ? "Delete experience"
+                        : "Eliminar experiencia"
+                      : language === "en"
+                        ? "Delete achievement"
+                        : "Eliminar logro"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={isConfirmingDelete}
+                onClick={() => setPendingDelete(null)}
+                aria-label={t.common.close}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 text-xs text-slate-300 leading-relaxed">
+              {pendingDelete.type === "experience" ? (
+                <>
+                  <p className="text-slate-100 font-medium">
+                    {tl.deleteCompanyConfirm(pendingDelete.company)}
+                  </p>
+                  {pendingDelete.role && (
+                    <p className="text-[11px] text-slate-400">{pendingDelete.role}</p>
+                  )}
+                  {!pendingDelete.permanent && pendingDelete.logsCount > 0 && (
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+                      {language === "en"
+                        ? `Your ${pendingDelete.logsCount} linked achievement(s) will be kept and reassigned automatically.`
+                        : `Se conservarán tus ${pendingDelete.logsCount} logro(s) vinculados y se reasignarán automáticamente a otra experiencia disponible.`}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-100 font-medium">{t.timeline.deleteLogConfirm}</p>
+                  {pendingDelete.title && (
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                      {pendingDelete.client && (
+                        <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+                          {pendingDelete.client}
+                        </span>
+                      )}
+                      <p className="text-xs text-slate-200 line-clamp-3 break-words">
+                        {pendingDelete.title}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {pendingDelete.permanent ? (
+                <div className="p-3 rounded-xl bg-red-950/50 border border-red-800/60 text-[11px] text-red-200">
+                  {language === "en"
+                    ? "This action will permanently remove this record and all of its version history. It cannot be undone."
+                    : "Esta acción eliminará permanentemente este registro y todo su historial de versiones. No se puede deshacer."}
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/50 text-[11px] text-amber-200">
+                  {language === "en"
+                    ? "It will move to the History tab with its saved versions so you can recover it anytime."
+                    : "Se moverá a la pestaña Historial conservando sus versiones guardadas para que puedas recuperarlo cuando quieras."}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/40 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isConfirmingDelete}
+                onClick={() => setPendingDelete(null)}
+                className="px-4 py-2 text-xs font-medium text-slate-300 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors disabled:opacity-40"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                disabled={isConfirmingDelete}
+                onClick={() => void handleConfirmDelete()}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg shadow-sm transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isConfirmingDelete ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isConfirmingDelete
+                    ? language === "en"
+                      ? "Deleting..."
+                      : "Eliminando..."
+                    : pendingDelete.permanent
+                      ? language === "en"
+                        ? "Delete permanently"
+                        : "Eliminar definitivamente"
+                      : language === "en"
+                        ? "Delete"
+                        : "Eliminar"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

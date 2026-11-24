@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
-import { AlertCircle, X, Sparkles, Eye, Lock, Zap, Loader2, FileText } from "lucide-react";
-import { InboxAchievementDraft, LogEntry, WorkExperience } from "../types";
+import React, { useEffect, useRef, useState } from "react";
+import { AlertCircle, X, Sparkles, Eye, Lock, Zap, Loader2, FileText, History, RotateCcw, Trash2 } from "lucide-react";
+import { InboxAchievementDraft, LogEntry, RevisionSource, WorkExperience } from "../types";
+import type { RestoredLogDraft } from "../hooks/useAppModals";
 import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
@@ -13,6 +14,7 @@ import { useQuickLogForm } from "./quick-log/useQuickLogForm";
 import { QuickLogTitleField } from "./quick-log/QuickLogTitleField";
 import { QuickLogAccordions } from "./quick-log/QuickLogAccordions";
 import { QuickLogContextPanel } from "./quick-log/QuickLogContextPanel";
+import { formatHistoryButtonLabel } from "../utils/revisions/snapshot";
 
 export {
   DEFAULT_TECH_CATEGORIES,
@@ -23,13 +25,19 @@ export {
 interface QuickLogModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onSave: (
+    entry: Omit<LogEntry, "id" | "createdAt" | "updatedAt">,
+    source?: RevisionSource
+  ) => Promise<void>;
+  onDelete?: (id: string) => Promise<void> | void;
   onCreateExperience?: (
     expData: Omit<WorkExperience, "id" | "createdAt" | "updatedAt">
   ) => Promise<WorkExperience>;
   existingLogs: LogEntry[];
   experiences?: WorkExperience[];
   initialData?: LogEntry | null;
+  restoredDraft?: RestoredLogDraft | null;
+  onOpenHistory?: () => void;
   initialExperienceId?: string;
   initialBulletText?: string;
   initialDraft?: InboxAchievementDraft | null;
@@ -39,10 +47,13 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onDelete,
   onCreateExperience,
   existingLogs,
   experiences = [],
   initialData,
+  restoredDraft,
+  onOpenHistory,
   initialExperienceId,
   initialBulletText,
   initialDraft,
@@ -51,12 +62,22 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const tl = VIEW_LOCALES[language]?.timeline || VIEW_LOCALES.en.timeline;
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const templatesDropdownRef = useRef<HTMLDivElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConfirmDelete(false);
+    setIsDeleting(false);
+    setDeleteError(null);
+  }, [isOpen, initialData?.id]);
 
   const form = useQuickLogForm({
     isOpen,
     existingLogs,
     experiences,
     initialData,
+    restoredDraft,
     initialExperienceId,
     initialBulletText,
     initialDraft,
@@ -113,15 +134,29 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
               {initialData ? t.modals.quickLogEditTitle : t.modals.quickLogTitle}
             </h2>
           </div>
-          <button
-            type="button"
-            disabled={form.isSaving}
-            onClick={onClose}
-            aria-label={t.common.close}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {initialData?.id && onOpenHistory && (
+              <button
+                type="button"
+                disabled={form.isSaving}
+                onClick={onOpenHistory}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium tabular-nums inline-flex items-center gap-1.5 transition-colors disabled:opacity-40"
+                title="Ver historial de cambios de este logro"
+              >
+                <History className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{formatHistoryButtonLabel(initialData.updatesCount, "es")}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={form.isSaving}
+              onClick={onClose}
+              aria-label={t.common.close}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="px-6 py-2 bg-slate-900/50 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
@@ -207,13 +242,27 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
         </div>
 
         <form onSubmit={form.handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
-          {form.saveError && (
+          {restoredDraft && (
+            <div
+              role="status"
+              className="p-3 rounded-xl bg-cyan-950/45 border border-cyan-700/60 text-cyan-100 text-xs flex items-start gap-2.5"
+            >
+              <RotateCcw className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <span>
+                Borrador restaurado desde{" "}
+                <strong className="font-mono">v{restoredDraft.versionNumber}</strong>.
+                No se guardará hasta que pulses Guardar.
+              </span>
+            </div>
+          )}
+
+          {(form.saveError || deleteError) && (
             <div
               role="alert"
               className="p-3 rounded-xl bg-red-950/70 border border-red-700/70 text-red-200 text-xs flex items-start gap-2.5"
             >
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span>{form.saveError}</span>
+              <span>{deleteError || form.saveError}</span>
             </div>
           )}
 
@@ -290,22 +339,86 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
             onRemoveTag={form.removeTag}
           />
 
-          <div className="pt-3 flex items-center justify-between border-t border-slate-800">
-            <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
-              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">
-                Ctrl / ⌘
-              </kbd>{" "}
-              +{" "}
-              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">
-                Enter
-              </kbd>{" "}
-              para guardar rápido
-            </span>
+          <div className="pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
+            <div className="flex items-center gap-2">
+              {initialData?.id && onDelete ? (
+                confirmDelete ? (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={isDeleting || form.isSaving}
+                      onClick={async () => {
+                        if (!initialData?.id || isDeleting) return;
+                        setIsDeleting(true);
+                        setDeleteError(null);
+                        try {
+                          await onDelete(initialData.id);
+                          onClose();
+                        } catch (err) {
+                          setDeleteError(
+                            err instanceof Error ? err.message : "No se pudo eliminar el logro."
+                          );
+                          setConfirmDelete(false);
+                        } finally {
+                          setIsDeleting(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {isDeleting
+                          ? language === "en"
+                            ? "Deleting..."
+                            : "Eliminando..."
+                          : language === "en"
+                            ? "Confirm delete"
+                            : "Confirmar"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => setConfirmDelete(false)}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
+                    >
+                      {t.common.cancel}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={form.isSaving || isDeleting}
+                    onClick={() => setConfirmDelete(true)}
+                    className="px-3 py-1.5 text-xs font-medium text-red-300 hover:text-red-200 bg-red-950/30 hover:bg-red-950/60 border border-red-800/50 rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-40"
+                    title={tl.deleteLogTooltip}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{language === "en" ? "Delete" : "Eliminar"}</span>
+                  </button>
+                )
+              ) : (
+                <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">
+                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">
+                    Ctrl / ⌘
+                  </kbd>{" "}
+                  +{" "}
+                  <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 text-[10px]">
+                    Enter
+                  </kbd>{" "}
+                  para guardar rápido
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
-                disabled={form.isSaving}
+                disabled={form.isSaving || isDeleting}
                 onClick={onClose}
                 className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-40"
               >
@@ -313,7 +426,7 @@ export const QuickLogModal: React.FC<QuickLogModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={!form.title.trim() || form.isSaving}
+                disabled={!form.title.trim() || form.isSaving || isDeleting}
                 className="px-5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 rounded-lg shadow-sm shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
               >
                 {form.isSaving ? (

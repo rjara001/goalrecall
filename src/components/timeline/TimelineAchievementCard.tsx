@@ -8,6 +8,7 @@ import {
   Globe,
   GripVertical,
   HelpCircle,
+  History,
   Layers,
   Lock,
   Sparkles,
@@ -19,6 +20,10 @@ import { LogEntry } from "../../types";
 import { useI18n } from "../../i18n";
 import { TimelineViewLocale } from "../../i18n/viewLocales";
 import { isLogIncludedInCv } from "../../utils/bulletToLogMapper";
+import {
+  formatHistoryButtonLabel,
+  normalizeRevisionUpdatesCount,
+} from "../../utils/revisions/snapshot";
 import { formatRelativeUpdatedTime, isRecentlyUpdatedLog } from "./timelineUtils";
 
 interface TimelineAchievementCardProps {
@@ -31,6 +36,7 @@ interface TimelineAchievementCardProps {
   onToggleIncludeInCv?: (id: string) => void;
   onDuplicateLog: (entry: LogEntry) => void;
   onEditLog: (entry: LogEntry) => void;
+  onOpenLogHistory?: (entry: LogEntry) => void;
   onDeleteLog: (id: string) => void;
   isDraggable?: boolean;
   isDragging?: boolean;
@@ -53,6 +59,7 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
   onToggleIncludeInCv,
   onDuplicateLog,
   onEditLog,
+  onOpenLogHistory,
   onDeleteLog,
   isDraggable = false,
   isDragging = false,
@@ -354,7 +361,26 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
         </div>
 
         <div className="flex items-center gap-1 text-slate-400">
+          {onOpenLogHistory && (
+            <button
+              type="button"
+              onClick={() => onOpenLogHistory(log)}
+              title="Ver historial de cambios"
+              className="px-2 py-1 hover:text-cyan-300 hover:bg-slate-800 rounded inline-flex items-center gap-1 text-[11px] font-medium tabular-nums transition-colors"
+            >
+              <History className="w-3.5 h-3.5 text-cyan-400" />
+              {normalizeRevisionUpdatesCount(log.updatesCount) > 0 && (
+                <span className="sm:hidden">
+                  ({normalizeRevisionUpdatesCount(log.updatesCount)})
+                </span>
+              )}
+              <span className="hidden sm:inline">
+                {formatHistoryButtonLabel(log.updatesCount, "es")}
+              </span>
+            </button>
+          )}
           <button
+            type="button"
             onClick={() => onDuplicateLog(log)}
             title="Duplicar entrada"
             className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
@@ -362,6 +388,7 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
             <Copy className="w-3.5 h-3.5" />
           </button>
           <button
+            type="button"
             onClick={() => onEditLog(log)}
             title={tl.editLogTooltip}
             className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
@@ -369,6 +396,7 @@ export const TimelineAchievementCard: React.FC<TimelineAchievementCardProps> = (
             <Edit3 className="w-3.5 h-3.5" />
           </button>
           <button
+            type="button"
             onClick={() => onDeleteLog(log.id)}
             title={tl.deleteLogTooltip}
             className="p-1.5 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"

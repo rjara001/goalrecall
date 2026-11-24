@@ -131,7 +131,7 @@ export const CareerGoalModal: React.FC<CareerGoalModalProps> = ({
       onClose();
     } catch (err) {
       setSaveError(
-        formatFirestoreUiError(err, "No se pudo guardar el objetivo profesional en Firestore.")
+        formatFirestoreUiError(err, "No se pudo guardar el objetivo profesional.")
       );
     } finally {
       setIsSaving(false);

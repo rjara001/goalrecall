@@ -68,23 +68,23 @@ export function parseFirestoreErrorInfo(error: unknown): FirestoreErrorInfo | nu
 
 export function formatFirestoreUiError(
   error: unknown,
-  fallbackMessage = "No se pudo guardar en Firestore. Intenta nuevamente."
+  fallbackMessage = "No se pudieron guardar los cambios. Intenta nuevamente."
 ): string {
   const info = parseFirestoreErrorInfo(error);
   const rawMessage = info ? info.error : error instanceof Error ? error.message : String(error || "");
   const lower = rawMessage.toLowerCase();
 
   if (lower.includes("quota exceeded")) {
-    return "Se alcanzó la cuota diaria de escritura/lectura de Firestore. Intenta nuevamente más tarde.";
+    return "Se alcanzó el límite temporal de operaciones. Intenta nuevamente más tarde.";
   }
   if (lower.includes("permission-denied") || lower.includes("missing or insufficient permissions")) {
-    return "Permiso denegado por Firestore. Verifica que tu sesión de Google esté activa y con correo verificado.";
+    return "No tienes permisos para esta acción. Verifica que tu sesión de Google esté activa y con correo verificado.";
   }
   if (lower.includes("the client is offline") || lower.includes("unavailable") || lower.includes("network")) {
-    return "Sin conexión con Firestore. Revisa tu conexión a internet e intenta de nuevo.";
+    return "Sin conexión. Revisa tu conexión a internet e intenta de nuevo.";
   }
   if (lower.includes("unauthenticated")) {
-    return "Debes iniciar sesión con Google para guardar cambios en la base de datos.";
+    return "Debes iniciar sesión con Google para guardar tus cambios.";
   }
   if (lower.includes("username_taken")) {
     return "Ese identificador público (/u/handle) ya está en uso por otra cuenta.";

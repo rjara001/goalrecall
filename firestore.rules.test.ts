@@ -19,12 +19,13 @@ describe("Firestore Security Rules & Blueprint Invariants", () => {
     expect(rulesText).toContain("request.auth.uid == userId");
   });
 
-  it("enforces all 12 blueprint collections in firestore.rules", () => {
+  it("enforces all 14 blueprint collections in firestore.rules", () => {
     const requiredMatches = [
       "match /users/{userId}",
       "match /cv/{cvDocId}",
       "match /logs/{logId}",
       "match /experiences/{experienceId}",
+      "match /revisions/{revisionId}",
       "match /products/{productId}",
       "match /certifications/{certificationId}",
       "match /careerGoals/{goalId}",
@@ -37,13 +38,19 @@ describe("Firestore Security Rules & Blueprint Invariants", () => {
     for (const m of requiredMatches) {
       expect(rulesText).toContain(m);
     }
-    expect(Object.keys(blueprint.firestore)).toHaveLength(12);
+    expect(Object.keys(blueprint.firestore)).toHaveLength(14);
   });
 
   it("prevents collection listing on users, publicShowcases, and proWaitlist", () => {
     expect(rulesText).not.toMatch(/allow\s+list:\s*if\s+true/);
     expect(rulesText).not.toMatch(/allow\s+read:\s*if\s+isSignedIn\(\)/);
     expect(rulesText).toContain("allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;");
+  });
+
+  it("enforces immutability on revision snapshots", () => {
+    expect(rulesText).toContain("isValidLogRevision(");
+    expect(rulesText).toContain("isValidExperienceRevision(");
+    expect(rulesText).toContain("allow update: if false;");
   });
 
   it("prevents client plan escalation and PII leakage in publicShowcases", () => {
@@ -63,7 +70,9 @@ describe("Firestore Security Rules & Blueprint Invariants", () => {
       "isValidUserProfile(",
       "isValidStoredCv(",
       "isValidLogEntry(",
+      "isValidLogRevision(",
       "isValidWorkExperience(",
+      "isValidExperienceRevision(",
       "isValidProduct(",
       "isValidCertification(",
       "isValidCareerGoal(",

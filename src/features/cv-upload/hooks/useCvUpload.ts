@@ -27,7 +27,7 @@ import {
   parseCvFile,
   validateCvFile,
 } from "../services/cvFileParser";
-import { extractCvWithAi } from "../services/cvAiExtractor";
+import { CvAiExtractionError, extractCvWithAi } from "../services/cvAiExtractor";
 import {
   buildWorkspaceImportFromCv,
   computeUpdatedCvField,
@@ -146,33 +146,44 @@ export function useCvUpload({
         }
       }
 
-      const result = await extractCvWithAi(payload, { idToken });
+      try {
+        const result = await extractCvWithAi(payload, { idToken });
 
-      if (result.usedAi && auth?.currentUser?.emailVerified) {
-        try {
-          const updatedQuota = await recordAiUsageFirestore();
-          setAiUsage(updatedQuota);
-          onAiQuotaUpdated?.(updatedQuota);
-        } catch (quotaErr) {
-          console.warn("No se pudo registrar el uso de cuota AI en Firestore:", quotaErr);
+        if (result.usedAi && auth?.currentUser?.emailVerified) {
+          try {
+            const updatedQuota = await recordAiUsageFirestore();
+            setAiUsage(updatedQuota);
+            onAiQuotaUpdated?.(updatedQuota);
+          } catch (quotaErr) {
+            console.warn("No se pudo registrar el uso de cuota AI en Firestore:", quotaErr);
+          }
         }
-      }
 
-      setFallbackNotice(result.fallbackReason || null);
-      setExtractionEngine(result.response.engine || "local-strict-parser");
-      setExtractedCv(result.response.cvData || null);
-      setPendingFields(result.response.pendingFields || []);
-      setCompletenessScore(result.response.completenessScore || 0);
-      setExtractedBullets(mapRawAchievementsToBullets(result.response.achievements || []));
-      setSaveError(null);
-      setPhase("review");
+        setPendingPayload(null);
+        setFallbackNotice(result.fallbackReason || null);
+        setExtractionEngine(result.response.engine || "local-strict-parser");
+        setExtractedCv(result.response.cvData || null);
+        setPendingFields(result.response.pendingFields || []);
+        setCompletenessScore(result.response.completenessScore || 0);
+        setExtractedBullets(mapRawAchievementsToBullets(result.response.achievements || []));
+        setSaveError(null);
+        setPhase("review");
 
-      if (result.response.cvData?.experiences?.length > 0) {
-        setReviewTab("radiography");
-      } else if (result.response.pendingFields?.length > 0) {
-        setReviewTab("pending");
-      } else {
-        setReviewTab("radiography");
+        if (result.response.cvData?.experiences?.length > 0) {
+          setReviewTab("radiography");
+        } else if (result.response.pendingFields?.length > 0) {
+          setReviewTab("pending");
+        } else {
+          setReviewTab("radiography");
+        }
+      } catch (err) {
+        if (err instanceof CvAiExtractionError) {
+          setPendingPayload(payload);
+          setErrorMessage(err.message);
+          setPhase("upload");
+          return;
+        }
+        throw err;
       }
     },
     [onAiQuotaUpdated]
@@ -401,7 +412,7 @@ export function useCvUpload({
 
     if (!auth?.currentUser || !auth.currentUser.emailVerified) {
       setSaveError(
-        "Debes iniciar sesión con una cuenta de Google verificada para guardar tu CV en Firestore."
+        "Debes iniciar sesión con una cuenta de Google verificada para guardar tu CV."
       );
       return;
     }
@@ -440,7 +451,7 @@ export function useCvUpload({
       setSaveError(
         formatFirestoreUiError(
           err,
-          "No se pudieron guardar los datos del CV en Firestore. Verifica tu conexión e intenta de nuevo."
+          "No se pudieron guardar los datos del CV. Verifica tu conexión e intenta de nuevo."
         )
       );
     } finally {
@@ -501,6 +512,7 @@ export function useCvUpload({
     quickFieldValue,
     setQuickFieldValue,
     aiUsage,
+    canFallbackLocally: Boolean(pendingPayload),
     showProModal,
     setShowProModal,
     proEmail,

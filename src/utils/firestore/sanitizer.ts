@@ -5,16 +5,25 @@ import {
   CareerGoalCategory,
   CareerGoalStatus,
   EmploymentSocialLinks,
+  ExperienceRevision,
+  ExperienceRevisionSnapshot,
   ExtractedCvData,
   JobOffer,
   JobOfferStatus,
   LogEntry,
+  LogRevision,
+  LogRevisionSnapshot,
   Product,
+  RevisionSource,
   TechnicalCertification,
   UserProfile,
   VisitorMessage,
   WorkExperience,
 } from "../../types";
+import {
+  buildExperienceRevisionSnapshot,
+  buildLogRevisionSnapshot,
+} from "../revisions/snapshot";
 
 export const RESERVED_USERNAMES = new Set([
   "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
@@ -475,6 +484,9 @@ function buildLogFields(entry: Partial<LogEntry>) {
   if (typeof entry.sortOrder === "number" && Number.isFinite(entry.sortOrder)) {
     out.sortOrder = Math.max(0, Math.min(100000, Math.trunc(entry.sortOrder)));
   }
+  if (typeof entry.updatesCount === "number" && Number.isFinite(entry.updatesCount)) {
+    out.updatesCount = Math.max(0, Math.min(1000000, Math.trunc(entry.updatesCount)));
+  }
   if (typeof entry.experienceId === "string") {
     out.experienceId = clampString(entry.experienceId, 128);
   }
@@ -537,12 +549,23 @@ export function buildLogSortOrderUpdatePayload(sortOrder: number) {
   };
 }
 
+const MAX_DELETED_AT_MS = 4102444800000;
+
+export function sanitizeDeletedAtTimestamp(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.min(MAX_DELETED_AT_MS, Math.max(1, Math.trunc(value)));
+}
+
 export function buildLogMetadataUpdatePayload(updates: {
   isPublic?: boolean;
   includeInCv?: boolean;
   experienceId?: string;
   client?: string;
   sortOrder?: number;
+  updatesCount?: number;
+  deletedAt?: number | null;
 }) {
   const out: Record<string, unknown> = {};
   if (typeof updates.isPublic === "boolean") {
@@ -560,11 +583,23 @@ export function buildLogMetadataUpdatePayload(updates: {
   if (typeof updates.sortOrder === "number" && Number.isFinite(updates.sortOrder)) {
     out.sortOrder = Math.max(0, Math.min(100000, Math.trunc(updates.sortOrder)));
   }
+  if (typeof updates.updatesCount === "number" && Number.isFinite(updates.updatesCount)) {
+    out.updatesCount = Math.max(0, Math.min(1000000, Math.trunc(updates.updatesCount)));
+  }
+  if (updates.deletedAt === null) {
+    out.deletedAt = deleteField();
+  } else {
+    const cleanDeletedAt = sanitizeDeletedAtTimestamp(updates.deletedAt);
+    if (cleanDeletedAt !== undefined) {
+      out.deletedAt = cleanDeletedAt;
+    }
+  }
   return out;
 }
 
 export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntry {
   const createdAt = timestampToMillis(raw.createdAt, 0);
+  const deletedAt = sanitizeDeletedAtTimestamp(raw.deletedAt);
   return {
     id,
     userId: typeof raw.userId === "string" ? raw.userId : undefined,
@@ -588,6 +623,11 @@ export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntr
       typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
         ? Math.max(0, Math.min(100000, Math.trunc(raw.sortOrder)))
         : undefined,
+    updatesCount:
+      typeof raw.updatesCount === "number" && Number.isFinite(raw.updatesCount)
+        ? Math.max(0, Math.min(1000000, Math.trunc(raw.updatesCount)))
+        : undefined,
+    ...(deletedAt !== undefined ? { deletedAt } : {}),
     createdAt,
     updatedAt: timestampToMillis(raw.updatedAt, createdAt),
   };
@@ -624,6 +664,9 @@ function buildWorkExperienceFields(exp: Partial<WorkExperience>) {
   if (typeof exp.isPersonalProjects === "boolean") {
     out.isPersonalProjects = exp.isPersonalProjects;
   }
+  if (typeof exp.updatesCount === "number" && Number.isFinite(exp.updatesCount)) {
+    out.updatesCount = Math.max(0, Math.min(1000000, Math.trunc(exp.updatesCount)));
+  }
 
   return out;
 }
@@ -649,8 +692,28 @@ export function buildWorkExperienceUpdatePayload(exp: Partial<WorkExperience>) {
   };
 }
 
+export function buildWorkExperienceMetadataUpdatePayload(updates: {
+  updatesCount?: number;
+  deletedAt?: number | null;
+}) {
+  const out: Record<string, unknown> = {};
+  if (typeof updates.updatesCount === "number" && Number.isFinite(updates.updatesCount)) {
+    out.updatesCount = Math.max(0, Math.min(1000000, Math.trunc(updates.updatesCount)));
+  }
+  if (updates.deletedAt === null) {
+    out.deletedAt = deleteField();
+  } else {
+    const cleanDeletedAt = sanitizeDeletedAtTimestamp(updates.deletedAt);
+    if (cleanDeletedAt !== undefined) {
+      out.deletedAt = cleanDeletedAt;
+    }
+  }
+  return out;
+}
+
 export function docToWorkExperience(raw: Record<string, unknown>, id: string): WorkExperience {
   const createdAt = timestampToMillis(raw.createdAt, 0);
+  const deletedAt = sanitizeDeletedAtTimestamp(raw.deletedAt);
   return {
     id,
     userId: typeof raw.userId === "string" ? raw.userId : undefined,
@@ -669,6 +732,11 @@ export function docToWorkExperience(raw: Record<string, unknown>, id: string): W
       : undefined,
     isPersonalProjects:
       typeof raw.isPersonalProjects === "boolean" ? raw.isPersonalProjects : undefined,
+    updatesCount:
+      typeof raw.updatesCount === "number" && Number.isFinite(raw.updatesCount)
+        ? Math.max(0, Math.min(1000000, Math.trunc(raw.updatesCount)))
+        : undefined,
+    ...(deletedAt !== undefined ? { deletedAt } : {}),
     createdAt,
     updatedAt: timestampToMillis(raw.updatedAt, createdAt),
   };
@@ -1384,5 +1452,177 @@ export function buildProWaitlistPayload(entryId: string, uid: string, email: str
     userId: uid,
     email: nonEmptyString(email.trim().toLowerCase(), 254, "usuario@goalrecall.app"),
     createdAt: serverTimestamp(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Revision Snapshots (/users/{uid}/logs|experiences/{parentId}/revisions/{revId})
+// ---------------------------------------------------------------------------
+const VALID_REVISION_SOURCES = new Set<RevisionSource>([
+  "initial",
+  "manual_form",
+  "json_editor",
+  "json_import",
+  "restore",
+]);
+
+function normalizeRevisionSource(source: unknown): RevisionSource {
+  return VALID_REVISION_SOURCES.has(source as RevisionSource)
+    ? (source as RevisionSource)
+    : "manual_form";
+}
+
+function clampRevisionVersion(versionNumber: unknown): number {
+  const n = Math.trunc(Number(versionNumber));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(1000000, n);
+}
+
+export function sanitizeLogRevisionSnapshot(
+  input: Partial<LogEntry> | Partial<LogRevisionSnapshot>
+): LogRevisionSnapshot {
+  const base = buildLogRevisionSnapshot(input);
+  const title = nonEmptyString(base.title, 2000, "Logro registrado");
+  const dateRaw = nonEmptyString(base.date, 32, new Date().toISOString().substring(0, 10));
+  const ensuredDate =
+    dateRaw.length >= 4 ? dateRaw : new Date().toISOString().substring(0, 10);
+
+  return {
+    date: ensuredDate,
+    client: nonEmptyString(base.client, 200, "General"),
+    project: nonEmptyString(base.project, 200, "General"),
+    category: nonEmptyString(base.category, 120, "Feature ✨"),
+    title,
+    whatWasSought: clampString(base.whatWasSought, 4000),
+    whyImportant: clampString(base.whyImportant, 4000),
+    howApplied: clampString(base.howApplied, 4000),
+    impact: nonEmptyString(base.impact, 3000, title),
+    description: clampString(base.description, 10000),
+    tags: sanitizeBoundedStringList(base.tags, 25, 200),
+    experienceId: clampString(base.experienceId, 128),
+  };
+}
+
+export function sanitizeExperienceRevisionSnapshot(
+  input: Partial<WorkExperience> | Partial<ExperienceRevisionSnapshot>,
+  overrideBullets?: string[]
+): ExperienceRevisionSnapshot {
+  const base = buildExperienceRevisionSnapshot(input, overrideBullets);
+  return {
+    company: nonEmptyString(base.company, 200, "Empresa"),
+    role: nonEmptyString(base.role, 200, "Rol Profesional"),
+    startDate: clampString(base.startDate, 40),
+    endDate: base.isCurrent ? "" : clampString(base.endDate, 40),
+    isCurrent: Boolean(base.isCurrent),
+    location: clampString(base.location, 200),
+    summary: clampString(base.summary, 5000),
+    bullets: sanitizeBoundedStringList(base.bullets, 60, 2000),
+    technologies: sanitizeBoundedStringList(base.technologies, 50, 200),
+    isPersonalProjects: Boolean(base.isPersonalProjects),
+  };
+}
+
+export function buildLogRevisionCreatePayload(params: {
+  revisionId: string;
+  uid: string;
+  logId: string;
+  versionNumber: number;
+  source: RevisionSource;
+  changedFields: string[];
+  snapshot: Partial<LogEntry> | LogRevisionSnapshot;
+}) {
+  return {
+    id: sanitizeDocId(params.revisionId, "rev"),
+    userId: params.uid,
+    parentId: sanitizeDocId(params.logId, "log"),
+    entityType: "log" as const,
+    versionNumber: clampRevisionVersion(params.versionNumber),
+    source: normalizeRevisionSource(params.source),
+    changedFields: sanitizeBoundedStringList(params.changedFields, 20, 120),
+    snapshot: sanitizeLogRevisionSnapshot(params.snapshot),
+    createdAt: serverTimestamp(),
+  };
+}
+
+export function docToLogRevision(raw: Record<string, unknown>, id: string): LogRevision {
+  const snapRaw = (raw.snapshot || {}) as Record<string, unknown>;
+  return {
+    id,
+    userId: typeof raw.userId === "string" ? raw.userId : "",
+    parentId: typeof raw.parentId === "string" ? raw.parentId : "",
+    entityType: "log",
+    versionNumber: clampRevisionVersion(raw.versionNumber),
+    source: normalizeRevisionSource(raw.source),
+    changedFields: sanitizeBoundedStringList(raw.changedFields, 20, 120),
+    snapshot: sanitizeLogRevisionSnapshot({
+      date: typeof snapRaw.date === "string" ? snapRaw.date : undefined,
+      client: typeof snapRaw.client === "string" ? snapRaw.client : undefined,
+      project: typeof snapRaw.project === "string" ? snapRaw.project : undefined,
+      category: typeof snapRaw.category === "string" ? snapRaw.category : undefined,
+      title: typeof snapRaw.title === "string" ? snapRaw.title : undefined,
+      whatWasSought:
+        typeof snapRaw.whatWasSought === "string" ? snapRaw.whatWasSought : "",
+      whyImportant:
+        typeof snapRaw.whyImportant === "string" ? snapRaw.whyImportant : "",
+      howApplied: typeof snapRaw.howApplied === "string" ? snapRaw.howApplied : "",
+      impact: typeof snapRaw.impact === "string" ? snapRaw.impact : undefined,
+      description: typeof snapRaw.description === "string" ? snapRaw.description : "",
+      tags: Array.isArray(snapRaw.tags) ? (snapRaw.tags as string[]) : [],
+      experienceId: typeof snapRaw.experienceId === "string" ? snapRaw.experienceId : "",
+    }),
+    createdAt: timestampToMillis(raw.createdAt, 0),
+  };
+}
+
+export function buildExperienceRevisionCreatePayload(params: {
+  revisionId: string;
+  uid: string;
+  experienceId: string;
+  versionNumber: number;
+  source: RevisionSource;
+  changedFields: string[];
+  snapshot: Partial<WorkExperience> | ExperienceRevisionSnapshot;
+}) {
+  return {
+    id: sanitizeDocId(params.revisionId, "rev"),
+    userId: params.uid,
+    parentId: sanitizeDocId(params.experienceId, "exp"),
+    entityType: "experience" as const,
+    versionNumber: clampRevisionVersion(params.versionNumber),
+    source: normalizeRevisionSource(params.source),
+    changedFields: sanitizeBoundedStringList(params.changedFields, 20, 120),
+    snapshot: sanitizeExperienceRevisionSnapshot(params.snapshot),
+    createdAt: serverTimestamp(),
+  };
+}
+
+export function docToExperienceRevision(
+  raw: Record<string, unknown>,
+  id: string
+): ExperienceRevision {
+  const snapRaw = (raw.snapshot || {}) as Record<string, unknown>;
+  return {
+    id,
+    userId: typeof raw.userId === "string" ? raw.userId : "",
+    parentId: typeof raw.parentId === "string" ? raw.parentId : "",
+    entityType: "experience",
+    versionNumber: clampRevisionVersion(raw.versionNumber),
+    source: normalizeRevisionSource(raw.source),
+    changedFields: sanitizeBoundedStringList(raw.changedFields, 20, 120),
+    snapshot: sanitizeExperienceRevisionSnapshot({
+      company: typeof snapRaw.company === "string" ? snapRaw.company : undefined,
+      role: typeof snapRaw.role === "string" ? snapRaw.role : undefined,
+      startDate: typeof snapRaw.startDate === "string" ? snapRaw.startDate : "",
+      endDate: typeof snapRaw.endDate === "string" ? snapRaw.endDate : "",
+      isCurrent: Boolean(snapRaw.isCurrent),
+      location: typeof snapRaw.location === "string" ? snapRaw.location : "",
+      summary: typeof snapRaw.summary === "string" ? snapRaw.summary : "",
+      bullets: Array.isArray(snapRaw.bullets) ? (snapRaw.bullets as string[]) : [],
+      technologies: Array.isArray(snapRaw.technologies)
+        ? (snapRaw.technologies as string[])
+        : [],
+      isPersonalProjects: Boolean(snapRaw.isPersonalProjects),
+    }),
+    createdAt: timestampToMillis(raw.createdAt, 0),
   };
 }

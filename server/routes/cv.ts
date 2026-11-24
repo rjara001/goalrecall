@@ -3,7 +3,12 @@ import path from "path";
 import { extractCvDataLocally } from "../../src/utils/localCvExtractor";
 import { checkAiRateLimit } from "../middleware/rateLimit";
 import { extractTextFromBuffer } from "../services/cvBufferExtractor";
-import { extractFullCvWithGemini } from "../services/geminiCvService";
+import {
+  classifyGeminiError,
+  extractFullCvWithGemini,
+  GEMINI_CV_MODEL,
+  isGeminiApiKeyConfigured,
+} from "../services/geminiCvService";
 
 export function createCvRouter(): Router {
   const router = Router();
@@ -51,7 +56,7 @@ export function createCvRouter(): Router {
         req.socket.remoteAddress;
       const rateCheck = checkAiRateLimit(userUid, clientIp);
 
-      if (!process.env.GEMINI_API_KEY || req.body?.forceLocal || !rateCheck.allowed) {
+      if (req.body?.forceLocal || !rateCheck.allowed) {
         const local = extractCvDataLocally(textContent || "", fileName || "Documento");
         return res.json({
           ...local,
@@ -64,6 +69,14 @@ export function createCvRouter(): Router {
           warning: !rateCheck.allowed
             ? "Has alcanzado la cuota diaria de análisis con IA. Tu CV se extrajo mediante nuestro motor local de alta fidelidad a costo $0.00."
             : undefined,
+        });
+      }
+
+      if (!isGeminiApiKeyConfigured()) {
+        return res.status(503).json({
+          code: "GEMINI_API_KEY_MISSING",
+          error:
+            "El análisis inteligente no tiene una clave válida configurada (revisa Settings > Secrets) o continúa con el lector local.",
         });
       }
 
@@ -90,7 +103,7 @@ export function createCvRouter(): Router {
         completedCount: audit.completedCount,
         totalChecks: audit.totalChecks,
         completenessScore: audit.completenessScore,
-        engine: "gemini-2.5-flash",
+        engine: GEMINI_CV_MODEL,
         fileName: fileName || "Documento",
         quota: {
           limitReached: false,
@@ -100,13 +113,13 @@ export function createCvRouter(): Router {
         },
       });
     } catch (err) {
-      console.error("Error en extracción completa con Gemini:", err);
-      const fallbackText = textContent || req.body?.textContent || "";
-      const effectiveFileName = fileName || req.body?.fileName || "cv.txt";
-      const local = extractCvDataLocally(fallbackText, effectiveFileName);
-      return res.json({
-        ...local,
-        warning: "Extracción procesada mediante motor de fidelidad local.",
+      const classified = classifyGeminiError(err);
+      console.warn(
+        `[cv/extract] Fallo en extracción con Gemini (${classified.code}, HTTP ${classified.httpStatus}): ${classified.logDetail}`
+      );
+      return res.status(classified.httpStatus).json({
+        code: classified.code,
+        error: classified.userMessage,
       });
     }
   };

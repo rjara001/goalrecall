@@ -91,7 +91,7 @@ export const AuthenticatedProfileView: React.FC<AuthenticatedProfileViewProps> =
               </h4>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/80 font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                <span>Google Auth</span>
+                <span>Cuenta de Google</span>
               </span>
             </div>
 

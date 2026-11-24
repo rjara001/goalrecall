@@ -95,7 +95,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
       onClose();
     } catch (err) {
       setSaveError(
-        formatFirestoreUiError(err, "No se pudieron importar las viñetas a Firestore.")
+        formatFirestoreUiError(err, "No se pudieron importar las viñetas.")
       );
     } finally {
       setIsSaving(false);
@@ -323,7 +323,7 @@ export const PasteBulletsModal: React.FC<PasteBulletsModalProps> = ({
             {isSaving ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Guardando en Firestore...</span>
+                <span>Guardando...</span>
               </>
             ) : (
               <>

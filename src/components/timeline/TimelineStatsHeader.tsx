@@ -1,5 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Award, Building, ChevronDown, Eye, FileUp, Lock, Plus, Rocket, Target, Zap } from "lucide-react";
+import {
+  Award,
+  Building,
+  ChevronDown,
+  Eye,
+  FileUp,
+  History,
+  Lock,
+  Plus,
+  Rocket,
+  Target,
+  Zap,
+} from "lucide-react";
 import { useI18n } from "../../i18n";
 
 export type TimelineViewMode =
@@ -7,7 +19,8 @@ export type TimelineViewMode =
   | "achievements"
   | "products"
   | "certifications"
-  | "career_goals";
+  | "career_goals"
+  | "history";
 
 interface TimelineStatsHeaderProps {
   experiencesCount: number;
@@ -18,6 +31,7 @@ interface TimelineStatsHeaderProps {
   productsCount: number;
   certificationsCount?: number;
   careerGoalsCount?: number;
+  deletedHistoryCount?: number;
   viewMode: TimelineViewMode;
   onChangeViewMode: (mode: TimelineViewMode) => void;
   onOpenCvUpload: () => void;
@@ -37,6 +51,7 @@ export const TimelineStatsHeader: React.FC<TimelineStatsHeaderProps> = ({
   productsCount,
   certificationsCount = 0,
   careerGoalsCount = 0,
+  deletedHistoryCount = 0,
   viewMode,
   onChangeViewMode,
   onOpenCvUpload,
@@ -46,7 +61,7 @@ export const TimelineStatsHeader: React.FC<TimelineStatsHeaderProps> = ({
   onOpenNewCertification,
   onOpenNewCareerGoal,
 }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
@@ -224,6 +239,35 @@ export const TimelineStatsHeader: React.FC<TimelineStatsHeaderProps> = ({
             >
               {careerGoalsCount}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onChangeViewMode("history")}
+            className={`px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-2 whitespace-nowrap shrink-0 transition-all ${
+              viewMode === "history"
+                ? "bg-gradient-to-r from-amber-400 to-cyan-400 text-slate-950 shadow-md shadow-amber-500/20 font-bold"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <History className="w-4 h-4 shrink-0" />
+            <span>{language === "en" ? "History" : "Historial"}</span>
+            {deletedHistoryCount > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono tabular-nums ${
+                  viewMode === "history"
+                    ? "bg-slate-950/40 text-slate-900 font-bold"
+                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                }`}
+                title={
+                  language === "en"
+                    ? `${deletedHistoryCount} recoverable deleted record(s)`
+                    : `${deletedHistoryCount} registro(s) eliminado(s) recuperables`
+                }
+              >
+                {deletedHistoryCount}
+              </span>
+            )}
           </button>
         </div>
 

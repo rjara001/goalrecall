@@ -70,6 +70,8 @@
         "isPublic": { "type": "boolean" },
         "includeInCv": { "type": "boolean", "description": "Whether the achievement title projects as a CV bullet on its parent experience." },
         "sortOrder": { "type": "integer", "description": "Optional non-negative manual display order index within experience and logbook." },
+        "updatesCount": { "type": "integer", "description": "Optional count of real content revisions recorded after creation (versionNumber - 1)." },
+        "deletedAt": { "type": "integer", "description": "Optional epoch milliseconds timestamp when moved to history trash." },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -92,6 +94,8 @@
         "bullets": { "type": "array", "description": "Bounded list of textual CV bullets (max 60)." },
         "technologies": { "type": "array", "description": "Bounded list of technology tags (max 50)." },
         "isPersonalProjects": { "type": "boolean" },
+        "updatesCount": { "type": "integer", "description": "Optional count of real content revisions recorded after creation (versionNumber - 1)." },
+        "deletedAt": { "type": "integer", "description": "Optional epoch milliseconds timestamp when moved to history trash." },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -257,6 +261,40 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "email", "createdAt"]
+    },
+    "LogRevisionDoc": {
+      "title": "LogRevisionDoc",
+      "description": "Immutable versioned content snapshot of a LogEntry stored under logs/{logId}/revisions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "parentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "entityType": { "type": "string", "enum": ["log"] },
+        "versionNumber": { "type": "integer" },
+        "source": { "type": "string", "enum": ["initial", "manual_form", "json_editor", "json_import", "restore"] },
+        "changedFields": { "type": "array", "description": "Bounded list of modified field keys (max 20)." },
+        "snapshot": { "type": "object", "description": "Canonical normalized editable fields snapshot of LogEntry." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "parentId", "entityType", "versionNumber", "source", "changedFields", "snapshot", "createdAt"]
+    },
+    "ExperienceRevisionDoc": {
+      "title": "ExperienceRevisionDoc",
+      "description": "Immutable versioned content snapshot of a WorkExperience stored under experiences/{experienceId}/revisions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "parentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "entityType": { "type": "string", "enum": ["experience"] },
+        "versionNumber": { "type": "integer" },
+        "source": { "type": "string", "enum": ["initial", "manual_form", "json_editor", "json_import", "restore"] },
+        "changedFields": { "type": "array", "description": "Bounded list of modified field keys (max 20)." },
+        "snapshot": { "type": "object", "description": "Canonical normalized editable fields snapshot of WorkExperience." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "parentId", "entityType", "versionNumber", "source", "changedFields", "snapshot", "createdAt"]
     }
   },
   "firestore": {
@@ -272,9 +310,17 @@
       "schema": { "$ref": "#/entities/LogEntryDoc" },
       "description": "Individual brag log / achievement entries owned by userId."
     },
+    "/users/{userId}/logs/{logId}/revisions/{revisionId}": {
+      "schema": { "$ref": "#/entities/LogRevisionDoc" },
+      "description": "Immutable revision history snapshots (max 25 retained) for a LogEntry owned by userId."
+    },
     "/users/{userId}/experiences/{experienceId}": {
       "schema": { "$ref": "#/entities/WorkExperienceDoc" },
       "description": "Career work experience containers owned by userId."
+    },
+    "/users/{userId}/experiences/{experienceId}/revisions/{revisionId}": {
+      "schema": { "$ref": "#/entities/ExperienceRevisionDoc" },
+      "description": "Immutable revision history snapshots (max 25 retained) for a WorkExperience owned by userId."
     },
     "/users/{userId}/products/{productId}": {
       "schema": { "$ref": "#/entities/ProductDoc" },

@@ -110,7 +110,7 @@ export default function App() {
               </div>
               <h3 className="text-base font-bold text-white">Sincronizando tu Bóveda Privada...</h3>
               <p className="text-xs text-slate-400">
-                Verificando sesión de Google y cargando registros desde Cloud Firestore.
+                Verificando tu sesión y cargando tus registros...
               </p>
             </div>
           ) : !workspace.user ? (
@@ -142,14 +142,21 @@ export default function App() {
               {routing.activeQuartersTab === "timeline" && (
                 <TimelineView
                   logs={workspace.logs}
+                  deletedLogs={workspace.deletedLogs}
                   experiences={workspace.experiences}
+                  deletedExperiences={workspace.deletedExperiences}
                   products={workspace.products}
                   certifications={workspace.certifications}
                   careerGoals={workspace.careerGoals}
+                  onRestoreDeletedLog={workspace.handleRestoreDeletedLog}
+                  onRestoreDeletedExperience={workspace.handleRestoreDeletedExperience}
+                  onPermanentDeleteLog={workspace.handlePermanentDeleteLog}
+                  onPermanentDeleteExperience={workspace.handlePermanentDeleteExperience}
                   onTogglePublic={workspace.handleTogglePublic}
                   onToggleIncludeInCv={workspace.handleToggleIncludeInCv}
                   onReorderLogs={workspace.handleReorderLogs}
                   onEditLog={modals.openEditLog}
+                  onOpenLogHistory={modals.openLogHistory}
                   onDeleteLog={workspace.handleDeleteLog}
                   onDuplicateLog={workspace.handleDuplicateLog}
                   onOpenQuickLog={() => modals.openQuickLog()}
@@ -157,8 +164,12 @@ export default function App() {
                   onOpenCvUpload={() => modals.setIsCvUploadOpen(true)}
                   onAddExperience={modals.openAddExperience}
                   onEditExperience={modals.openEditExperience}
+                  onOpenExperienceHistory={(exp) =>
+                    modals.openExperienceHistory(exp, workspace.logs)
+                  }
                   onDeleteExperience={workspace.handleDeleteExperience}
                   onImportExperienceJson={workspace.handleImportExperienceJson}
+                  jsonEditorResetNonce={modals.jsonEditorResetNonce}
                   onAddLogToExperience={(expId) => modals.openQuickLog(expId)}
                   onExtractBulletToLog={workspace.handleExtractBulletToLog}
                   onExtractAllBulletsForExperience={workspace.handleExtractAllBulletsForExperience}
@@ -301,7 +312,7 @@ export default function App() {
                 <h3 className="text-lg font-bold text-white">Tu Vitrina Pública te espera</h3>
                 <p className="text-slate-400 text-xs leading-relaxed">
                   Inicia sesión con Google para previsualizar y publicar tu vitrina pública, o abre un enlace{" "}
-                  <span className="font-mono text-cyan-300">/u/handle</span> de un perfil publicado en Firestore.
+                  <span className="font-mono text-cyan-300">/u/handle</span> de un perfil publicado.
                 </p>
               </div>
               <div className="flex justify-center gap-3">
@@ -392,7 +403,9 @@ export default function App() {
       <AppModals
         user={workspace.user}
         logs={workspace.logs}
+        deletedLogs={workspace.deletedLogs}
         experiences={workspace.experiences}
+        deletedExperiences={workspace.deletedExperiences}
         inbox={workspace.inbox}
         jobOffers={workspace.jobOffers}
         products={workspace.products}
@@ -402,27 +415,80 @@ export default function App() {
         onAiQuotaUpdated={workspace.setAiQuota}
         isQuickLogOpen={modals.isQuickLogOpen}
         editingLog={modals.editingLog}
+        restoredLogDraft={modals.restoredLogDraft}
+        onOpenLogHistory={modals.openLogHistory}
         initialExperienceIdForLog={modals.initialExperienceIdForLog}
         initialBulletTextForLog={modals.initialBulletTextForLog}
         initialDraftForLog={modals.initialDraftForLog}
         onCloseQuickLog={modals.closeQuickLog}
-        onSaveLog={async (entryData) => {
+        onSaveLog={async (entryData, revisionSource) => {
           const wasEditing = await workspace.handleSaveLog(
             entryData,
             modals.editingLog,
-            modals.sourceInboxMessageIdForLog
+            modals.sourceInboxMessageIdForLog,
+            revisionSource
           );
           if (wasEditing) {
             modals.setEditingLog(null);
+            modals.setRestoredLogDraft(null);
           }
         }}
+        onDeleteLog={workspace.handleDeleteLog}
         onCreateQuickExperience={workspace.handleCreateQuickExperience}
         isExperienceModalOpen={modals.isExperienceModalOpen}
         editingExperience={modals.editingExperience}
-        onCloseExperienceModal={modals.closeExperienceModal}
-        onSaveExperience={(expData, newLogBulletsToCreate, editedLogs) =>
-          workspace.handleSaveExperience(expData, newLogBulletsToCreate, editedLogs)
+        restoredExperienceDraft={modals.restoredExperienceDraft}
+        onOpenExperienceHistory={(exp) =>
+          modals.openExperienceHistory(exp, workspace.logs)
         }
+        onCloseExperienceModal={modals.closeExperienceModal}
+        onSaveExperience={(expData, newLogBulletsToCreate, editedLogs, revisionSource) =>
+          workspace.handleSaveExperience(
+            expData,
+            newLogBulletsToCreate,
+            editedLogs,
+            revisionSource
+          )
+        }
+        historyTarget={modals.historyTarget}
+        onCloseHistory={modals.closeHistory}
+        onRecoverDeletedHistoryTarget={async (target) => {
+          if (target.entityType === "log") {
+            await workspace.handleRestoreDeletedLog(target.entityId);
+          } else {
+            await workspace.handleRestoreDeletedExperience(target.entityId);
+          }
+        }}
+        diffModalState={modals.diffModalState}
+        onOpenDiffModal={modals.openDiffModal}
+        onCloseDiffModal={modals.closeDiffModal}
+        onRestoreRevision={async (rev) => {
+          let nextLogs = workspace.logs;
+          let nextExps = workspace.experiences;
+          try {
+            if (
+              rev.entityType === "log" &&
+              workspace.deletedLogs.some((l) => l.id === rev.parentId)
+            ) {
+              const restored = await workspace.handleRestoreDeletedLog(rev.parentId);
+              if (restored) {
+                nextLogs = [restored, ...nextLogs.filter((l) => l.id !== restored.id)];
+              }
+            } else if (
+              rev.entityType === "experience" &&
+              workspace.deletedExperiences.some((e) => e.id === rev.parentId)
+            ) {
+              const restored = await workspace.handleRestoreDeletedExperience(rev.parentId);
+              if (restored) {
+                nextExps = [restored, ...nextExps.filter((e) => e.id !== restored.id)];
+              }
+            }
+          } catch {
+            return;
+          }
+          modals.restoreRevision(rev, nextLogs, nextExps);
+        }}
+        onSyncRevisionUpdatesCount={workspace.handleSyncRevisionUpdatesCount}
         isCvUploadOpen={modals.isCvUploadOpen}
         onCloseCvUpload={() => modals.setIsCvUploadOpen(false)}
         onCvSaved={workspace.handleCvAppliedState}

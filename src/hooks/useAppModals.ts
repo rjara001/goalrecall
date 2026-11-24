@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CareerGoal,
+  EntityRevision,
+  ExperienceRevisionSnapshot,
   InboxAchievementDraft,
   LogEntry,
+  LogRevisionSnapshot,
   Product,
+  RevisionEntityType,
   TechnicalCertification,
   WorkExperience,
 } from "../types";
+import { deriveExperienceBulletsFromLogs } from "../utils/bulletToLogMapper";
+import {
+  buildExperienceRevisionSnapshot,
+  buildLogRevisionSnapshot,
+} from "../utils/revisions/snapshot";
 
 export interface CertificationPrefillDraft {
   name: string;
@@ -15,6 +24,34 @@ export interface CertificationPrefillDraft {
   summary?: string;
   skills?: string[];
   sourceGoalId?: string;
+}
+
+export interface RestoredLogDraft {
+  logId?: string;
+  versionNumber: number;
+  snapshot: LogRevisionSnapshot;
+}
+
+export interface RestoredExperienceDraft {
+  experienceId?: string;
+  versionNumber: number;
+  snapshot: ExperienceRevisionSnapshot;
+}
+
+export interface HistoryTarget {
+  entityType: RevisionEntityType;
+  entityId: string;
+  title: string;
+  currentSnapshot: LogRevisionSnapshot | ExperienceRevisionSnapshot;
+  isDeleted?: boolean;
+}
+
+export interface DiffModalState {
+  entityType: RevisionEntityType;
+  entityTitle: string;
+  revisions: EntityRevision[];
+  initialBaseId: string;
+  initialTargetId: string;
 }
 
 export const useAppModals = () => {
@@ -43,10 +80,21 @@ export const useAppModals = () => {
     undefined
   );
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
+  const [restoredLogDraft, setRestoredLogDraft] = useState<RestoredLogDraft | null>(null);
+  const [restoredExperienceDraft, setRestoredExperienceDraft] =
+    useState<RestoredExperienceDraft | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<HistoryTarget | null>(null);
+  const [diffModalState, setDiffModalState] = useState<DiffModalState | null>(null);
+  const [jsonEditorResetNonce, setJsonEditorResetNonce] = useState(0);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  const historyTargetRef = useRef(historyTarget);
+  historyTargetRef.current = historyTarget;
+  const diffModalStateRef = useRef(diffModalState);
+  diffModalStateRef.current = diffModalState;
 
   const openQuickLog = useCallback(
     (
@@ -55,6 +103,7 @@ export const useAppModals = () => {
       options?: { draft?: InboxAchievementDraft; sourceInboxId?: string }
     ) => {
       setEditingLog(null);
+      setRestoredLogDraft(null);
       setInitialExperienceIdForLog(experienceId);
       setInitialBulletTextForLog(initialBulletText);
       setInitialDraftForLog(options?.draft || null);
@@ -66,6 +115,7 @@ export const useAppModals = () => {
 
   const openEditLog = useCallback((log: LogEntry) => {
     setEditingLog(log);
+    setRestoredLogDraft(null);
     setInitialBulletTextForLog(undefined);
     setInitialDraftForLog(null);
     setSourceInboxMessageIdForLog(undefined);
@@ -75,6 +125,7 @@ export const useAppModals = () => {
   const closeQuickLog = useCallback(() => {
     setIsQuickLogOpen(false);
     setEditingLog(null);
+    setRestoredLogDraft(null);
     setInitialExperienceIdForLog(undefined);
     setInitialBulletTextForLog(undefined);
     setInitialDraftForLog(null);
@@ -83,18 +134,94 @@ export const useAppModals = () => {
 
   const openAddExperience = useCallback(() => {
     setEditingExperience(null);
+    setRestoredExperienceDraft(null);
     setIsExperienceModalOpen(true);
   }, []);
 
   const openEditExperience = useCallback((exp: WorkExperience) => {
     setEditingExperience(exp);
+    setRestoredExperienceDraft(null);
     setIsExperienceModalOpen(true);
   }, []);
 
   const closeExperienceModal = useCallback(() => {
     setIsExperienceModalOpen(false);
     setEditingExperience(null);
+    setRestoredExperienceDraft(null);
   }, []);
+
+  const openLogHistory = useCallback((log: LogEntry) => {
+    setDiffModalState(null);
+    setHistoryTarget({
+      entityType: "log",
+      entityId: log.id,
+      title: log.title || log.logro || "Logro registrado",
+      currentSnapshot: buildLogRevisionSnapshot(log),
+      isDeleted: Boolean(log.deletedAt),
+    });
+  }, []);
+
+  const openExperienceHistory = useCallback(
+    (exp: WorkExperience, logs: LogEntry[]) => {
+      const currentBullets = deriveExperienceBulletsFromLogs(exp, logs);
+      setDiffModalState(null);
+      setHistoryTarget({
+        entityType: "experience",
+        entityId: exp.id,
+        title: `${exp.role} @ ${exp.company}`,
+        currentSnapshot: buildExperienceRevisionSnapshot(exp, currentBullets),
+        isDeleted: Boolean(exp.deletedAt),
+      });
+    },
+    []
+  );
+
+  const closeHistory = useCallback(() => {
+    setDiffModalState(null);
+    setHistoryTarget(null);
+  }, []);
+
+  const openDiffModal = useCallback((params: DiffModalState) => {
+    setDiffModalState(params);
+  }, []);
+
+  const closeDiffModal = useCallback(() => {
+    setDiffModalState(null);
+  }, []);
+
+  const restoreRevision = useCallback(
+    (revision: EntityRevision, logs: LogEntry[], experiences: WorkExperience[]) => {
+      setDiffModalState(null);
+      setHistoryTarget(null);
+      setJsonEditorResetNonce((n) => n + 1);
+
+      if (revision.entityType === "log") {
+        const targetLog = logs.find((l) => l.id === revision.parentId) || null;
+        setEditingLog(targetLog);
+        setRestoredLogDraft({
+          logId: targetLog?.id,
+          versionNumber: revision.versionNumber,
+          snapshot: revision.snapshot as LogRevisionSnapshot,
+        });
+        setInitialExperienceIdForLog(undefined);
+        setInitialBulletTextForLog(undefined);
+        setInitialDraftForLog(null);
+        setSourceInboxMessageIdForLog(undefined);
+        setIsQuickLogOpen(true);
+        return;
+      }
+
+      const targetExp = experiences.find((e) => e.id === revision.parentId) || null;
+      setEditingExperience(targetExp);
+      setRestoredExperienceDraft({
+        experienceId: targetExp?.id,
+        versionNumber: revision.versionNumber,
+        snapshot: revision.snapshot as ExperienceRevisionSnapshot,
+      });
+      setIsExperienceModalOpen(true);
+    },
+    []
+  );
 
   const openNewProduct = useCallback(() => {
     setEditingProduct(null);
@@ -157,7 +284,12 @@ export const useAppModals = () => {
     setIsAvatarModalOpen(false);
     setIsShareModalOpen(false);
     setEditingLog(null);
+    setRestoredLogDraft(null);
     setEditingExperience(null);
+    setRestoredExperienceDraft(null);
+    setHistoryTarget(null);
+    setDiffModalState(null);
+    setJsonEditorResetNonce((n) => n + 1);
     setEditingProduct(null);
     setEditingCertification(null);
     setCertificationPrefill(null);
@@ -174,6 +306,7 @@ export const useAppModals = () => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setEditingLog(null);
+        setRestoredLogDraft(null);
         setInitialBulletTextForLog(undefined);
         setInitialDraftForLog(null);
         setSourceInboxMessageIdForLog(undefined);
@@ -181,11 +314,20 @@ export const useAppModals = () => {
       } else if (e.altKey && e.key.toLowerCase() === "l") {
         e.preventDefault();
         setEditingLog(null);
+        setRestoredLogDraft(null);
         setInitialBulletTextForLog(undefined);
         setInitialDraftForLog(null);
         setSourceInboxMessageIdForLog(undefined);
         setIsQuickLogOpen(true);
       } else if (e.key === "Escape") {
+        if (diffModalStateRef.current) {
+          setDiffModalState(null);
+          return;
+        }
+        if (historyTargetRef.current) {
+          setHistoryTarget(null);
+          return;
+        }
         setIsQuickLogOpen(false);
         setIsAuthOpen(false);
         setIsSettingsOpen(false);
@@ -193,6 +335,8 @@ export const useAppModals = () => {
         setIsCertificationModalOpen(false);
         setIsCareerGoalModalOpen(false);
         setEditingLog(null);
+        setRestoredLogDraft(null);
+        setRestoredExperienceDraft(null);
         setInitialDraftForLog(null);
         setSourceInboxMessageIdForLog(undefined);
       }
@@ -219,6 +363,8 @@ export const useAppModals = () => {
     setIsCareerGoalModalOpen,
     editingExperience,
     setEditingExperience,
+    restoredExperienceDraft,
+    setRestoredExperienceDraft,
     editingProduct,
     setEditingProduct,
     editingCertification,
@@ -233,6 +379,11 @@ export const useAppModals = () => {
     sourceInboxMessageIdForLog,
     editingLog,
     setEditingLog,
+    restoredLogDraft,
+    setRestoredLogDraft,
+    historyTarget,
+    diffModalState,
+    jsonEditorResetNonce,
     isAuthOpen,
     setIsAuthOpen,
     isSettingsOpen,
@@ -247,6 +398,12 @@ export const useAppModals = () => {
     openAddExperience,
     openEditExperience,
     closeExperienceModal,
+    openLogHistory,
+    openExperienceHistory,
+    closeHistory,
+    openDiffModal,
+    closeDiffModal,
+    restoreRevision,
     openNewProduct,
     openEditProduct,
     closeProductModal,

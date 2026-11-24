@@ -246,7 +246,7 @@ export const apiExtractCv = onRequest(
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       res.status(401).json({
-        error: "Acceso no autorizado. Se requiere inicio de sesión con Firebase Auth.",
+        error: "Acceso no autorizado. Se requiere iniciar sesión.",
       });
       return;
     }
@@ -272,19 +272,27 @@ export const apiExtractCv = onRequest(
     }
 
     const cleanText = textContent.length > 15000 ? textContent.substring(0, 15000) : textContent;
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const rawKey = process.env.GEMINI_API_KEY;
+    let apiKey = typeof rawKey === "string" ? rawKey.trim() : "";
+    if (
+      (apiKey.startsWith('"') && apiKey.endsWith('"')) ||
+      (apiKey.startsWith("'") && apiKey.endsWith("'"))
+    ) {
+      apiKey = apiKey.slice(1, -1).trim();
+    }
 
-    if (!apiKey) {
-      res.status(500).json({
-        error: "GEMINI_API_KEY no configurada en las variables seguras de entorno.",
+    if (!apiKey || apiKey.toUpperCase() === "MY_GEMINI_API_KEY") {
+      res.status(503).json({
+        code: "GEMINI_API_KEY_MISSING",
+        error: "La clave del análisis inteligente no está configurada. Revísala en Settings > Secrets.",
       });
       return;
     }
 
     const ai = new GoogleGenAI({
-      apiKey: apiKey,
+      apiKey,
       httpOptions: {
-        headers: { "User-Agent": "goalrecall-build" },
+        headers: { "User-Agent": "aistudio-build" },
       },
     });
 
@@ -306,20 +314,20 @@ ESTRUCTURA A EXTRAER:
 - projects: name, role, description, technologies, url.
 - languages: language, level.
 
-Devuelve estrictamente un JSON válido conforme al schema.`;
+Devuelve estrictamente un JSON válido y conciso conforme al schema.`;
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-4-hydrogen",
         contents: {
           parts: [
             {
-              text: `${promptInstructions}\n\n--- CONTENIDO DEL CV ORIGINAL ---\n${cleanText}\n--- FIN DEL CV ---`,
+              text: `--- CONTENIDO DEL CV ORIGINAL ---\n${cleanText}\n--- FIN DEL CV ---`,
             },
           ],
         },
         config: {
-          maxOutputTokens: 2048,
+          systemInstruction: promptInstructions,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -486,14 +494,32 @@ Devuelve estrictamente un JSON válido conforme al schema.`;
         completedCount: audit.completedCount,
         totalChecks: audit.totalChecks,
         completenessScore: audit.completenessScore,
-        engine: "gemini-2.5-flash-function",
+        engine: "gemini-4-hydrogen-function",
         fileName: fileName,
       });
-    } catch (geminiErr: any) {
-      console.error("Error en Gemini AI Cloud Function:", geminiErr);
-      res.status(500).json({
-        error: "Fallo en el servicio de IA de Gemini. Por favor intenta con el respaldo local.",
-        details: geminiErr.message,
+    } catch (geminiErr: unknown) {
+      const msg = geminiErr instanceof Error ? geminiErr.message : String(geminiErr || "");
+      const upper = msg.toUpperCase();
+      const isAuth =
+        upper.includes("UNAUTHENTICATED") ||
+        upper.includes("API_KEY_INVALID") ||
+        upper.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED") ||
+        upper.includes("API KEY NOT VALID");
+      const status = isAuth
+        ? 401
+        : upper.includes("PERMISSION_DENIED")
+          ? 403
+          : upper.includes("RESOURCE_EXHAUSTED")
+            ? 429
+            : upper.includes("NOT_FOUND")
+              ? 404
+              : 502;
+      console.warn(`Error en Gemini AI Cloud Function (HTTP ${status}):`, msg.slice(0, 240));
+      res.status(status).json({
+        code: isAuth ? "GEMINI_API_KEY_INVALID" : "GEMINI_UPSTREAM_ERROR",
+        error: isAuth
+          ? "La clave configurada para el análisis inteligente no es válida. Verifícala en Settings > Secrets."
+          : "Error en el servicio de análisis inteligente. Puedes reintentar o usar el lector local.",
       });
     }
   }
