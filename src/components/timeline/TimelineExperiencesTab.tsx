@@ -44,6 +44,7 @@ import {
   formatHistoryButtonLabel,
   normalizeRevisionUpdatesCount,
 } from "../../utils/revisions/snapshot";
+import { formatExperiencePeriod } from "../../utils/experienceDateUtils";
 import { ExperienceJsonEditorModal } from "./ExperienceJsonEditorModal";
 import { AchievementRowActions } from "./AchievementRowActions";
 
@@ -407,8 +408,7 @@ export const TimelineExperiencesTab: React.FC<TimelineExperiencesTabProps> = ({
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1">
                       <span className="font-mono text-slate-300 flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                        {exp.startDate || "Inicio"} —{" "}
-                        {exp.isCurrent ? "Present" : exp.endDate || "Present"}
+                        {formatExperiencePeriod(exp, { language })}
                       </span>
                       {exp.location && (
                         <>

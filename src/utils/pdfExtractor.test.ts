@@ -124,7 +124,12 @@ Education
     expect(result.cvData.experiences.length).toBe(2);
     expect(result.cvData.experiences[0].company).toBe("ParserDigital / Chambers & Partners");
     expect(result.cvData.experiences[0].role).toBe("Senior Full Stack Developer (Remote)");
-    expect(result.cvData.experiences[0].startDate).toBe("Oct 2025 – Present");
+    expect(result.cvData.experiences[0].startDate).toBe("Oct 2025");
+    expect(result.cvData.experiences[0].endDate).toBe("");
+    expect(result.cvData.experiences[0].isCurrent).toBe(true);
+    expect(result.cvData.experiences[1].startDate).toBe("Oct 2024");
+    expect(result.cvData.experiences[1].endDate).toBe("Oct 2025");
+    expect(result.cvData.experiences[1].isCurrent).toBe(false);
     expect(result.cvData.experiences[0].bullets.length).toBeGreaterThanOrEqual(2);
     expect(result.cvData.education.length).toBe(2);
     expect(result.cvData.education[0].degree).toBe("Master’s in Data Science");

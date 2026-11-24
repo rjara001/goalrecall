@@ -24,6 +24,7 @@ import {
   buildExperienceRevisionSnapshot,
   buildLogRevisionSnapshot,
 } from "../revisions/snapshot";
+import { normalizeExperiencePeriod } from "../experienceDateUtils";
 
 export const RESERVED_USERNAMES = new Set([
   "admin", "root", "api", "docs", "features", "offers", "public", "quarters",
@@ -637,17 +638,23 @@ export function docToLogEntry(raw: Record<string, unknown>, id: string): LogEntr
 // 4. WorkExperience (/users/{uid}/experiences/{expId})
 // ---------------------------------------------------------------------------
 function buildWorkExperienceFields(exp: Partial<WorkExperience>) {
+  const normalizedPeriod = normalizeExperiencePeriod({
+    startDate: exp.startDate,
+    endDate: exp.endDate,
+    isCurrent: exp.isCurrent,
+  });
+
   const out: Record<string, unknown> = {
     company: nonEmptyString(exp.company, 200, "Empresa"),
     role: nonEmptyString(exp.role, 200, "Rol Profesional"),
-    startDate: clampString(exp.startDate, 40),
+    startDate: clampString(normalizedPeriod.startDate, 40),
   };
 
-  if (typeof exp.endDate === "string") {
-    out.endDate = clampString(exp.endDate, 40);
+  if (typeof exp.endDate === "string" || normalizedPeriod.endDate.length > 0 || normalizedPeriod.isCurrent) {
+    out.endDate = clampString(normalizedPeriod.endDate, 40);
   }
-  if (typeof exp.isCurrent === "boolean") {
-    out.isCurrent = exp.isCurrent;
+  if (typeof exp.isCurrent === "boolean" || normalizedPeriod.isCurrent) {
+    out.isCurrent = normalizedPeriod.isCurrent;
   }
   if (typeof exp.location === "string") {
     out.location = clampString(exp.location, 200);
@@ -714,14 +721,28 @@ export function buildWorkExperienceMetadataUpdatePayload(updates: {
 export function docToWorkExperience(raw: Record<string, unknown>, id: string): WorkExperience {
   const createdAt = timestampToMillis(raw.createdAt, 0);
   const deletedAt = sanitizeDeletedAtTimestamp(raw.deletedAt);
+  const hasEndDate = typeof raw.endDate === "string";
+  const hasIsCurrent = typeof raw.isCurrent === "boolean";
+  const normalizedPeriod = normalizeExperiencePeriod({
+    startDate: clampString(raw.startDate, 40),
+    endDate: hasEndDate ? (raw.endDate as string) : undefined,
+    isCurrent: hasIsCurrent ? (raw.isCurrent as boolean) : undefined,
+  });
+
   return {
     id,
     userId: typeof raw.userId === "string" ? raw.userId : undefined,
     company: nonEmptyString(raw.company, 200, "Empresa"),
     role: nonEmptyString(raw.role, 200, "Rol"),
-    startDate: clampString(raw.startDate, 40),
-    endDate: typeof raw.endDate === "string" ? raw.endDate : undefined,
-    isCurrent: typeof raw.isCurrent === "boolean" ? raw.isCurrent : undefined,
+    startDate: clampString(normalizedPeriod.startDate, 40),
+    endDate:
+      hasEndDate || normalizedPeriod.endDate.length > 0
+        ? clampString(normalizedPeriod.endDate, 40)
+        : undefined,
+    isCurrent:
+      hasIsCurrent || normalizedPeriod.isCurrent
+        ? normalizedPeriod.isCurrent
+        : undefined,
     location: typeof raw.location === "string" ? raw.location : undefined,
     summary: typeof raw.summary === "string" ? raw.summary : undefined,
     bullets: Array.isArray(raw.bullets)

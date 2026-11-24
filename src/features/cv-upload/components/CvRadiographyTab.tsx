@@ -1,6 +1,7 @@
 import React from "react";
 import { Award, Briefcase, Check, FileText, GraduationCap, Tag, User } from "lucide-react";
 import { ExtractedCvData } from "../../../types";
+import { formatExperiencePeriod } from "../../../utils/experienceDateUtils";
 
 interface CvRadiographyTabProps {
   extractedCv: ExtractedCvData;
@@ -65,7 +66,9 @@ export const CvRadiographyTab: React.FC<CvRadiographyTabProps> = ({ extractedCv,
             <div key={exp.id || idx} className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                 <div className="flex items-center gap-2"><span className="font-bold text-sm text-white">{exp.role}</span><span className="text-xs text-purple-400">@ {exp.company}</span></div>
-                <span className="text-xs font-mono text-slate-400">{exp.startDate || ""} {exp.endDate ? `— ${exp.endDate}` : ""}</span>
+                <span className="text-xs font-mono text-slate-400">
+                  {formatExperiencePeriod(exp, { language: "es", emptyLabel: "" })}
+                </span>
               </div>
               <ul className="space-y-1.5 mt-2">
                 {exp.bullets.map((b, bIdx) => (

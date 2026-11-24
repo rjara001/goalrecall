@@ -7,6 +7,7 @@ import {
   inferCategoryForSavedExperienceBullet,
   isLogIncludedInCv,
 } from "./bulletToLogMapper";
+import { normalizeExperiencePeriod } from "./experienceDateUtils";
 
 export const EXPERIENCE_JSON_VERSION = "goalrecall_experience_v1";
 
@@ -399,17 +400,25 @@ export function reconcileImportedExperienceJson(
       : targetExp.company;
   const nextRole =
     incomingExp?.role && incomingExp.role.length > 0 ? incomingExp.role : targetExp.role;
-  const nextIsCurrent =
+  const rawIsCurrent =
     typeof incomingExp?.isCurrent === "boolean" ? incomingExp.isCurrent : targetExp.isCurrent;
-  const nextStartDate =
+  const rawStartDate =
     typeof incomingExp?.startDate === "string" && incomingExp.startDate.length > 0
       ? incomingExp.startDate
       : targetExp.startDate;
-  const nextEndDate = nextIsCurrent
+  const rawEndDate = rawIsCurrent
     ? ""
     : typeof incomingExp?.endDate === "string"
       ? incomingExp.endDate
       : targetExp.endDate;
+  const normalizedPeriod = normalizeExperiencePeriod({
+    startDate: rawStartDate,
+    endDate: rawEndDate,
+    isCurrent: rawIsCurrent,
+  });
+  const nextStartDate = normalizedPeriod.startDate;
+  const nextEndDate = normalizedPeriod.endDate;
+  const nextIsCurrent = normalizedPeriod.isCurrent;
   const nextLocation =
     typeof incomingExp?.location === "string" ? incomingExp.location : targetExp.location;
   const nextSummary =

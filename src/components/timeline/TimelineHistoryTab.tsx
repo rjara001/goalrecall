@@ -17,6 +17,7 @@ import {
   normalizeRevisionUpdatesCount,
 } from "../../utils/revisions/snapshot";
 import { formatRelativeUpdatedTime } from "./timelineUtils";
+import { formatExperiencePeriod } from "../../utils/experienceDateUtils";
 
 interface TimelineHistoryTabProps {
   logs: LogEntry[];
@@ -378,7 +379,7 @@ export const TimelineHistoryTab: React.FC<TimelineHistoryTabProps> = ({
                           </h5>
 
                           <p className="text-xs text-slate-400">
-                            {exp.startDate} — {exp.isCurrent ? (isEn ? "Present" : "Actualidad") : exp.endDate || "—"}
+                            {formatExperiencePeriod(exp, { language })}
                             {exp.location ? ` · ${exp.location}` : ""}
                             {(exp.bullets?.length || 0) > 0
                               ? ` · ${exp.bullets!.length} ${isEn ? "bullets" : "viñetas"}`
@@ -604,7 +605,7 @@ export const TimelineHistoryTab: React.FC<TimelineHistoryTabProps> = ({
                         <p className="text-xs text-slate-400 line-clamp-2">
                           {exp.summary ||
                             (exp.bullets && exp.bullets[0]) ||
-                            `${exp.startDate} — ${exp.isCurrent ? (isEn ? "Present" : "Actualidad") : exp.endDate || "—"}`}
+                            formatExperiencePeriod(exp, { language })}
                         </p>
                       </div>
 
@@ -614,7 +615,7 @@ export const TimelineHistoryTab: React.FC<TimelineHistoryTabProps> = ({
                             ? isEn
                               ? `Updated ${relUpdated}`
                               : `Editado ${relUpdated}`
-                            : exp.startDate}
+                            : formatExperiencePeriod(exp, { language })}
                         </span>
 
                         {onOpenExperienceHistory && (

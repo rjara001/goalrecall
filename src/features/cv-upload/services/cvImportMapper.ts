@@ -9,6 +9,7 @@ import {
   UserProfile,
   WorkExperience,
 } from "../../../types";
+import { normalizeExperiencePeriod } from "../../../utils/experienceDateUtils";
 
 export function mapRawAchievementsToBullets(
   rawAchievements: ExtractedAchievementItem[] = []
@@ -205,19 +206,27 @@ export function buildWorkspaceImportFromCv({
         if (exp.role && (!existing.role || existing.role === "Ingeniero")) {
           existing.role = exp.role;
         }
-        if (exp.startDate && !existing.startDate) {
-          existing.startDate = exp.startDate;
-        }
+        const normalizedExisting = normalizeExperiencePeriod(existing);
+        const normalizedIncoming = normalizeExperiencePeriod(exp);
+        existing.startDate =
+          normalizedExisting.startDate || normalizedIncoming.startDate;
+        existing.isCurrent =
+          normalizedExisting.isCurrent ||
+          (!normalizedExisting.endDate && normalizedIncoming.isCurrent);
+        existing.endDate = existing.isCurrent
+          ? ""
+          : normalizedExisting.endDate || normalizedIncoming.endDate;
       } else {
+        const normalizedPeriod = normalizeExperiencePeriod(exp);
         const newWorkExp: WorkExperience = {
           id:
             exp.id ||
             `exp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
           company: exp.company.trim(),
           role: exp.role?.trim() || "Ingeniero",
-          startDate: exp.startDate || "",
-          endDate: exp.endDate || "",
-          isCurrent: exp.isCurrent || false,
+          startDate: normalizedPeriod.startDate,
+          endDate: normalizedPeriod.endDate,
+          isCurrent: normalizedPeriod.isCurrent,
           location: exp.location || "",
           summary:
             exp.description || (finalBullets.length > 0 ? finalBullets[0] : ""),

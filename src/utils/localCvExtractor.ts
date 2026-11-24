@@ -10,6 +10,7 @@ import {
   ExtractedAchievementItem,
   LocalExtractionResult,
 } from "../types";
+import { normalizeExperiencePeriod } from "./experienceDateUtils";
 
 export type { ExtractedAchievementItem, LocalExtractionResult };
 
@@ -217,9 +218,10 @@ export function extractCvDataLocally(rawText: string, fileName?: string): LocalE
         currentExp.category = "Feature ✨" as LogCategory;
       }
 
-      if (/(?:presente|present|actualidad)/i.test(currentExp.startDate || "") || /(?:presente|present|actualidad)/i.test(currentExp.endDate || "")) {
-        currentExp.isCurrent = true;
-      }
+      const normalizedPeriod = normalizeExperiencePeriod(currentExp);
+      currentExp.startDate = normalizedPeriod.startDate;
+      currentExp.endDate = normalizedPeriod.endDate;
+      currentExp.isCurrent = normalizedPeriod.isCurrent;
 
       experiences.push(currentExp);
       currentExp = null;
@@ -343,6 +345,7 @@ export function extractCvDataLocally(rawText: string, fileName?: string): LocalE
         const prevLine = lines[i - 1];
         let role = prevLine && !prevLine.startsWith("@") && !prevLine.startsWith("•") && !/^(?:Experiencia|Historial|Experience|Work)/i.test(prevLine) ? prevLine : (headline || "Ingeniero");
         let dateRange = "";
+        let expLocation = "";
 
         let j = i + 1;
         while (j < lines.length && (
@@ -355,10 +358,18 @@ export function extractCvDataLocally(rawText: string, fileName?: string): LocalE
           lines[j].toLowerCase().includes("chile") ||
           lines[j].toLowerCase().includes("santiago")
         )) {
-          if (!dateRange) {
-            dateRange = lines[j];
+          const candidate = lines[j].trim();
+          const hasDateHint =
+            /(?:19|20)\d\d/.test(candidate) ||
+            /(?:actualidad|presente|present|current)/i.test(candidate);
+          if (hasDateHint) {
+            if (!dateRange) {
+              dateRange = candidate;
+            } else {
+              dateRange += " · " + candidate;
+            }
           } else {
-            dateRange += " · " + lines[j];
+            expLocation = expLocation ? `${expLocation} · ${candidate}` : candidate;
           }
           j++;
         }
@@ -368,6 +379,7 @@ export function extractCvDataLocally(rawText: string, fileName?: string): LocalE
           id: `exp-${Date.now()}-${experiences.length}`,
           company: company,
           role: role,
+          location: expLocation || undefined,
           startDate: dateRange,
           description: "",
           bullets: [],

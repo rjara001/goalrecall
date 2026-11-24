@@ -32,6 +32,7 @@ import { useI18n } from "../i18n";
 import { VIEW_LOCALES } from "../i18n/viewLocales";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { doesLogBelongToExperience, isLogIncludedInCv } from "../utils/bulletToLogMapper";
+import { formatExperiencePeriod } from "../utils/experienceDateUtils";
 
 interface OffersViewProps {
   offers: JobOffer[];
@@ -279,7 +280,8 @@ export const OffersView: React.FC<OffersViewProps> = ({
     output += `## EXPERIENCIA Y LOGROS ADAPTADOS A ${currentOffer.company.toUpperCase()}\n\n`;
 
     sections.forEach(({ exp, logs: expLogs }) => {
-      output += `### ${exp.role} @ ${exp.company} (${exp.startDate || "Inicio"} — ${exp.isCurrent ? "Present" : exp.endDate || "Present"})\n`;
+      const period = formatExperiencePeriod(exp, { language, emptyLabel: "" });
+      output += `### ${exp.role} @ ${exp.company}${period ? ` (${period})` : ""}\n`;
       expLogs.forEach((l) => {
         const hasDistinctImpact = l.impact && l.impact.trim() && l.impact.trim() !== l.title.trim();
         output += hasDistinctImpact ? `- ${l.title} (${l.impact})\n` : `- ${l.title}\n`;
@@ -831,7 +833,7 @@ export const OffersView: React.FC<OffersViewProps> = ({
                                     {exp.role} <span className="text-indigo-700">· {exp.company}</span>
                                   </p>
                                   <span className="text-[11px] font-mono text-slate-500">
-                                    {exp.startDate || "Inicio"} — {exp.isCurrent ? "Present" : exp.endDate || "Present"}
+                                    {formatExperiencePeriod(exp, { language })}
                                   </span>
                                 </div>
                                 <ul className="space-y-1.5 text-xs text-slate-800 pl-1">

@@ -6,6 +6,7 @@ import { TimelineViewLocale } from "../../i18n/viewLocales";
 import { TimelineAchievementCard } from "./TimelineAchievementCard";
 import { RecentEditedLogsSelector } from "./RecentEditedLogsSelector";
 import { formatRelativeUpdatedTime, isRecentlyUpdatedLog } from "./timelineUtils";
+import { formatExperiencePeriod } from "../../utils/experienceDateUtils";
 
 interface TimelineAchievementsTabProps {
   logs: LogEntry[];
@@ -390,7 +391,7 @@ export const TimelineAchievementsTab: React.FC<TimelineAchievementsTabProps> = (
                         </span>
                       </div>
                       <p className="text-xs font-mono text-slate-400 mt-0.5">
-                        {exp.startDate} — {exp.isCurrent ? "Present" : exp.endDate || "Present"}
+                        {formatExperiencePeriod(exp, { language })}
                       </p>
                     </div>
                   </div>

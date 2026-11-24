@@ -28,6 +28,10 @@ import { WorkExperience, LogEntry, RevisionSource } from "../types";
 import type { RestoredExperienceDraft } from "../hooks/useAppModals";
 import { useI18n } from "../i18n";
 import { MODALS_LOCALES } from "../i18n/modalsLocales";
+import {
+  formatExperiencePeriod,
+  normalizeExperiencePeriod,
+} from "../utils/experienceDateUtils";
 import { formatFirestoreUiError } from "../utils/firestore/errors";
 import { formatHistoryButtonLabel } from "../utils/revisions/snapshot";
 import {
@@ -105,11 +109,12 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
 
     if (restoredDraft) {
       const snap = restoredDraft.snapshot;
+      const normalizedSnapPeriod = normalizeExperiencePeriod(snap);
       setCompany(snap.company || "");
       setRole(snap.role || "");
-      setStartDate(snap.startDate || "");
-      setEndDate(snap.endDate || "");
-      setIsCurrent(Boolean(snap.isCurrent));
+      setStartDate(normalizedSnapPeriod.startDate);
+      setEndDate(normalizedSnapPeriod.endDate);
+      setIsCurrent(normalizedSnapPeriod.isCurrent);
       setLocation(snap.location || "");
       setSummary(snap.summary || "");
       setTechnologies(snap.technologies || []);
@@ -155,11 +160,12 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
       setIsDatesOpen(Boolean(snap.startDate || snap.endDate || snap.isCurrent));
       setIsLocationTechOpen(Boolean(snap.location || snap.technologies.length > 0));
     } else if (initialData) {
+      const normalizedInitPeriod = normalizeExperiencePeriod(initialData);
       setCompany(initialData.company || "");
       setRole(initialData.role || "");
-      setStartDate(initialData.startDate || "");
-      setEndDate(initialData.endDate || "");
-      setIsCurrent(initialData.isCurrent || false);
+      setStartDate(normalizedInitPeriod.startDate);
+      setEndDate(normalizedInitPeriod.endDate);
+      setIsCurrent(normalizedInitPeriod.isCurrent);
       setLocation(initialData.location || "");
       setSummary(initialData.summary || "");
       setTechnologies(initialData.technologies || []);
@@ -763,7 +769,7 @@ export const ExperienceModal: React.FC<ExperienceModalProps> = ({
                   </div>
                   <span className="font-semibold text-slate-300 group-hover:text-white truncate">
                     {startDate || endDate || isCurrent
-                      ? `Fechas: ${startDate || "—"} a ${isCurrent ? "Actualidad" : endDate || "—"}`
+                      ? `Fechas: ${formatExperiencePeriod({ startDate, endDate, isCurrent }, { language: "es", emptyLabel: "" })}`
                       : `+ ${ml.datesHeader} (Opcional)`}
                   </span>
                 </div>
